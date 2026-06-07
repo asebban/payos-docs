@@ -1,14 +1,14 @@
 # Debugging
 
-Server-side logic in PayOS is JavaScript executed inside the
-[GraalVM sandbox](../architecture/scripting-engine.md). This page collects practical
+Server-side logic in PayOS is JavaScript executed inside the [GraalVM sandbox](../architecture/scripting-engine.md). This page collects practical
 techniques for diagnosing application behavior.
 
+## Using VSCode debugger
+
+There are two guides that show how to use the VS Code debugger to debug backend JS programs. See [Debugging PayOS Javascript Endpoints in Windows](./debug-backend-javascript-vscode.md) and [Debugging PayOS Javascript Endpoints in Linux](./debug-backend-javascript-vscode-linux.md)
 ## Use logging, scoped by correlation ID
 
-Every request carries an `X-Correlation-Id` (generated if absent) and an `X-Tenant-Id`, both
-mirrored into the SLF4J MDC and included in audit records. When tracing a problem, capture
-the correlation ID from the response headers and grep the logs for it.
+Every request carries an `X-Correlation-Id` (generated if absent) and an `X-Tenant-Id`, both mirrored into the SLF4J MDC and included in audit records. When tracing a problem, capture the correlation ID from the response headers and grep the logs for it.
 
 ```bash
 curl -i http://localhost:8080/payments/api/quote   # note X-Correlation-Id in the response

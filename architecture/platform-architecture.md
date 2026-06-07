@@ -9,16 +9,17 @@ PayOS is deliberately split into two layers with very different change profiles.
 | | Rigid core | Flexible guest layer |
 | --- | --- | --- |
 | Language | Java 21 | JavaScript (GraalVM) + connector/extension JARs |
-| Module | `payos-kernel` (+ transports, services) | Applications, capabilities, products; connectors; extensions |
+| Module | `payos-kernel` (+ transports, services) | Applications, capabilities, products; connectors; extensions; plugins |
 | Change frequency | Low — stable contracts | High — per business need |
 | Performance role | Hot path, shared engine, caches | Business logic, isolated per request |
 | Who owns it | Platform team | Application developers / integrators |
 
 The core is **never** modified to add a business feature. New behavior is delivered by:
 
-- writing **JavaScript** application/capability resources (the primary mechanism),
+- writing / extending **JavaScript** application/capability resources (the primary mechanism), using all extensibility mechanisms.
 - plugging in **service connectors** (database, queue, secret, webhook) through the SPI,
 - dropping in **Java extensions** callable from scripts via `Java.type()`, and
+- plugging in **new TCP handlers** as encoder / decoder and handler.
 - adding **transport providers** for new protocols.
 
 These mechanisms are detailed in [extensibility.md](extensibility.md).
@@ -32,7 +33,7 @@ flowchart BT
   server["Server layer<br/>IServer · Server · Servers · ServerProvider<br/>Transport-specific ingress HTTP/TCP/Queue -> Request/Response<br/>Opens tenant scope, propagates correlation and tenant IDs"]
   resource["Resource layer<br/>ResourceHandler · ResourceLocator<br/>Routes Request to API/Page/Component/Menu resources<br/>Walks the application extends chain, honors capability state"]
   scripting["Scripting layer<br/>PolyglotScriptingEngine - GraalVM, sandboxed<br/>Bindings: $Request $Response $Api $App $Principal $Tenant<br/>$Logger $Library $I18n $Errors $DB $Queue $Secrets ..."]
-  guest["Guest layer<br/>Per application / capability / product<br/>api/*.js · page/*.vue · menu/ · lib/*.js · i18n/"]
+  guest["Guest layer<br/>Per application / capability / product<br/>api/*.js · page/*.vue · menu/ · lib/*.js · hook/*.js · i18n/"]
 
   services -->|pluggable below the core| bootstrap
   bootstrap -->|started and configured by| server

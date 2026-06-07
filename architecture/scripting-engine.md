@@ -87,7 +87,7 @@ The developer-facing reference for every binding is [developer/scripting-binding
 
 ## Hooks use the engine too
 
-Hook scripts run through `evalScript` (no `execute`/`loadControlData` contract) with the same sandbox. The `HookEngine` drives them at the hook points listed in [eventing-webhooks.md](eventing-webhooks.md).
+Hook scripts run through `evalScript` (no `execute`/`loadControlData` contract) with the same sandbox. The `HookEngine` drives them at the hook points listed in [eventing-webhooks.md](eventing-webhooks.md). A fully detailed description of the internal hooks system can be found in [Architecture of the Hooks / Webhooks System](./hooks-webhooks.md)
 
 ## Performance notes
 

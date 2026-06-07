@@ -20,9 +20,34 @@ ConfigWatcher (NIO WatchService over the config paths)
 `PayOSConfig.settings` is a **volatile** map and the swap is atomic, so in-flight requests
 either see the old or the new configuration consistently — never a half-applied state.
 
+## Disabling hot reload
+
+Hot reload is **enabled by default**. To disable it, set `config-hot-reload-enabled` to
+`false` in `payos.json` or `bootstrap.json`:
+
+```json
+{
+  "config-hot-reload-enabled": false
+}
+```
+
+When disabled, the `ConfigWatcher` is not started and configuration changes require a full
+restart.
+
+### When to disable
+
+- **High-security environments** where configuration changes must go through a controlled
+  deployment pipeline with explicit restarts.
+- **Production environments** where changes are managed exclusively via container orchestration
+  or configuration management tools and automatic reload is not desired.
+- **Debugging scenarios** where stable configuration is required to reproduce an issue.
+- **Regulated environments** where all changes must be auditable through deployment records
+  rather than runtime file modifications.
+
 ## What reloads
 
-- **Settings** in `payos.json` and the merged `configDir` files.
+- **Settings** from `payos.json` (bundle entrypoint) and the merged runtime configuration files
+  under `configDir` (typically `config/bootstrap.json`).
 - **Applications** registry (`applications`).
 - **Data sources** and service initializations.
 - **Hooks** — the hook cache is invalidated so new/changed hooks take effect.

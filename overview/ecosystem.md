@@ -22,12 +22,12 @@ and the **tooling / build coordination** modules.
 | `payosv2-packer` | `ma.s2m:payosv2-packer` | Tooling | `edc` — bundle encryption/decryption CLI. |
 | `payos-pm` | `ma.s2m.payos:payos-pm` | Tooling | `apm` / `cpm` / `ppm` — application, capability, and product package managers. |
 | `pdoc` | `ma.s2m.payos:pdoc` | Tooling | Static OpenAPI documentation generator. |
-| `payos-parent` | `ma.s2m.payos:payos-parent` | Build | Maven parent POM: Java 21 baseline, plugin and dependency versions. |
-| `payos-bom` | `ma.s2m.payos:payos-core-bom` | Build | Bill of Materials: owns the kernel version contract. |
+| `payos-parent` | `ma.s2m.payos:payos-parent` | Build | Maven parent POM: Java 21 baseline, plugin and non-payos dependency versions (sl4j, jackson, ...). |
+| `payos-bom` | `ma.s2m.payos:payos-core-bom` | Build | Bill of Materials: owns the kernel version and payos-secret-api contracts. |
 
 > The exact pinned versions live in [build-and-release/module-map.md](../build-and-release/module-map.md).
-> The frontend (`nuxt-app`) and product/management apps are out of scope for this runtime
-> documentation.
+> All module versions (payos-server-http, payos-server-tcp, ...) use the bom for their dependency to the kernel and inherit payos-parent for dependencies to non-payos libraries.
+> The payos-runtime contains versions of all payos modules (payos-server-http, payos-server-tcp, ...)
 
 ## How the modules fit together
 
@@ -55,17 +55,19 @@ and the **tooling / build coordination** modules.
         ─ payos-pm:  apm / cpm / ppm     ─ pdoc       ─ payosv2-packer: edc
 ```
 
-### The three plug-in mechanisms
+### The seven extensibility mechanisms
 
-PayOS extends without modifying the core through three distinct mechanisms. Knowing which
-is which is essential; they are fully described in
-[architecture/extensibility.md](../architecture/extensibility.md).
+PayOS extends without modifying the core through seven distinct mechanisms. Knowing which is which is essential; they are fully described in [architecture/extensibility.md](../architecture/extensibility.md).
 
 | Mechanism | Directory | Discovery | Used for |
 | --- | --- | --- | --- |
+| **Capabilities** | application `base.path` | Installed via `cpm`, declared with `"category": "capability"` | Reusable, self-contained extensions (APIs, pages, menus, libraries, hooks) that applications can inherit from; activatable without redeploying the runtime; enables composable application architectures |
+| **Application resource inheritance** | application `base.path` | `extends` field in application config | Applications can inherit APIs, pages, menus, libraries, and hooks from capabilities or from other applications. |
+| **Internal hooks** | application `hook/` directory | Registered in `hooks` configuration | JavaScript scripts that intercept lifecycle events (API_BEFORE_EXECUTE, API_AFTER_EXECUTE, API_ON_ERROR, etc.) in the request processing pipeline; observe and modify request/response context. |
 | **Service connectors** | `connectors-dir` | Java `ServiceLoader` (SPI) | Database, queue, secret, and (some) webhook providers. |
 | **Java extensions** | `extensions-dir` | `Java.type('…')` from scripts | Arbitrary Java libraries callable from JavaScript (e.g. jPOS). |
 | **Transport providers** | bundled / classpath | `ServiceLoader<ServerProvider>` | New protocols (`http`, `tcp`, `queue`, …). |
+| **TCP codec/handler plugins** | `tcp-handlers-dir` | JAR scanning for concrete `TcpMessageDecoder/Encoder/Handler` | Custom wire-format parsing for the TCP transport; decodes bytes to `Request`, encodes `Response` to bytes, and provides message-specific processing logic. |
 
 ### Deployment units
 
@@ -74,7 +76,7 @@ Applications are packaged and deployed at three granularities, managed by the
 
 | Unit | Managed by | Description |
 | --- | --- | --- |
-| **Application** | `apm` | A single application: APIs, pages, menus, libraries, i18n. |
+| **Application** | `apm` | A single application: APIs, pages, menus, libraries, hooks, i18n. |
 | **Capability** | `cpm` | A self-contained extension that other apps `extends`, installable/activatable without redeploying the runtime. |
 | **Product** | `ppm` | A bundle of applications plus shared server configuration. |
 

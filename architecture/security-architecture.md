@@ -29,12 +29,12 @@ resolving the `provider` value in this order:
 1. application security config (`security.provider`),
 2. the session store (`OidcSessionKeys.SESSION_PROVIDER`),
 3. global security config (`PayOSConfig.settings.security.provider`),
-4. default `"pac4j"`.
+4. default `"nimbus"`.
 
 | `provider` | Implementation |
 | --- | --- |
-| `"pac4j"` (default) | `SecurityService` — pac4j OIDC. |
-| `"nimbus"` | `NimbusSecurityService`. |
+| `"nimbus"` (default) | `NimbusSecurityService` — Nimbus OIDC (primary). |
+| `"pac4j"` (legacy) | `SecurityService` — pac4j OIDC. |
 
 ## OIDC integration (pac4j)
 
@@ -116,10 +116,9 @@ resolved from three levels (most specific wins): application → tenant → glob
 
 ## Secrets and cryptography
 
-Sensitive material is never hard-coded. Secrets are retrieved through the secret-provider
-SPI (`$Secrets`), configuration files may be encrypted at rest (`CryptoService`), and the
-filesystem secret provider encrypts values with AES-256-GCM. See
-[extensibility.md](extensibility.md) and [operations/secrets-management.md](../operations/secrets-management.md).
+Sensitive material is never hard-coded. Secrets are retrieved through the secret-provider SPI (`$Secrets`), configuration files may be encrypted at rest (`CryptoService`), and the secret provider encrypts values with AES-256-GCM. You can find here a detailed description of the [Secret Provider Architecture](./secret-provider-architecture.md)
+
+See [extensibility.md](extensibility.md) and [operations/secrets-management.md](../operations/secrets-management.md).
 
 ## Audit & traceability (PCI DSS)
 
@@ -128,6 +127,14 @@ called in the pipeline's `finally` block (aligned with PCI DSS Req. 10.2.1). Com
 mandatory `X-Correlation-Id` / `X-Tenant-Id` propagation and the secret-provider audit
 logger (`payos.secret.audit`), every security-relevant action is attributable to a user,
 tenant, and trace. Operational details: [operations/observability.md](../operations/observability.md).
+
+## References
+
+You can find below detailed descriptions of the different security components
+
+- [Legacy PAC4J](./security/legacy-pac4j.md)
+- [Nimbus Security Service (default)](./security/nimbus-security-service.md)
+- [security features inventory](./security/security-inventory.md)
 
 ## Next
 

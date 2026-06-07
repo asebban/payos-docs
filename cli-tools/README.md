@@ -14,7 +14,6 @@ installed into your `PATH` (typically `~/.payos/bin`).
 | `spm` | secret-service-filesystem | **S**ecret **P**ackage **M**anager — manage filesystem secrets. | [spm.md](spm.md) |
 | `edc` | payosv2-packer | Encrypt/pack and decrypt/unpack bundles. | [edc.md](edc.md) |
 | `pdoc` | pdoc | Generate OpenAPI 3.1 docs statically from annotations. | [pdoc.md](pdoc.md) |
-| `docshub` | (docs aggregator) | Aggregate/serve module documentation. | [docshub.md](docshub.md) |
 
 ## Common conventions
 

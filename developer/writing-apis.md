@@ -2,6 +2,8 @@
 
 API scripts live in an application's `api/` directory and are executed by the [GraalVM scripting engine](../architecture/scripting-engine.md) for every matching request. This page describes the **script contract**, the request/response model, error handling, and shared libraries.
 
+Vous pourrez trouver [ici -> javascript-api-endpoint-guide](./javascript-api-endpoint-guide.md) des explications plus détaillées sur l'écriture de scripts JS.
+
 ## The three-function contract
 
 The engine drives each API script through three well-known functions:

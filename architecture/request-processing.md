@@ -106,6 +106,17 @@ The request and response are JSON envelopes; the correlation ID falls back to th
 
 ## Stage 2 — resource routing
 
+### Resource Processing
+
+- `Server.processRequest` finds the target `Application` by appId.
+- Dispatch to `ResourceHandler` by request type (`api`, `page`, `component`, `menu`, `lib`, `i18n`).
+- Specialized loaders/handlers resolve and execute target behavior.
+- **`api` resource type**: `ApiResourceHandler` executes JS scripts through a full **hooks + webhooks pipeline**: `pre-request` hook → API script → `post-request` hook (error path: `on-error` hook). `$WebHooks.dispatchNative()` is called automatically at each lifecycle point.
+- **`page` resource type**: `VueResourceHandler` assembles Vue SFC pages through an equivalent pipeline: `page-pre-serve` hook → Vue assembly → `page-post-serve` hook (error path: `page-on-error` hook), with native webhook dispatch at each point.
+- **`menu` resource type**: `MenuHandler` aggregates `entries.json` files from the application's `menu/` directory and all active capability extensions. Capability menu entries are only included when the capability is activated for the current app/tenant via `ActivationStore`.
+- **`lib` resource type**: `LibraryHandler` loads and evaluates shared JavaScript files from the application's `lib/` directory. Libraries are injected into API scripts via the `$Library` binding and cached per file path with `lastModified`-based invalidation.
+- **`i18n` resource type**: `I18nLoader` loads `config/i18n.json` and all JSON files under `i18n/{locale}/`. `I18nService` merges parent resources first, then local application resources, so local translations override inherited keys while missing keys are inherited from base apps or active capabilities.
+
 `ResourceHandler.getHandler(type)` selects the handler for the resource type:
 
 | Resource type (`IResource`) | Handler |
@@ -114,6 +125,8 @@ The request and response are JSON envelopes; the correlation ID falls back to th
 | `PAGE_RESOURCE` | `VueResourceHandler` |
 | `COMPONENT_RESOURCE` | `ComponentHandler` |
 | `MENU_RESOURCE` | `MenuHandler` |
+| `LIBRARY_RESOURCE` | `LibraryHandler` |
+| `I18N_RESOURCE` | `I18nService` |
 
 `ResourceLocator.locate(application, resource)` finds the concrete resource by walking the application's `extends` chain. For each extended app whose `category` is `"capability"`, it checks `IActivationStore.isActive(appId, requestingAppId, tenantId)` and **skips inactive capabilities**. This is how capability activation gates resource visibility (see [extensibility.md](extensibility.md)).
 

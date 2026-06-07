@@ -1,10 +1,10 @@
 # Internationalization (`$I18n`)
 
-PayOS resolves user-facing messages per request locale. Translation files live in an
-application's `i18n/` directory and are exposed to scripts through the `$I18n` binding. This
-page covers usage; the global i18n configuration keys are in
-[configuration/i18n.md](../configuration/i18n.md).
+PayOS resolves user-facing messages per request locale. Translation files live in an application's `i18n/` directory and are exposed to scripts through the `$I18n` binding. This page covers usage; the global i18n configuration keys are in [configuration/i18n.md](../configuration/i18n.md).
 
+## Fully detailed guide to i18n
+
+for a fully detailed guide to backend i18n localization system. Please see [Guide to I18N localization system](./server-side-i18n-js-guide.md)
 ## Translation files
 
 Place locale resources in `i18n/`, one file per locale (resource type `I18N_RESOURCE`):

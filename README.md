@@ -1,4 +1,4 @@
-# PayOS Documentation
+# PayOS Documentation V1.0.0-RELEASE
 
 Authoritative, code-grounded documentation for the **PayOS** platform — an API-first,
 multi-tenant, deployment-agnostic runtime for building financial applications.
@@ -48,6 +48,12 @@ It is structured by audience so that each reader can go straight to what they ne
 | [Reference](reference/README.md) | Exhaustive indexes: configuration keys, script bindings, system events, and built-in HTTP endpoints. |
 
 ---
+
+### Main technical features of PayOS
+
+| Document | Purpose |
+| --- | --- |
+| [Main technical features](./technical-features.md) | Main technical attributes and features that distinguishes PayOS. |
 
 ## How this documentation is organized
 

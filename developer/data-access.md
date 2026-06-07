@@ -1,26 +1,18 @@
 # Data access (`$DB`)
 
-When a [database service](../configuration/database-service.md) is configured, scripts
-receive the `$DB` binding — an `IDatabaseService` backed by the
-`dynamic-database-service` connector (Hibernate-based). This page covers using `$DB` from
-JavaScript; the connector's configuration keys are in
-[configuration/database-service.md](../configuration/database-service.md), and the
-architectural model is in [architecture/data-architecture.md](../architecture/data-architecture.md).
+When a [database service](../configuration/database-service.md) is configured, scripts receive the `$DB` binding — an `IDatabaseService` backed by the `dynamic-database-service` connector (Hibernate-based). This page covers using `$DB` from JavaScript; the connector's configuration keys are in [configuration/database-service.md](../configuration/database-service.md), and the architectural model is in [architecture/data-architecture.md](../architecture/data-architecture.md).
 
 ## Tenant scoping is automatic
 
-You never pass a tenant to `$DB`. The kernel binds the current tenant to the database
-service for the lifetime of the request (`setCurrentTenant` + `beginRequestScope`), so all
-access is scoped to the request's tenant and isolation mode automatically. See
-[multi-tenancy](../architecture/multi-tenancy.md).
+You never pass a tenant to `$DB`. The kernel binds the current tenant to the database service for the lifetime of the request (`setCurrentTenant` + `beginRequestScope`), so all access is scoped to the request's tenant and isolation mode automatically. See [multi-tenancy](../architecture/multi-tenancy.md).
 
 ## Querying
 
 ```javascript
 function execute(request, controlData) {
-    var accounts = $DB.query(
-        "SELECT id, balance FROM account WHERE status = ?",
-        ["ACTIVE"]
+    var accounts = $DB.find(
+        "SELECT id, balance FROM account WHERE status = :status",
+        {status: "ACTIVE"}
     );
     return { count: accounts.length, accounts: accounts };
 }
@@ -30,7 +22,7 @@ function execute(request, controlData) {
 
 ```javascript
 function execute(request, controlData) {
-    var id = $DB.insert("account", {
+    var id = $DB.save("account", {
         owner: $Principal.get("id"),
         balance: 0
     });
@@ -39,21 +31,15 @@ function execute(request, controlData) {
 }
 ```
 
-> The exact method surface (`query`, `insert`, `update`, `delete`, named operations) is
-> provided by `DynamicDataAccessService`. See the connector's own reference,
-> `database-service/docs/DynamicDataAccessService.md`, for the complete API.
+> The exact method surface (`find`, `save`, `update`, `delete`, named operations) is provided by `DynamicDataAccessService`. See the connector's own reference, `database-service/docs/ DynamicDataAccessService.md`, for the complete API.
 
 ## Data-model mapping files
 
-An application can declare entity/data-model mappings through `mapping-files` in its
-[application configuration](application-model.md). These describe how logical entities map to
-the underlying schema, letting `$DB` resolve named operations.
+An application can declare entity/data-model mappings through `mapping-files` in its [application configuration](application-model.md). These describe how logical entities map to the underlying schema, letting `$DB` resolve named operations. It is also possible to just put by convention the mapping files in `model/` sub-directory of the application.
 
 ## Transactions and request scope
 
-Each request opens a database **request scope** before bindings are injected and closes it in
-the `finally` stage of the pipeline (`endRequestScope`). Work performed via `$DB` during the
-request participates in that scope; you do not manage connections manually.
+Each request opens a database **request scope** before bindings are injected and closes it in the `finally` stage of the pipeline (`endRequestScope`). Work performed via `$DB` during the request participates in that scope; you do not manage connections manually.
 
 ## Schema and isolation
 

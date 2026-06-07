@@ -4,6 +4,7 @@ Internal design of PayOS for **architects** and anyone who needs to understand h
 
 ## Reading order
 
+0. [Architecture style](./architecture-style.md) — Description of the architecture style of PayOS
 1. [Platform architecture](platform-architecture.md) — the kernel / guest-layer split and the layering.
 2. [Runtime architecture](runtime-architecture.md) — bootstrap, configuration loading, hot-reload, global registry.
 3. [Request processing](request-processing.md) — the full path from transport ingress to response.
@@ -14,6 +15,8 @@ Internal design of PayOS for **architects** and anyone who needs to understand h
 8. [Extensibility](extensibility.md) — connectors, extensions, transport providers, and capabilities.
 9. [Eventing & webhooks](eventing-webhooks.md) — hooks, system events, and webhook dispatch.
 10. [Architecture Decision Records](adr/README.md) — significant decisions captured over time.
+11. [Server side i18n localization service](./server-side-i18n-architecture.md) — Architecture of the backend localization system
+12. [Ecosystem surface](./ecosystem-surface.md) — a description of the surface that enables access to the PayOS platform
 
 ## Cross-cutting principles
 

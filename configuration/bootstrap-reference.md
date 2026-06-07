@@ -55,6 +55,7 @@ bundle root, and use `configDir` to choose where merged configuration files live
 | --- | --- | --- | --- |
 | `runtimeBaseDir` | `RUNTIME_BASE_DIRECTORY` | directory containing `payos.json` | Effective runtime base directory; computed and set on `PayOSConfig`. |
 | `configDir` | `CONFIG_DIRECTORY` | `.` | Directory whose files are merged into the configuration, resolved relative to `runtimeBaseDir` when not absolute. |
+| `config-hot-reload-enabled` | `CONFIG_HOT_RELOAD_ENABLED` | `true` | Enable configuration hot-reload (watches config directories for changes). Set to `false` to require manual restarts for config changes. |
 | `connectors-dir` | `CONNECTORS_DIR` | — | Directory scanned for connector (SPI) JARs. |
 | `extensions-dir` | `EXTENSIONS_DIR` | — | Directory scanned for extension JARs. |
 | (internal) | `CAPABILITIES_DIR` | `.capabilities` | Capability state under `configDir`. |

@@ -43,7 +43,7 @@ edc --encryption pack \
 | --- | --- |
 | `--encryption pack` | Encrypt mode. |
 | `--inputdir` | Bundle directory to pack. |
-| `--key <16-char>` | Encryption key (or source it from a secret provider, below). |
+| `--key <16-char>` | Encryption key (or if --key is absent, source it from a secret provider, below). |
 
 ## Unpack (decrypt)
 
@@ -77,6 +77,7 @@ Vault or filesystem store can hold the bundle key.
   it on a schedule (see [secrets-management.md](secrets-management.md)).
 - Keep an auditable record of which key version packed which delivered bundle.
 - The `P8OS` magic header lets tooling verify a packed artifact before unpacking.
+- This guide only shows an example for filesystem secret provider. To explore all options (including vault secret provider) see the following document [CLI tools guide](./cli-tools-guide.md).
 
 ## Next
 

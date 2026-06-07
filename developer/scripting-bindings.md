@@ -35,7 +35,17 @@ $Response.setHeader("X-Custom", "value");
 
 ### `$Api`
 
-Metadata about the API resource being executed (its identity/path within the application).
+API invocation utility (`ApiProxy`) that calls APIs within the current application or falls
+back to remote HTTP/HTTPS endpoints when the local API is not found. Provides `get()`,
+`post()`, `put()`, and `delete()` methods.
+
+```javascript
+// Call a local API within the same bundle
+var response = $Api.get("/orders/123");
+
+// If local API not found and path is a valid HTTP URL, falls back to remote call
+var remoteResponse = $Api.post("http://payment-service:8080/process", JSON.stringify({amount: 100}));
+```
 
 ### `$App`
 
@@ -68,7 +78,7 @@ The database access service (`IDatabaseService`). Backed by the
 [database connector](../configuration/database-service.md). See [data access](data-access.md).
 
 ```javascript
-var rows = $DB.query("SELECT * FROM accounts WHERE tenant = ?", [$Tenant]);
+var rows = $DB.find("SELECT * FROM accounts WHERE tenant = ?", [$Tenant]);
 ```
 
 ### `$Queue`

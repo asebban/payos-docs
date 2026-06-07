@@ -1,9 +1,6 @@
 # Operations guide
 
-For **operators** running PayOS in production: deployment, bundle encryption, secrets
-management, observability, and hot reload. This section assumes familiarity with the
-[architecture](../architecture/README.md) and the
-[configuration reference](../configuration/README.md).
+For **operators** running PayOS in production: deployment, bundle encryption, secrets management, observability, and hot reload. This section assumes familiarity with the [architecture](../architecture/README.md) and the [configuration reference](../configuration/README.md).
 
 ## Contents
 
@@ -14,6 +11,7 @@ management, observability, and hot reload. This section assumes familiarity with
 | Managing secrets (Vault, rotation, `spm`) | [secrets-management.md](secrets-management.md) |
 | Logging, correlation, tenancy, audit | [observability.md](observability.md) |
 | Zero-downtime configuration reload | [hot-reload.md](hot-reload.md) |
+| Guide of all CLI tools | [cli-tools-guide.md](./cli-tools-guide.md) |
 
 ## Related references
 

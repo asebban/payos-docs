@@ -68,8 +68,71 @@ logic runs. See [architecture/multi-tenancy.md](../architecture/multi-tenancy.md
 
 ## Per-tenant overrides
 
-Each `tenants[]` entry can override the schema, isolation mode, and quotas for a specific
-tenant, layering on top of the `default-*` values.
+Each `tenants[]` entry can override the schema, isolation mode, quotas, security settings,
+and database configuration for a specific tenant, layering on top of the `default-*` values.
+
+### `tenants[]` entry structure
+
+| Key | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `id` (required) | string | — | Unique tenant identifier. |
+| `database-schema` or `schema` | string | inherits `default-database-schema` | Database schema for this tenant. |
+| `isolation-mode` or `isolationMode` | string | inherits `default-isolation-mode` | Isolation mode (`schema`, etc.). |
+| `tcp.handlers.dir` | string | — | Per-tenant TCP plugin directory. |
+| `quotas` | object | inherits `default-tenant-quotas` | Rate limits (see below). |
+| `security` | object | inherits global `security` | Per-tenant OIDC overrides (see below). |
+| `database-service` | object | inherits global `database-service` | Per-tenant database configuration (see below). |
+
+#### `quotas` object
+
+| Key | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `requestsPerMinute` | int | inherits `default-tenant-quotas.requestsPerMinute` | Requests per minute limit. |
+| `enabled` | boolean | inherits `default-tenant-quotas.enabled` | Enforce quota for this tenant. |
+
+#### `security` object
+
+Accepts all keys from the global `security` block (see [security-oidc.md](security-oidc.md)):
+`provider`, `oidcProviderBaseUrl`, `realm`, `discoveryUri`, `clientId`, `clientSecret`,
+`callBackUri`, `scope`, `preferredJwsAlgorithm`, `logoutUrl`, `postLogoutRedirectUri`,
+`sessionTtlSeconds`, `sessionMaxEntries`, `sessionCookieSecure`, `allowedOrigins`.
+
+#### `database-service` object
+
+Accepts all keys from the global `database-service` block (see
+[database-service.md](database-service.md)): `name`, `dialect`, `driver-class`, `url`,
+`username`, `password`, `schema`, `max-pool-size`, `minimum-idle`, `ddl-auto`,
+`retired-session-factory-close-delay-seconds`.
+
+### Example with full overrides
+
+```json
+{
+  "multitenancy": {
+    "tenants": [
+      {
+        "id": "acme",
+        "database-schema": "acme",
+        "isolation-mode": "schema",
+        "quotas": {
+          "requestsPerMinute": 1200,
+          "enabled": true
+        },
+        "security": {
+          "clientId": "acme-client",
+          "clientSecret": "${ACME_OIDC_SECRET}",
+          "realm": "acme"
+        },
+        "database-service": {
+          "url": "jdbc:postgresql://acme-db.example.com:5432/payos",
+          "username": "acme_user",
+          "password": "${ACME_DB_PASSWORD}"
+        }
+      }
+    ]
+  }
+}
+```
 
 ## Relationship to other blocks
 

@@ -8,10 +8,10 @@ documentation; this page is the single source for their meaning.
 **Application**
 : A unit of business functionality deployed *into* the runtime. It is a directory of
 resources — API scripts (`api/`), pages (`page/`), components, menus (`menu/`), shared
-libraries (`lib/`), and translations (`i18n/`) — registered in the runtime configuration.
-Identified by an `id`; addressed as the first path segment of an inbound URI
-(`/{appId}/...`). Modeled by `ma.s2m.payos.applications.Application`. Managed with
-[`apm`](../cli-tools/apm.md). See [developer/application-model.md](../developer/application-model.md).
+libraries (`lib/`), hook scripts (`hook/`), and translations (`i18n/`) — registered in the
+runtime configuration. Identified by an `id`; addressed as the first path segment of an
+inbound URI (`/{appId}/...`). Modeled by `ma.s2m.payos.applications.Application`. Managed
+with [`apm`](../cli-tools/apm.md). See [developer/application-model.md](../developer/application-model.md).
 
 **Capability**
 : An application with `category: "capability"`. It is a self-contained extension that other
@@ -24,13 +24,10 @@ redeploying the runtime. Capability resources are only resolved when the capabil
 manifest. Managed with [`ppm`](../cli-tools/ppm.md).
 
 **Extends**
-: The inheritance relationship between applications. An application lists parent app/
-capability IDs in `extends`; the [resource locator](../architecture/request-processing.md)
-walks this chain to resolve a resource, honoring capability activation.
+: The inheritance relationship between applications. An application lists parent app/ capability IDs in `extends`; the [resource locator](../architecture/request-processing.md) walks this chain to resolve a resource.
 
 **Bundle**
-: The on-disk runtime directory rooted at `payos.json` (passed via `--bundle-path`). It
-contains the merged configuration, the registered applications, and the capability state.
+: The on-disk runtime directory rooted at `payos.json` (passed via `--bundle-path`). It contains the merged configuration, the registered applications, and the capability state.
 
 ## Runtime concepts
 
@@ -41,7 +38,7 @@ contracts. Never modified to add a feature.
 
 **Runtime**
 : The running PayOS process, produced by `payos-runtime` and started by `BootServer`.
-Applications run inside it (the *externalized runtime* principle).
+Applications run inside it as a container (the *externalized runtime* principle: Applications run inside the runtime as data, not as part of the server binary. The application is completely decoupled from the server/transport layer).
 
 **BootServer**
 : `ma.s2m.payos.BootServer` — the executable entry point (declared in the shade plugin
@@ -82,42 +79,28 @@ protocol (`http`, `https`, `tcp`, `queue`). See [architecture/request-processing
 ## Scripting concepts
 
 **Script binding**
-: A host object injected into the JavaScript sandbox before execution (a `$`-prefixed
-global such as `$Request`, `$Response`, `$DB`, `$Queue`, `$Secrets`). The full list is in
-[developer/scripting-bindings.md](../developer/scripting-bindings.md) and
-[reference/script-bindings-index.md](../reference/script-bindings-index.md).
+: A host object injected into the JavaScript sandbox before execution (a `$`-prefixed global such as `$Request`, `$Response`, `$DB`, `$Queue`, `$Secrets`). The full list is in [developer/scripting-bindings.md](../developer/scripting-bindings.md) and [reference/script-bindings-index.md](../reference/script-bindings-index.md).
 
 **`loadControlData` / `execute` / `emitInsight`**
-: The three-function contract a PayOS API script exposes. `loadControlData(request)` returns
-control data; `execute(request, controlData)` returns the response; `emitInsight(request,
-response, payload)` emits optional analytics/business insight. See
-[developer/writing-apis.md](../developer/writing-apis.md).
+: The three-function contract a PayOS API script exposes. `loadControlData(request)` returns control data; `execute(request, controlData)` returns the response; `emitInsight(request, 
+response, payload)` emits optional analytics/business insight. See [developer/writing-apis.md](../developer/writing-apis.md).
 
 **Resource**
-: A loadable artifact within an application — `api` (`.js`), `page`/`component` (`.vue`,
-`.html`), `menu`, `lib`, `i18n`. Resource types are defined by
-`ma.s2m.payos.resources.IResource`.
+: A loadable artifact within an application — `api` (`.js`), `page`/`component` (`.vue`, `.html`), `menu`, `lib`, `i18n`, and `hook` (event-interception scripts). Resource types are defined by `ma.s2m.payos.resources.IResource`.
 
 **Hook / System event**
-: An interception point (`api.pre-request`, `api.post-request`, `api.on-error`,
-`security.login`, capability lifecycle events, page events, …) where PayOS can run hook
-scripts and dispatch native webhooks. The full list is in
-[reference/system-events.md](../reference/system-events.md).
+: An interception point (`api.pre-request`, `api.post-request`, `api.on-error`, `security.login`, capability lifecycle events, page events, …) where PayOS can run hook scripts and dispatch native webhooks. The full list is in [reference/system-events.md](../reference/system-events.md).
 
 ## Service concepts
 
 **Database service** (`$DB`)
-: The `IDatabaseService` implementation providing multi-tenant data access. See
-[developer/data-access.md](../developer/data-access.md).
+: The `IDatabaseService` implementation providing multi-tenant data access. See [developer/data-access.md](../developer/data-access.md).
 
 **Queue client** (`$Queue`)
-: The `IQueueClient` implementation for publish/subscribe messaging (NATS by default). See
-[developer/queue-messaging.md](../developer/queue-messaging.md).
+: The `IQueueClient` implementation for publish/subscribe messaging (NATS by default). See [developer/queue-messaging.md](../developer/queue-messaging.md).
 
 **Secret provider** (`$Secrets`)
-: The `ISecretProvider` implementation for retrieving and storing secrets (filesystem or
-Vault). See [developer/secrets-usage.md](../developer/secrets-usage.md).
+: The `ISecretProvider` implementation for retrieving and storing secrets (filesystem or Vault). See [developer/secrets-usage.md](../developer/secrets-usage.md).
 
 **Webhook dispatcher** (`$WebHooks`)
-: The `IWebhookDispatcher` implementation that delivers webhook events over HTTP. See
-[developer/webhooks-and-hooks.md](../developer/webhooks-and-hooks.md).
+: The `IWebhookDispatcher` implementation that delivers webhook events over HTTP. See [developer/webhooks-and-hooks.md](../developer/webhooks-and-hooks.md).

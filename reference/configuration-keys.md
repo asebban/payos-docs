@@ -10,11 +10,14 @@ block heading.
 | --- | --- | --- |
 | `runtimeBaseDir` | directory containing `payos.json` | Effective runtime base directory; computed by the loader, not normally authored in `payos.json`. |
 | `configDir` | `.` | Directory merged into the configuration, resolved relative to `runtimeBaseDir` when not absolute. |
+| `config-hot-reload-enabled` | `true` | Enable configuration hot-reload (watches config directories for changes). |
 | `connectors-dir` | — | Connector (SPI) JAR directory. |
 | `extensions-dir` | — | Extension JAR directory. |
 | `tcp-handlers-dir` | — | TCP plugin directory (also per-server). |
 | `applications[]` | — | Registered applications (see below). |
 | `applicationCatalog` | — | Optional app catalog (`local`/`git`, `baseUrl`/`path`). |
+| `capabilityCatalog` | — | Optional capability catalog (`local`/`git`, `baseUrl`/`path`). |
+| `productCatalog` | — | Optional product catalog (`local`/`git`, `baseUrl`/`path`). |
 
 Internal/effective: `RUNTIME_CONFIG_FILE = payos.json`, `RUNTIME_BASE_DIRECTORY = runtimeBaseDir`, `CAPABILITIES_DIR = .capabilities`.
 
@@ -57,8 +60,7 @@ Internal/effective: `RUNTIME_CONFIG_FILE = payos.json`, `RUNTIME_BASE_DIRECTORY 
 
 | Key | Purpose |
 | --- | --- |
-| `provider` | `pac4j` (default) / `nimbus`. |
-| `encryptionKey` | Session/value encryption key. |
+| `provider` | `nimbus` (default) / `pac4j` (legacy). |
 | `oidcProviderBaseUrl` / `keycloakBaseUrl` | IdP base URL. |
 | `realm` | IdP realm. |
 | `discoveryUri` | OIDC discovery URL. |
@@ -81,7 +83,20 @@ Internal/effective: `RUNTIME_CONFIG_FILE = payos.json`, `RUNTIME_BASE_DIRECTORY 
 | `default-tenant-quotas.enabled` | — | Enforce default quotas. |
 | `tenantSimulator.enabled` | `false` | Dev-only fixed tenant. |
 | `tenantSimulator.tenantId` | — | Simulated tenant id. |
-| `tenants[]` | — | Per-tenant overrides. |
+| `tenants[]` | — | Per-tenant overrides (see below). |
+
+### `tenants[]` entry
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `id` (required) | — | Unique tenant identifier. |
+| `database-schema` / `schema` | inherits `default-database-schema` | Database schema for this tenant. |
+| `isolation-mode` / `isolationMode` | inherits `default-isolation-mode` | Isolation mode. |
+| `tcp.handlers.dir` | — | Per-tenant TCP plugin directory. |
+| `quotas.requestsPerMinute` | inherits default | Requests per minute limit. |
+| `quotas.enabled` | inherits default | Enforce quota. |
+| `security` | inherits global | Per-tenant OIDC overrides (all keys from global `security`). |
+| `database-service` | inherits global | Per-tenant DB config (all keys from global `database-service`). |
 
 ## `database-service` — [database-service.md](../configuration/database-service.md)
 

@@ -4,6 +4,7 @@ For developers **building applications on PayOS**. Applications are written prim
 
 ## Reading order
 
+0. [PayOS Build Guide](./build-guide.md) — Detailed build guide
 1. [Getting started](getting-started.md) — build PayOS, run it locally, create your first app.
 2. [Application model](application-model.md) — apps, capabilities, products, directory layout, `extends`.
 3. [Writing API scripts](writing-apis.md) — the `loadControlData` / `execute` / `emitInsight` contract.
@@ -22,6 +23,7 @@ For developers **building applications on PayOS**. Applications are written prim
 - [Configuration reference](../configuration/README.md) — every configuration key.
 - [Reference: script bindings index](../reference/script-bindings-index.md) — quick lookup.
 - [Architecture: request processing](../architecture/request-processing.md) — what runs your script.
+- [Create an application guide](./create-application-guide.md) — Comprehensive guide for creating PayOS applications step by step
 
 ## The shortest possible application
 

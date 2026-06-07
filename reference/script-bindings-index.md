@@ -9,7 +9,7 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 | --- | --- | --- |
 | `$Request` | `Request` | Body, headers, parameters, method, path, context data. |
 | `$Response` | `Response` | Set status, headers, body. |
-| `$Api` | API metadata | The API resource being executed. |
+| `$Api` | `ApiProxy` | Call local or remote APIs (`get()`, `post()`, `put()`, `delete()`). |
 | `$App` | `Application` | Current application (id, name, version, config). |
 | `$Principal` / `$User` | Map | Authenticated principal: `id`, `email`, `name`, `preferred_username`, `roles`. |
 | `$Tenant` | String | Resolved tenant id. |

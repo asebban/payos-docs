@@ -50,6 +50,8 @@ The service is then exposed to scripts as `$DB` (injected by `ApiResourceHandler
 a database service is configured). Data sources per application are cached in
 `PayOSConfig.dataSources`.
 
+A detailed description of the database initialization process is described [here](./database-initialization-process.md)
+
 ## Configuration
 
 Database configuration lives under `database-service` → `configuration`, both at the global
@@ -84,23 +86,15 @@ databaseService.endRequestScope();
 databaseService.clearCurrentTenant();
 ```
 
-Per-tenant schemas and isolation modes (configured under `multitenancy`) let a single
-runtime serve many tenants with the appropriate data separation. The architectural rules
-for tenant isolation are in [multi-tenancy.md](multi-tenancy.md).
+Per-tenant schemas and isolation modes (configured under `multitenancy`) let a single runtime serve many tenants with the appropriate data separation. The architectural rules for tenant isolation are in [multi-tenancy.md](multi-tenancy.md).
 
 ### Session-factory lifecycle on reconfiguration
 
-Because configuration can be hot-reloaded (see
-[runtime-architecture.md](runtime-architecture.md)), a tenant's session factory may be
-replaced at runtime. The `retired-session-factory-close-delay-seconds` setting keeps the old
-factory open briefly so in-flight requests can complete before it is closed.
+Because configuration can be hot-reloaded (see [runtime-architecture.md](runtime-architecture.md)), a tenant's session factory may be replaced at runtime. The `retired-session-factory-close-delay-seconds` setting keeps the old factory open briefly so in-flight requests can complete before it is closed.
 
 ## Mapping files
 
-Applications declare their data model through `mapping-files` (an array of paths) at the
-application level and/or per tenant. These drive the dynamic data access. Application-level
-data configuration is part of the application model — see
-[developer/application-model.md](../developer/application-model.md).
+Applications declare their data model through `mapping-files` (an array of paths) at the application level or simply put mapping files in the `model` directory. These drive the dynamic data access. Application-level data configuration is part of the application model — see [developer/application-model.md](../developer/application-model.md).
 
 ## Next
 

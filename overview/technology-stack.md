@@ -59,3 +59,5 @@ class set to `ma.s2m.payos.BootServer`. See
   regulated traceability (see [operations/observability.md](../operations/observability.md)).
 - **SPI everywhere** — database, queue, secret, and webhook providers are discovered at
   runtime so the same core supports many backends without recompilation.
+
+Here is a [detailed description of all dimensions of the technology stack](./stack/technology-stack.md)

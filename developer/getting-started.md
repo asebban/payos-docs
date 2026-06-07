@@ -35,24 +35,27 @@ bundle:
 ```
 my-bundle/
 ├── payos.json
-├── config/
-│   └── bootstrap.json
+├── bootstrap.json
 └── app/
     ├── config/
-    │   └── config.json
+    │   └── mappings.json
+    │   └── routes.json
+    │   └── application.json
     └── api/
         └── greet.js
+    └── page/
+        └── Home.vue
 ```
 
 `payos.json` (bundle entrypoint — it points to the configuration directory):
 
 ```json
 {
-  "configDir": "config"
+  "configDir": "." // current directory
 }
 ```
 
-`config/bootstrap.json` (runtime configuration — see the [configuration reference](../configuration/bootstrap-reference.md)):
+`${configDir}/bootstrap.json` (runtime configuration — see the [configuration reference](../configuration/bootstrap-reference.md)):
 
 ```json
 {
@@ -60,7 +63,7 @@ my-bundle/
     { "protocol": "http", "host": "0.0.0.0", "port": 8080 }
   ],
   "applications": [
-    { "id": "hello", "name": "Hello", "base.path": "../apps/hello", "version": "1.0.0" }
+    { "id": "hello", "name": "Hello", "base.path": "./apps/hello", "version": "1.0.0" }
   ],
   "multitenancy": {
     "tenantSimulator": { "enabled": true, "tenantId": "dev-tenant" }
@@ -71,7 +74,7 @@ my-bundle/
 > The `tenantSimulator` is enabled here so you can call the API without sending `X-Tenant-Id`.
 > **Never enable it in production** — see [multi-tenancy](../architecture/multi-tenancy.md).
 > Note that `base.path` is resolved relative to `configDir`; since `bootstrap.json` lives in
-> `config/` and the app is in `apps/hello/`, we use `../apps/hello`.
+> `.` and the app is in `apps/hello/`, we use `./apps/hello`.
 
 `apps/hello/api/greet.js`:
 
@@ -82,11 +85,30 @@ function loadControlData(request) {
 
 function execute(request, controlData) {
     $Response.setStatusCode(200);
-    return { message: "Hello from PayOS", tenant: $Tenant };
+    var body = { message: "Hello from PayOS", "tenant": $Tenant };
+    $Response.setJsonBody(body);
+    return $Response;
 }
 
 function emitInsight(request, response, payload) {
   return null;
+}
+```
+
+Declare a mappings.json route to the greet.js API endpoint
+
+```json
+{
+    "mappings": {
+        "api": {
+            "/greet" :{
+                "GET": {
+                    "handler": "greet", // path relative to the "api" directory, without .js extension
+                    "description": "Greeting endpoint"
+                }
+            }
+        }
+    }
 }
 ```
 
@@ -106,8 +128,12 @@ available immediately (see [reference/http-endpoints.md](../reference/http-endpo
 curl http://localhost:8080/health
 
 # your API
-curl -X POST http://localhost:8080/hello/api/greet
+curl -X GET http://localhost:8080/hello/api/greet
 ```
+
+- `hello` is the application name.
+- `api` is the requested resource type
+- `/greet` is the declared route in mappings.json
 
 You should receive:
 
@@ -117,17 +143,12 @@ You should receive:
 
 ## What just happened
 
-1. The HTTP transport received `POST /hello/api/greet`, opened a (pre-auth) tenant scope,
-   and built a `Request`.
+1. The HTTP transport received `GET /hello/api/greet`, opened a (pre-auth) tenant scope, and built a `Request`.
 2. The kernel resolved the `hello` application and located the `greet` API resource.
-3. The [scripting engine](../architecture/scripting-engine.md) ran `loadControlData`,
-   `execute`, and `emitInsight`, with `$Response` and `$Tenant` injected as bindings.
-4. The returned object from `execute` was serialized as the HTTP response, with `X-Tenant-Id`
-   and `X-Correlation-Id` headers added. (`emitInsight` returned `null`, so no insight was
-   published.)
+3. The [scripting engine](../architecture/scripting-engine.md) ran `loadControlData`, `execute`, and `emitInsight`, with `$Response` and `$Tenant` injected as bindings.
+4. The returned object from `execute` was serialized as the HTTP response, with `X-Tenant-Id` and `X-Correlation-Id` headers added. (`emitInsight` returned `null`, so no insight was published.)
 
-The full path is described in
-[architecture/request-processing.md](../architecture/request-processing.md).
+The full path is described in [architecture/request-processing.md](../architecture/request-processing.md).
 
 ## Next
 

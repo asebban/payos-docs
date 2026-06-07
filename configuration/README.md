@@ -26,6 +26,7 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | Block | Document | Purpose |
 | --- | --- | --- |
 | Bootstrap (entrypoint + top level) | [bootstrap-reference.md](bootstrap-reference.md) | `payos.json`, `bootstrap.json`, top-level runtime blocks, runtime dirs. |
+| Environment variables & config references | [env-var-resolution.md](env-var-resolution.md)<br>[config-references.md](config-references.md) | Placeholder syntax (`${...}`) for environment variables, files, and config keys. |
 | `servers` | [servers.md](servers.md) | Transport listeners (HTTP/HTTPS/TCP/queue), TLS, Swagger UI. |
 | `security` | [security-oidc.md](security-oidc.md) | OIDC/pac4j authentication, sessions, CORS. |
 | `multitenancy` | [multi-tenancy.md](multi-tenancy.md) | Tenant policy, quotas, isolation, simulator. |
@@ -35,6 +36,7 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | `webhooks` / `http-webhook-service` | [webhook-service.md](webhook-service.md) | Webhook dispatcher. |
 | `i18n` | [i18n.md](i18n.md) | Locale resolution. |
 | `connectors-dir` / `extensions-dir` | [extensions-connectors.md](extensions-connectors.md) | Plugin discovery paths and classloaders. |
+| Complete reference guide of configuration | [Json configuration reference](./json-configuration-reference.md) | |
 
 ## A complete index
 
@@ -46,6 +48,10 @@ For a single flat list of every key (block + key + default), see
 - **Convention over configuration:** most keys have sensible defaults; only override what you
   need.
 - **Environment placeholders:** any string value may contain `${ENV_VAR}`, resolved at load.
+  See [Environment Variable Resolution](env-var-resolution.md) for full syntax.
+- **Config references:** any string value may reference other config keys using dot notation
+  (e.g., `${database.host}` or `${config:server.port}`). This allows reusing values across
+  the configuration. See [Configuration References](config-references.md) for details.
 - **Encrypted values:** sensitive values can be stored encrypted and are decrypted at load
   (see [operations/bundle-encryption.md](../operations/bundle-encryption.md)).
 - **Hot reload:** edits to watched config files are applied without a restart

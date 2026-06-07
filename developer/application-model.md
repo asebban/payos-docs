@@ -17,6 +17,7 @@ apps/{appId}/
 ├── page/              pages (.vue, .html)          → resource type "page"
 ├── menu/              menu definitions             → resource type "menu"
 ├── lib/               shared JavaScript libraries  → resource type "lib"
+├── hook/              hook scripts (.js)           → resource type "hook"
 └── i18n/              translation files            → resource type "i18n"
 ```
 
@@ -29,6 +30,7 @@ Resource types and directory names are defined by `ma.s2m.payos.resources.IResou
 | `COMPONENT_RESOURCE` | `page/` (components) | `.vue`, `.html` | `/{appId}/component/...` |
 | `MENU_RESOURCE` | `menu/` | `.json` | `/{appId}/menu/...` |
 | `LIB_RESOURCE` | `lib/` | `.js` | loaded via `$Library` |
+| `HOOK_RESOURCE` | `hook/` | `.js` | executed by `HookEngine` on lifecycle events |
 | `I18N_RESOURCE` | `i18n/` | `.json` | loaded via `$I18n` |
 
 ## Registering an application
@@ -111,8 +113,15 @@ Applications can be loaded from a **catalog** instead of a local path, configure
 | `baseUrl` | Git repository base URL (for `git`). |
 | `path` | Local repository path (for `local`). |
 
-The package managers ([`apm`](../cli-tools/apm.md), [`ppm`](../cli-tools/ppm.md)) can resolve
-applications from this catalog.
+The package managers ([`apm`](../cli-tools/apm.md), [`ppm`](../cli-tools/ppm.md)) can resolve applications from this catalog.
+
+## Creating an appilcation from sratch
+
+Here is the guide for creating a complete application from ground zero [Creating an application guide](./create-application-guide.md)
+
+# Capability model
+
+Capabilities are technically a particular form of an applications with minimal differences. A complete description of how to use capabilities can be found in [Capability System](./capability%20system.md) 
 
 ## Next
 

@@ -1,21 +1,16 @@
 # Runtime architecture
 
-How a PayOS process **boots**, **loads and merges configuration**, **initializes services**,
-and **stays current** through hot-reload. The bootstrap layer is owned by the kernel module
-`payos` (`ma.s2m.payos`).
+How a PayOS process **boots**, **loads and merges configuration**, **initializes services**, and **stays current** through hot-reload. The bootstrap layer is owned by the kernel module `payos` (`ma.s2m.payos`).
 
 ## Entry point: `BootServer`
 
-`ma.s2m.payos.BootServer` is the executable main class (declared in the `payos-runtime`
-shade plugin manifest). It accepts a single argument:
+`ma.s2m.payos.BootServer` is the executable main class (declared in the `payos-runtime` shade plugin manifest). It accepts a single argument:
 
 ```bash
 java -jar payos-runtime-<version>.jar --bundle-path <bundle-directory|payos.json>
 ```
 
-If `--bundle-path` is omitted, the configuration is resolved from the current directory or
-the classpath. The bundle directory rooted at `payos.json` is the unit operators deploy
-(see [operations/deployment.md](../operations/deployment.md)).
+If `--bundle-path` is omitted, the configuration is resolved from the current directory or the classpath. The bundle directory rooted at `payos.json` is the unit operators deploy (see [operations/deployment.md](../operations/deployment.md)).
 
 ## Boot sequence
 
@@ -25,7 +20,7 @@ BootServer.main(args)
   ├─ ConfigLoader.loadServerConfig([payos.json])
   │     ├─ read raw bytes
   │     ├─ CryptoService.decryptIfEncrypted(raw)      ← supports encrypted config
-  │     ├─ EnvVarResolver.resolve(map)                ← ${ENV} substitution
+  │     ├─ EnvVarResolver.resolve(map)                ← ${...} substitution
   │     ├─ resolve relative paths against payos.json location
   │     └─ merge config directory files (loadConfigByDirectory)
   │
@@ -105,6 +100,10 @@ On a change, `BootServer.reloadConfiguration()`:
 This is why the kernel rule *"avoid static one-time config assumptions"* exists: any code
 that reads configuration must read it through `PayOSConfig.settings` so that a reload takes
 effect. Operational behavior is described in [operations/hot-reload.md](../operations/hot-reload.md).
+
+Hot-reload is **enabled by default** but can be disabled by setting
+`config-hot-reload-enabled` to `false` in the bootstrap configuration. When disabled, the
+`ConfigWatcher` is not started and all configuration changes require a full restart.
 
 ## Class-loader hierarchy
 

@@ -8,12 +8,12 @@ can be set globally and overridden per application.
 ## Provider selection
 
 `SecurityServiceFactory.create()` resolves the provider in this order: **application config
-→ session store → global config → default `pac4j`**.
+→ session store → global config → default `nimbus`**.
 
 | `provider` value | Implementation |
 | --- | --- |
-| `pac4j` (default) | `SecurityService` (pac4j OIDC). |
-| `nimbus` | `NimbusSecurityService`. |
+| `nimbus` (default) | `NimbusSecurityService` (Nimbus OIDC — primary). |
+| `pac4j` (legacy) | `SecurityService` (pac4j OIDC). |
 
 ## OIDC keys
 
@@ -22,8 +22,7 @@ From `IConfigSpec.Security`:
 ```json
 {
   "security": {
-    "provider": "pac4j",
-    "encryptionKey": "${PAYOS_SEC_KEY}",
+    "provider": "nimbus",
     "oidcProviderBaseUrl": "https://idp.example.com",
     "keycloakBaseUrl": "https://idp.example.com",
     "realm": "payos",
@@ -46,7 +45,6 @@ From `IConfigSpec.Security`:
 | Key | Purpose |
 | --- | --- |
 | `provider` | `pac4j` or `nimbus`. |
-| `encryptionKey` | Key for session/value encryption. |
 | `oidcProviderBaseUrl` / `keycloakBaseUrl` | IdP base URL. |
 | `realm` | IdP realm. |
 | `discoveryUri` | OIDC discovery document URL. |
@@ -92,6 +90,10 @@ Resource access checks roles when the resource requires them; the authenticated 
 
 The HTTP transport serves `/me` (current principal), `/callback` (OIDC redirect), and
 `/logout`. See [reference/http-endpoints.md](../reference/http-endpoints.md).
+
+## See further
+
+For a fully more detailed explanation of security oidc functioning and configuration, see [oidc configuration guide](./oidc-configuration-guide.md)  
 
 ## Next
 

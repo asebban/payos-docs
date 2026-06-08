@@ -7,6 +7,7 @@ artifacts. This section is for engineers maintaining the platform itself.
 
 | Topic | Document |
 | --- | --- |
+| Build step by step and Automated build | [Automated build](./automated-build.md) |
 | Build conventions (Java 21, Maven, plugins) | [build-conventions.md](build-conventions.md) |
 | Versioning & release flow | [versioning.md](versioning.md) |
 | Module map (what each module is, versions, artifacts) | [module-map.md](module-map.md) |

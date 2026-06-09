@@ -281,6 +281,288 @@ For a token like `${VAR:-default}`:
 }
 ```
 
+## Configuration Variable Resolution: `${config:path}`
+
+In addition to environment variables, PayOS supports **configuration key references** using the `${config:...}` prefix. This allows you to reuse values defined elsewhere in the configuration without duplication.
+
+### Basic Syntax
+
+```json
+{
+  "shared": {
+    "host": "api.example.com",
+    "port": 8443
+  },
+  "service-a": {
+    "endpoint": "${config:shared.host}"
+  },
+  "service-b": {
+    "url": "https://${config:shared.host}:${config:shared.port}/api"
+  }
+}
+```
+
+**Result**:
+```json
+{
+  "shared": {
+    "host": "api.example.com",
+    "port": 8443
+  },
+  "service-a": {
+    "endpoint": "api.example.com"
+  },
+  "service-b": {
+    "url": "https://api.example.com:8443/api"
+  }
+}
+```
+
+### Nested Object Navigation
+
+Use dot notation to access nested values:
+
+```json
+{
+  "database": {
+    "primary": {
+      "host": "db1.example.com",
+      "port": 5432,
+      "credentials": {
+        "username": "payos_user",
+        "password": "${DB_PASSWORD}"
+      }
+    }
+  },
+  "backup-service": {
+    "target": "${config:database.primary.host}",
+    "port": "${config:database.primary.port}",
+    "user": "${config:database.primary.credentials.username}"
+  }
+}
+```
+
+**Result** (assuming `DB_PASSWORD=secret123`):
+```json
+{
+  "backup-service": {
+    "target": "db1.example.com",
+    "port": 5432,
+    "user": "payos_user"
+  }
+}
+```
+
+### Array Access by Index
+
+Access array elements using bracket notation:
+
+```json
+{
+  "servers": ["server1.example.com", "server2.example.com", "server3.example.com"],
+  "primary": {
+    "host": "${config:servers[0]}"
+  },
+  "failover": {
+    "host": "${config:servers[1]}"
+  }
+}
+```
+
+**Result**:
+```json
+{
+  "primary": {
+    "host": "server1.example.com"
+  },
+  "failover": {
+    "host": "server2.example.com"
+  }
+}
+```
+
+### Combining with Environment Variables
+
+Config references can be mixed with environment variable resolution:
+
+```json
+{
+  "common": {
+    "apiVersion": "v2",
+    "basePath": "/api"
+  },
+  "services": {
+    "payment": {
+      "url": "${API_HOST:-https://localhost}${config:common.basePath}/${config:common.apiVersion}/payments",
+      "apiKey": "${PAYMENT_API_KEY:?Payment API key required}"
+    }
+  }
+}
+```
+
+**Environment**:
+```bash
+export API_HOST=https://prod.example.com
+export PAYMENT_API_KEY=pk_live_abc123
+```
+
+**Result**:
+```json
+{
+  "services": {
+    "payment": {
+      "url": "https://prod.example.com/api/v2/payments",
+      "apiKey": "pk_live_abc123"
+    }
+  }
+}
+```
+
+### Default Values for Config References
+
+Use the `:-` operator to provide defaults when a config path doesn't exist:
+
+```json
+{
+  "app": {
+    "theme": "dark"
+  },
+  "ui": {
+    "colorScheme": "${config:app.theme:-light}",
+    "language": "${config:app.locale:-en}"
+  }
+}
+```
+
+**Result**:
+```json
+{
+  "ui": {
+    "colorScheme": "dark",
+    "language": "en"
+  }
+}
+```
+
+### Cross-Application Configuration Sharing
+
+Configuration references are particularly useful in application inheritance scenarios:
+
+```json
+// parent-app/config/application.json
+{
+  "shared": {
+    "database": {
+      "host": "shared-db.example.com",
+      "pool": {
+        "min": 5,
+        "max": 20
+      }
+    }
+  }
+}
+
+// child-app/config/application.json
+{
+  "extends": ["parent-app"],
+  "database-service": {
+    "url": "jdbc:postgresql://${config:shared.database.host}:5432/child_db",
+    "pool": {
+      "maxSize": "${config:shared.database.pool.max}"
+    }
+  }
+}
+```
+
+### Resolution Order and Precedence
+
+When resolving a `${...}` token, PayOS follows this order:
+
+1. **Check for explicit prefix**:
+   - `${config:path}` → Always resolve as configuration reference
+   - `${file:path}` → Always resolve as file read
+   - `${env:VAR}` → Always resolve as environment variable
+
+2. **If no prefix** (e.g., `${VAR}`):
+   - First try as environment variable `System.getenv("VAR")`
+   - If not found and contains dots (e.g., `${a.b.c}`), try as config path
+   - If still not found, use default value or throw error per operator
+
+### Circular Reference Detection
+
+PayOS detects circular references and fails fast:
+
+```json
+{
+  "a": "${config:b}",
+  "b": "${config:c}",
+  "c": "${config:a}"
+}
+```
+
+**Result**: `IllegalStateException` thrown at startup with message indicating circular dependency.
+
+### Best Practices
+
+1. **Use explicit prefix for clarity**:
+   ```json
+   // ✅ GOOD - clear intent
+   { "value": "${config:shared.setting}" }
+   
+   // ⚠️ AMBIGUOUS - could be env var or config
+   { "value": "${shared.setting}" }
+   ```
+
+2. **Define shared configuration in a dedicated section**:
+   ```json
+   {
+     "shared": {
+       "apiVersion": "v2",
+       "timeout": 30000
+     },
+     "service-a": {
+       "version": "${config:shared.apiVersion}"
+     }
+   }
+   ```
+
+3. **Use config references for DRY configuration**:
+   ```json
+   // ❌ BAD - duplication
+   {
+     "service-a": { "host": "api.example.com" },
+     "service-b": { "host": "api.example.com" },
+     "service-c": { "host": "api.example.com" }
+   }
+   
+   // ✅ GOOD - single source of truth
+   {
+     "shared": { "host": "api.example.com" },
+     "service-a": { "host": "${config:shared.host}" },
+     "service-b": { "host": "${config:shared.host}" },
+     "service-c": { "host": "${config:shared.host}" }
+   }
+   ```
+
+4. **Combine with environment variables for flexibility**:
+   ```json
+   {
+     "defaults": {
+       "port": 8080
+     },
+     "server": {
+       "port": "${PORT:-${config:defaults.port}}"
+     }
+   }
+   ```
+
+### Limitations
+
+- Config references are resolved **left-to-right, top-to-bottom** in the JSON structure
+- Cannot reference values defined later in the file (forward references not supported)
+- Cannot reference into arrays using dynamic indices (only literal numbers)
+- Resolution depth is limited to prevent infinite loops
+
 ## Important Notes
 
 ### Environment Variable Naming

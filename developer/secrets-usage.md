@@ -1,12 +1,6 @@
 # Secrets usage (`$Secrets`)
 
-When a [secret service](../configuration/secret-service.md) is configured, scripts receive
-the `$Secrets` binding — an `ISecretProvider`. Use it to read and manage secrets (API keys,
-credentials, tokens) without embedding them in code or configuration. This page covers usage
-from JavaScript; provider configuration is in
-[configuration/secret-service.md](../configuration/secret-service.md) and operational setup
-(Vault, rotation, the `spm` CLI) is in
-[operations/secrets-management.md](../operations/secrets-management.md).
+When a [secret service](../configuration/secret-service.md) is configured, scripts receive the `$Secrets` binding — an `ISecretProvider`. Use it to read and manage secrets (API keys, credentials, tokens) without embedding them in code or configuration. This page covers usage from JavaScript; provider configuration is in [configuration/secret-service.md](../configuration/secret-service.md) and operational setup (Vault, rotation, the `spm` CLI) is in [operations/secrets-management.md](../operations/secrets-management.md).
 
 ## Tenant scoping is automatic
 
@@ -87,6 +81,10 @@ try {
 `$Secrets` is injected only when `secret-service.enabled` is `true` and a provider `type`
 (`filesystem` or `vault`) is configured with a valid connector JAR. See
 [configuration/secret-service.md](../configuration/secret-service.md).
+
+## See how to configure and use vault secret provider
+
+[Vault Secret Provider](./vault-secret-id-secure-injection.md)
 
 ## Next
 

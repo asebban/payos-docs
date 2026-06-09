@@ -21,7 +21,7 @@ module contributes and the embedded versions.
 
 ```
 /opt/payos/
-├── payos-runtime-<version>.jar
+├── payos-runtime-<version>.jar // start the runtime with --bundle-path option to indicate the root directory of the bundle or, put the runtime JAR in the bundle directory
 └── bundle/
     ├── payos.json              # bundle entrypoint (usually only configDir)
     ├── config/                 # merged runtime config files, typically bootstrap.json

@@ -57,7 +57,7 @@ PayOS organizes its design principles into a hierarchy. They are reproduced here
 | **Financial data first** | Data integrity, traceability, and reconciliation drive design decisions. |
 | **Platform first** | Capabilities are built once and reused across products. |
 | **Secure & compliant by design** | Security and regulatory constraints (notably PCI DSS) are embedded structurally. |
-| **Native multi-tenancy** | Isolation is enforced by architecture, not by configuration. |
+| **Native multi-tenancy** | Isolation is enforced by architecture, not by applications. |
 | **Modular by design** | Clear boundaries and replaceable modules; no tight coupling. |
 | **Deployment agnostic** | The same product runs on-prem, private cloud, and public cloud. |
 

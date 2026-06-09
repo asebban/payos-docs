@@ -154,5 +154,5 @@ The full path is described in [architecture/request-processing.md](../architectu
 
 - [Application model](application-model.md) — how applications are structured and registered.
 - [Writing API scripts](writing-apis.md) — the script contract in depth.
-- Want to add config, a database, secrets, or i18n? Continue through the
-  [developer guide](README.md).
+- Want to add config, a database, secrets, or i18n? Continue through the [developer guide](README.md).
+- [Full API contracts](./api-contracts.md) — Standard API contracts for http transport

@@ -93,9 +93,7 @@ $Queue.publish("payments.events", JSON.stringify({ id: 42 }));
 
 ### `$Secrets`
 
-The secret provider (`ISecretProvider`), backed by a
-[secret service](../configuration/secret-service.md) (`filesystem` or `vault`). See
-[secrets usage](secrets-usage.md).
+The secret provider (`ISecretProvider`), backed by a [secret service](../configuration/secret-service.md) (`filesystem` or `vault`). See [secrets usage](secrets-usage.md).
 
 ```javascript
 var apiKey = $Secrets.getSecret("psp-api-key");

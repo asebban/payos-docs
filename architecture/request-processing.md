@@ -87,6 +87,8 @@ The decoder, encoder, and handler are **pluggable** (`TcpMessageDecoder`, `TcpMe
 
 If no plugin JAR provides one of these interfaces, the TCP server uses sensible UTF-8 defaults: it reads the input as a UTF-8 request payload, routes it through the normal kernel pipeline, and writes the response as UTF-8 bytes. This makes local/simple TCP usage work out of the box while allowing production protocols to plug in strict codecs. See [developer/java-extensions.md](../developer/java-extensions.md) and [configuration/servers.md](../configuration/servers.md).
 
+For a fully detailed documentation on TCP Server, see the following [TCP Server documentation](./tcp%20server/README.md)
+
 ### Queue (`payos-server-queue`)
 
 Subscribes to a topic via an `IQueueClient` and processes each message asynchronously:
@@ -103,6 +105,8 @@ subscribe((message, replyTopic, replyRequired) -> {
 ```
 
 The request and response are JSON envelopes; the correlation ID falls back to the payload field, then the header, then a freshly generated UUID. Because `subscribe` is asynchronous, the server thread stays alive until `stop()`.
+
+For a more detailed explanation about Queue servers, see [Queue server documentation](./queue%20server/queue-server.md)
 
 ## Stage 2 — resource routing
 

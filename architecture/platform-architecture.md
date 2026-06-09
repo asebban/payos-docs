@@ -16,7 +16,7 @@ PayOS is deliberately split into two layers with very different change profiles.
 
 The core is **never** modified to add a business feature. New behavior is delivered by:
 
-- writing / extending **JavaScript** application/capability resources (the primary mechanism), using all extensibility mechanisms.
+- writing / extending **JavaScript** application/capability resources (the primary mechanism), using all [extensibility mechanisms](./extensibility.md).
 - plugging in **service connectors** (database, queue, secret, webhook) through the SPI,
 - dropping in **Java extensions** callable from scripts via `Java.type()`, and
 - plugging in **new TCP handlers** as encoder / decoder and handler.
@@ -27,19 +27,19 @@ These mechanisms are detailed in [extensibility.md](extensibility.md).
 ## Layered view
 
 ```mermaid
-flowchart BT
-  services["Service providers<br/>SPI, in connectors-dir<br/>IDatabaseService · IQueueClient · ISecretProvider · IWebhook..."]
-  bootstrap["Bootstrap layer<br/>BootServer · ConfigLoader · PayOSConfig<br/>Loads payos.json, merges settings, initializes services,<br/>watches changes, holds the global registry"]
-  server["Server layer<br/>IServer · Server · Servers · ServerProvider<br/>Transport-specific ingress HTTP/TCP/Queue -> Request/Response<br/>Opens tenant scope, propagates correlation and tenant IDs"]
-  resource["Resource layer<br/>ResourceHandler · ResourceLocator<br/>Routes Request to API/Page/Component/Menu resources<br/>Walks the application extends chain, honors capability state"]
-  scripting["Scripting layer<br/>PolyglotScriptingEngine - GraalVM, sandboxed<br/>Bindings: $Request $Response $Api $App $Principal $Tenant<br/>$Logger $Library $I18n $Errors $DB $Queue $Secrets ..."]
+flowchart TD
   guest["Guest layer<br/>Per application / capability / product<br/>api/*.js · page/*.vue · menu/ · lib/*.js · hook/*.js · i18n/"]
+  scripting["Scripting layer<br/>PolyglotScriptingEngine - GraalVM, sandboxed<br/>Bindings: $Request $Response $Api $App $Principal $Tenant<br/>$Logger $Library $I18n $Errors $DB $Queue $Secrets ..."]
+  resource["Resource layer<br/>ResourceHandler · ResourceLocator<br/>Routes Request to API/Page/Component/Menu resources<br/>Walks the application extends chain, honors capability state"]
+  server["Server layer<br/>IServer · Server · Servers · ServerProvider<br/>Transport-specific ingress HTTP/TCP/Queue -> Request/Response<br/>Opens tenant scope, propagates correlation and tenant IDs"]
+  bootstrap["Bootstrap layer<br/>BootServer · ConfigLoader · PayOSConfig<br/>Loads payos.json, merges settings, initializes services,<br/>watches changes, holds the global registry"]
+  services["Service providers<br/>SPI, in connectors-dir<br/>IDatabaseService · IQueueClient · ISecretProvider · IWebhook..."]
 
-  services -->|pluggable below the core| bootstrap
-  bootstrap -->|started and configured by| server
-  server -->|delegated to by| resource
-  resource -->|invoked by| scripting
-  scripting -->|executed inside| guest
+  guest -->|executed inside| scripting
+  scripting -->|invoked by| resource
+  resource -->|delegated to by| server
+  server -->|started and configured by| bootstrap
+  bootstrap -->|pluggable below the core| services
 ```
 
 Each layer is the subject of its own document:

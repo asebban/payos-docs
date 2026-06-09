@@ -1,9 +1,7 @@
 # Secret service configuration
 
-The `secret-service` block configures the secret provider that backs the `$Secrets` binding.
-Two providers ship with PayOS: `filesystem` and `vault`. Developer usage is in
-[developer/secrets-usage.md](../developer/secrets-usage.md); operational setup and rotation
-are in [operations/secrets-management.md](../operations/secrets-management.md).
+The `secret-service` block configures the secret provider that backs the `$Secrets` binding. Two providers ship with PayOS: `filesystem` and `vault`. Developer usage is in
+[developer/secrets-usage.md](../developer/secrets-usage.md); operational setup and rotation are in [operations/secrets-management.md](../operations/secrets-management.md).
 
 ## Common keys
 
@@ -12,8 +10,7 @@ are in [operations/secrets-management.md](../operations/secrets-management.md).
 | `enabled` | Enable the secret service (injects `$Secrets`). |
 | `type` | Provider type: `filesystem` or `vault`. Selects the `ISecretProviderFactory`. |
 
-The factory is discovered by `type` and the provider is constructed at bootstrap. The
-provider JAR must be on the [connectors path](extensions-connectors.md).
+The factory is discovered by `type` and the provider is constructed at bootstrap. The provider JAR must be on the [connectors path](extensions-connectors.md).
 
 ## `filesystem` provider
 

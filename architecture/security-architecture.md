@@ -1,14 +1,10 @@
 # Security architecture
 
-PayOS embeds security into the request path structurally — the *secure & compliant by
-design* principle. This document covers authentication (OIDC), sessions, the principal,
-authorization, idempotency, transport hardening, and the audit/traceability that PCI DSS
-requires.
+PayOS embeds security into the request path structurally — the *secure & compliant by design* principle. This document covers authentication (OIDC), sessions, the principal, authorization, idempotency, transport hardening, and the audit/traceability that PCI DSS requires.
 
 ## Authentication: the `ISecurityService` contract
 
-`ma.s2m.payos.security.ISecurityService` defines the security operations used by the
-pipeline and the built-in HTTP endpoints:
+`ma.s2m.payos.security.ISecurityService` defines the security operations used by the pipeline and the built-in HTTP endpoints:
 
 ```java
 Response             check(Request, List<String> requiredRoles);   // non-null = forbidden
@@ -23,8 +19,7 @@ String               resolveAuthenticatedTenantId(Request);        // tenant fro
 
 ### Provider selection
 
-`SecurityServiceFactory.create(application[, request])` chooses the implementation by
-resolving the `provider` value in this order:
+`SecurityServiceFactory.create(application[, request])` chooses the implementation by resolving the `provider` value in this order:
 
 1. application security config (`security.provider`),
 2. the session store (`OidcSessionKeys.SESSION_PROVIDER`),
@@ -62,30 +57,22 @@ Full key documentation: [configuration/security-oidc.md](../configuration/securi
 
 ## Sessions
 
-Sessions are kept in `PayOSSessionStore` (singleton), keyed by the `PAYOS_SESSION_ID`
-cookie. pac4j integrates through `DefaultPayOSWebContext`. Session TTL and capacity are
-bounded by `sessionTtlSeconds` and `sessionMaxEntries`. The session cookie is hardened
-(`HttpOnly`, `Secure`, `SameSite=Lax`) by the HTTP transport.
+Sessions are kept in `PayOSSessionStore` (singleton), keyed by the `PAYOS_SESSION_ID` cookie. pac4j integrates through `DefaultPayOSWebContext`. Session TTL and capacity are bounded by `sessionTtlSeconds` and `sessionMaxEntries`. The session cookie is hardened (`HttpOnly`, `Secure`, `SameSite=Lax`) by the HTTP transport.
 
 ## The principal
 
-When authenticated, `getCurrentPrincipal(request)` returns a `Map<String,Object>` of OIDC
-claims, exposed to scripts as `$Principal`:
+When authenticated, `getCurrentPrincipal(request)` returns a `Map<String,Object>` of OIDC claims, exposed to scripts as `$Principal`:
 
 | Key | Meaning |
 | --- | --- |
 | `id` | User identifier (from the `sub` claim). |
 | `email`, `name`, `preferred_username`, `roles`, … | Standard / IdP claims. |
 
-`$Principal` is `null` for unauthenticated requests. Scripts use it for authorization
-decisions beyond declarative roles — see [developer/scripting-bindings.md](../developer/scripting-bindings.md).
+`$Principal` is `null` for unauthenticated requests. Scripts use it for authorization decisions beyond declarative roles — see [developer/scripting-bindings.md](../developer/scripting-bindings.md).
 
 ## Authorization
 
-API resources may declare required roles (`ApiResource.getRoles()`). When roles are present,
-the pipeline calls `authenticate` then `check(request, roles)`; a non-null `Response` from
-either stops processing (redirect to login, or 403). Resources without roles are public
-within their application.
+API resources may declare required roles (`ApiResource.getRoles()`). When roles are present, the pipeline calls `authenticate` then `check(request, roles)`; a non-null `Response` from either stops processing (redirect to login, or 403). Resources without roles are public within their application.
 
 ## Idempotency
 
@@ -108,11 +95,8 @@ Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'n
 Strict-Transport-Security: max-age=31536000; includeSubDomains      (HTTPS only)
 ```
 
-CORS headers are added only when the request origin matches an allowlist. CORS origins are
-resolved from three levels (most specific wins): application → tenant → global
-`security.cors.allowedOrigins` / `security.allowedOrigins`. See
-[configuration/servers.md](../configuration/servers.md) and
-[configuration/security-oidc.md](../configuration/security-oidc.md).
+CORS headers are added only when the request origin matches an allowlist. CORS origins are resolved from three levels (most specific wins): application → tenant → global
+`security.cors.allowedOrigins` / `security.allowedOrigins`. See [configuration/servers.md](../configuration/servers.md) and [configuration/security-oidc.md](../configuration/security-oidc.md).
 
 ## Secrets and cryptography
 

@@ -54,7 +54,7 @@ Startup failures are surfaced as explicit checked exceptions (for example `Unabl
 4. **Config directory merge** — JSON files under the configured config directory (`IConfigSpec.CONFIG_DIRECTORY = "configDir"`), typically including `bootstrap.json`, are merged into the effective runtime configuration.
 5. **Path resolution** — `ConfigLoader` computes `IConfigSpec.RUNTIME_BASE_DIRECTORY` from the directory that contains `payos.json`, stores it as the effective `runtimeBaseDir`, and resolves relative paths from that base.
 
-The full key catalog is in the [configuration reference](../configuration/README.md) and the exhaustive index in [reference/configuration-keys.md](../reference/configuration-keys.md).
+The description of how configuration is loaded and an index of configuration keys is in  [configuration reference](../configuration/README.md) and the full configuration key catalog is in [reference/configuration-keys.md](../reference/configuration-keys.md).
 
 ## The global registry: `PayOSConfig`
 

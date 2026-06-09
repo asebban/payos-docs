@@ -67,5 +67,6 @@ Point the server at your generated spec via the `swaggerUI.openapi-yaml` setting
 
 ## Next
 
+- [Configure and use swagger](./swagger.md) — How to configure and use swagger to document APIs
 - [CLI: pdoc](../cli-tools/pdoc.md) — full annotation format and flags.
 - [Configuration: servers (Swagger UI)](../configuration/servers.md)

@@ -1,47 +1,47 @@
-# PayOS — Style d'architecture
+# PayOS — Architecture style
 
-## Le style dominant : **Microkernel (Plugin Architecture)**
+## The dominant style: **Microkernel (Plugin Architecture)**
 
-C'est l'ossature principale de PayOS, explicitement revendiquée :
+This is the main backbone of PayOS, explicitly claimed:
 
 > *"Rigid Core + Flexible Guest Layer (High performance core, extensibility without modifying the core)"*  
 > *"Externalized Runtime (Applications run inside the runtime; app <> server)"*
 
 ```mermaid
 graph TB
-    GL["Applications — Guest Layer<br/>Scripts JS · Plugins · Customisations<br/><i>Pas de modification du core</i>"]
-    MK["Microkernel — payos-kernel<br/>Bootstrap · Scripting engine<br/>Sécurité · Audit · Multi-tenancy<br/><i>Runtime minimal · Hosting · Isolation</i>"]
+    GL["Applications — Guest Layer<br/>JS Scripts · Plugins · Customizations<br/><i>No core modification</i>"]
+    MK["Microkernel — payos-kernel<br/>Bootstrap · Scripting engine<br/>Security · Audit · Multi-tenancy<br/><i>Minimal runtime · Hosting · Isolation</i>"]
 
-    GL -->|"s'exécutent dans"| MK
+    GL -->|"run in"| MK
 
     style GL fill:#34a853,color:#fff,stroke:#2d9145
     style MK fill:#4a4a4a,color:#fff,stroke:#333
 ```
 
-### Indices structurels
+### Structural indices
 
-- `BootServer` — kernel minimal qui héberge tout
-- Scripts JS (GraalVM Polyglot) = plugins/guests qui s'exécutent dans le runtime
-- Découverte runtime de plugins TCP via JAR scanning (`TcpMessageDecoder`, `TcpMessageHandler`)
-- Hot-reload de configuration (`ConfigWatcher`)
-- Bindings injectés (`$Api`, `$App`, `$DB`, `$Queue`, `$Response`, `$Principal`…) = la seule API exposée aux guests
+- `BootServer` — minimal kernel that hosts everything
+- JS scripts (GraalVM Polyglot) = plugins/guests that run in the runtime
+- Runtime discovery of TCP plugins via JAR scanning (`TcpMessageDecoder`, `TcpMessageHandler`)
+- Configuration hot-reload (`ConfigWatcher`)
+- Injected Bindings (`$Api`, `$App`, `$DB`, `$Queue`, `$Response`, `$Principal`…) = the only API exposed to guests
 
 ---
 
-## Les styles complémentaires
+## Complementary styles
 
 ### 1. **Modular Monolith**
 
 > *"Modular by design (clear boundaries and replaceable modules, no tight coupling)"*
 
-Modules découplés mais déployables ensemble (dans un runtime) :  
+Decoupled modules but deployable together (in a runtime):  
 `payos-kernel` · `payos-server-http` · `payos-server-tcp` · `payos-server-queue` · `database-service` · `queue-service-nats` · `webhook-service-http`
 
-Communication par interfaces (`IServer`, `IQueueClient`, `IAuditLogger`, `ISecurityService`, `IScriptingEngine`, ...) — chaque implémentation peut être remplacée sans toucher au kernel.
+Communication via interfaces (`IServer`, `IQueueClient`, `IAuditLogger`, `ISecurityService`, `IScriptingEngine`, ...) — each implementation can be replaced without touching the kernel.
 
 ### 2. **Layered Architecture**
 
-5 couches strictement ordonnées :
+5 strictly ordered layers:
 
 ```mermaid
 graph TB
@@ -51,69 +51,69 @@ graph TB
     PS --> PK["Platform Kernel"]
 ```
 
-Une couche n'appelle que celle du dessous. La surface est la **seule porte d'entrée** légale.
+A layer calls only the one below. The surface is the **only legal entry point**.
 
-### 3. **Event-Driven (asynchrone)**
+### 3. **Event-Driven (asynchronous)**
 
 > *"Queue/MoM support with NATS client"*
 
-Les flux asynchrones (notifications, webhooks, événements de paiement) passent par NATS via :
-- `payos-server-queue` — consommation
-- `webhook-service-http` — émission
-- `queue-service-nats` — client MoM
+Asynchronous flows (notifications, webhooks, payment events) pass through NATS via:
+- `payos-server-queue` — consumption
+- `webhook-service-http` — broadcast
+- `queue-service-nats` — MoM client
 
-Pattern publish/subscribe assumé sur l'ensemble des flux non-bloquants.
+Pattern publish/subscribe assumed on all non-blocking flows.
 
 ### 4. **API-First**
 
-> *"API-First"* — premier principe d'identité plateforme
+> *"API-First"* — first principle of platform identity
 
-Le contrat API précède l'implémentation — d'où les headers gouvernés :
+The API contract precedes the implementation — hence the governed headers:
 - `Authorization: Bearer …` (auth)
 - `X-Tenant-Id` (isolation)
-- `X-Correlation-Id` (traçabilité)
-- Versioning explicite (`/api/v1/…`)
+- `X-Correlation-Id` (traceability)
+- Explicit versioning (`/api/v1/…`)
 
 ### 5. **Multi-tenant by Architecture**
 
 > *"Native Multi-tenancy (Isolation is enforced by architecture, not configuration)"*
 
-L'isolation tenant n'est pas une option configurable — c'est **structurel** :
-- `TenantPolicyService` — validation et quotas
-- `TenantScope` — propagation MDC AutoCloseable
-- Headers tenant propagés sur toute la chaîne (HTTP, TCP, Queue)
+Tenant isolation is not a configurable option — it is **structural**:
+- `TenantPolicyService` — validation and quotas
+- `TenantScope` — MDC AutoCloseable propagation
+- Headers held propagated throughout the chain (HTTP, TCP, Queue)
 
 ---
 
-## Synthèse
+## Summary
 
-> **PayOS est un microkernel modulaire, multi-tenant natif, layered et API-first, avec une couche d'extension par scripts isolés (sandbox GraalVM) et une intégration event-driven asynchrone via MoM (NATS).**
+> **PayOS is a modular, multi-tenant native, layered and API-first microkernel, with an extension layer by isolated scripts (GraalVM sandbox) and asynchronous event-driven integration via MoM (NATS).**
 
-### Ce qui le distingue
+### What sets it apart
 
-| Comparaison | Différence |
+| Comparison | Difference |
 |---|---|
-| **Application monolithique** | Séparation kernel/guests, extensibilité sans recompilation |
-| **Microservices** | Pas de prolifération de services réseau — runtime unique hébergeant des extensions |
+| **Monolithic application** | Kernel/guest separation, extensibility without recompilation |
+| **Microservices** | No proliferation of network services — single runtime hosting extensions |
 
-### Le nom révèle l'intention
+### The name reveals the intention
 
-PayOS est en fait très proche d'un **système d'exploitation** :
-- Le **kernel** fournit les primitives : sécurité, runtime, hosting, isolation
-- Les **applications de paiement** (Gateway, Switch, Wallet…) sont des **guests** qui tournent dessus
-- Les **partenaires/clients** étendent via scripts isolés — comme on installerait des apps sur un OS
+PayOS is actually very close to an **operating system**:
+- The **kernel** provides the primitives: security, runtime, hosting, isolation
+- The **payment applications** (Gateway, Switch, Wallet, etc.) are **guests** that run on them
+- **Partners/customers** extend via isolated scripts — like installing apps on an OS
 
-D'où le nom : **PayOS = un OS pour applications de paiement**.
+Hence the name: **PayOS = an OS for payment applications**.
 
 ---
 
-## Cartographie des styles → décisions d'implémentation
+## Style mapping → implementation decisions
 
-| Style | Conséquence concrète |
+| Style | Concrete consequence |
 |---|---|
-| Microkernel | Pas de framework lourd dans le kernel · Scripts JS pour customiser · Plugins TCP par découverte JAR |
-| Modular Monolith | Interfaces I-prefixed · Modules sibling avec leurs propres `pom.xml` · `payos-bom` pour aligner versions |
-| Layered | Surface = seule entrée · Pas d'accès direct DB/queues/runtime depuis l'externe |
-| Event-Driven | NATS pour événements · Webhooks versionnés · Async par défaut sur les flux non-critiques en latence |
-| API-First | Headers gouvernés · `/v1/` versioning · OIDC obligatoire · Sandboxes pour onboarding |
-| Multi-tenant native | `TenantScope` MDC · Quotas par tenant · Audit avec `tenantId` partout |
+| Microkernel | No heavy framework in the kernel · JS scripts to customize · TCP plugins by JAR discovery |
+| Modular Monolith | I-prefixed interfaces · Sibling modules with their own `pom.xml` · `payos-bom` to align versions |
+| Layered | Surface = only entry · No direct access to DB/queues/runtime from external |
+| Event-Driven | NATS for events · Versioned webhooks · Async by default on non-latency-critical flows |
+| API-First | Governed headers · `/v1/` versioning · Mandatory OIDC · Sandboxes for onboarding |
+| Native multi-tenant | `TenantScope` MDC · Quotas per tenant · Audit with `tenantId` everywhere |

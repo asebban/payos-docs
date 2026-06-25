@@ -1,4 +1,4 @@
-# PayOS Documentation V1.0.0-RELEASE
+# PayOS Documentation V1.1.0-RELEASE
 
 Authoritative, code-grounded documentation for the **PayOS** platform — an API-first,
 multi-tenant, deployment-agnostic runtime for building financial applications.

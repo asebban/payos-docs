@@ -28,6 +28,12 @@ It is structured by audience so that each reader can go straight to what they ne
 | [Developer guide](developer/README.md) | Getting started, the application model, writing API scripts, the script binding reference, data access, secrets, messaging, i18n, hooks, Java extensions, debugging, and API documentation. |
 | [Configuration reference](configuration/README.md) | Exhaustive reference of every configuration key (`payos.json` / `bootstrap.json`). |
 
+### Integrators (customizing delivered applications for a client)
+
+| Document | Purpose |
+| --- | --- |
+| [Integrator guide](integrators/README.md) | *(French)* Practical guide for partner teams customizing an editor-delivered PayOS application for a specific client through `extends`, hooks, webhooks, capabilities, multi-tenancy, secrets, and i18n — without ever modifying the delivered application. |
+
 ### Operators (deploying and running PayOS)
 
 | Document | Purpose |
@@ -63,6 +69,7 @@ payos-docs/
 ├── architecture/        Internal design (architects)
 │   └── adr/             Architecture Decision Records
 ├── developer/           Building applications (developers)
+├── integrators/         Customizing delivered applications for a client (integrators)
 ├── configuration/       Configuration key reference (developers + operators)
 ├── operations/          Running PayOS in production (operators)
 ├── cli-tools/           Command-line tool reference (developers + operators)

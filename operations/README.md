@@ -7,6 +7,7 @@ For **operators** running PayOS in production: deployment, bundle encryption, se
 | Topic | Document |
 | --- | --- |
 | Deploying the runtime and bundles | [deployment.md](deployment.md) |
+| Running the notification service daemon | [notification-service.md](notification-service.md) |
 | Encrypting/packing bundles (`edc`) | [bundle-encryption.md](bundle-encryption.md) |
 | Managing secrets (Vault, rotation, `spm`) | [secrets-management.md](secrets-management.md) |
 | Logging, correlation, tenancy, audit | [observability.md](observability.md) |

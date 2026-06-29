@@ -4,6 +4,8 @@ Operator guidance for running `payos-service-notification`: a standalone daemon 
 
 Unlike the main PayOS runtime (`payos-runtime`/`BootServer`), this is its **own deployable process** with its own `main()` — it does not implement `IServer`/`ServerProvider`, is not booted from a bundle's `connectors-dir`/`extensions-dir`, and has no HTTP surface. The message queue is its only ingress. If you're looking for the main runtime's deployment model, see [deployment.md](deployment.md) instead — this page is specific to the notification daemon.
 
+> **Not to be confused with** the `notification-service` *bootstrap.json* block — that one configures the `payos-notification-connector` running inside `BootServer`, which **publishes** notification requests onto the queue that this daemon consumes. See [configuration/notification-service.md](../configuration/notification-service.md) for the publisher side.
+
 ## Artifacts
 
 | Artifact | Role |

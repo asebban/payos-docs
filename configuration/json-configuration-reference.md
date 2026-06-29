@@ -37,6 +37,7 @@
     - [3.11 `http-webhook-service` (bootstrap.json)](#311-http-webhook-service-bootstrapjson)
     - [3.12 `secret-service` (bootstrap.json)](#312-secret-service-bootstrapjson)
     - [3.13 `extensions-dir` (bootstrap.json)](#313-extensions-dir-bootstrapjson)
+    - [3.14 `notification-service` (bootstrap.json)](#314-notification-service-bootstrapjson)
   - [4. manifest.json — Déclaration de capability](#4-manifestjson--déclaration-de-capability)
   - [5. Résolution hiérarchique des valeurs](#5-résolution-hiérarchique-des-valeurs)
   - [6. Constantes et valeurs par défaut](#6-constantes-et-valeurs-par-défaut)
@@ -922,6 +923,32 @@ payos-runtime/
 ```
 
 Aucune interface ne doit être implémentée — les JARs peuvent être des bibliothèques tierces quelconques.
+
+---
+
+### 3.14 `notification-service` (bootstrap.json)
+
+Configuration du connecteur de notification (binding `$Notification`). Volontairement **distincte** de [`queue-service`](#36-queue-service) : un connecteur de notification adossé à une queue (ex. `payos-notification-connector`) établit et possède sa **propre** connexion broker à partir de ce bloc, plutôt que de réutiliser le client générique exposé aux scripts sous `$Queue` — le broker/topic de notification peut différer de celui de `$Queue`.
+
+```json
+"notification-service": {
+  "configuration": {
+    "type": "nats",
+    "host": "nats.internal",
+    "port": 4222,
+    "topic": "payos.notifications"
+  }
+}
+```
+
+| Clé | Type | Requis | Défaut | Description |
+|-----|------|--------|--------|-------------|
+| `type` | string | Non | Dérivé du connecteur (`nats` pour le connecteur queue) | Type de client MoM utilisé par le connecteur |
+| `host` | string | Non | `"localhost"` | Hôte du broker de notification |
+| `port` | int | Non | `4222` | Port du broker de notification |
+| `topic` | string | Non | `"payos.notifications"` | Sujet utilisé pour la connexion |
+
+> Le bloc `configuration` est transmis tel quel (`Map<String, String>`) à `INotificationServiceFactory#initialize` du connecteur actif au démarrage ; les clés au-delà de `type` sont donc spécifiques au connecteur installé dans `connectors-dir`. Si aucun connecteur de notification n'est présent, ce bloc est ignoré et `$Notification` n'est pas disponible dans les scripts.
 
 ---
 

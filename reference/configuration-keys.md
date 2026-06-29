@@ -122,6 +122,18 @@ Internal/effective: `RUNTIME_CONFIG_FILE = payos.json`, `RUNTIME_BASE_DIRECTORY 
 | `publisher-topic` | — | Default publish topic. |
 | `consumer-topic` | `default-topic` | Topic consumed by the queue transport. |
 
+## `notification-service` — [notification-service.md](../configuration/notification-service.md)
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `type` | connector-derived (`nats`) | Connector type; selects the `IQueueClientFactory` used by the notification connector's own connection. |
+| `host` | `localhost` | Notification broker host. |
+| `port` | `4222` | Notification broker port. |
+| `topic` | `payos.notifications` | Topic used for the connector's own connection. |
+
+Independent of `queue-service` — the notification connector owns its own broker connection
+rather than reusing `$Queue`'s client.
+
 ## `secret-service` — [secret-service.md](../configuration/secret-service.md)
 
 | Key | Default | Purpose |

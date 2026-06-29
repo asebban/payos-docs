@@ -32,6 +32,7 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | `multitenancy` | [multi-tenancy.md](multi-tenancy.md) | Tenant policy, quotas, isolation, simulator. |
 | `database-service` | [database-service.md](database-service.md) | JDBC/Hibernate connection and pooling. |
 | `queue-service` | [queue-service.md](queue-service.md) | MoM connector (e.g. NATS). |
+| `notification-service` | [notification-service.md](notification-service.md) | Publisher-side `$Notification` connector — independent from `queue-service`. |
 | `secret-service` | [secret-service.md](secret-service.md) | Secret provider (`filesystem`/`vault`). |
 | `webhooks` / `http-webhook-service` | [webhook-service.md](webhook-service.md) | Webhook dispatcher. |
 | `i18n` | [i18n.md](i18n.md) | Locale resolution. |

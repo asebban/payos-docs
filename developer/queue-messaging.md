@@ -1,12 +1,6 @@
 # Queue messaging (`$Queue`)
 
-When a [queue service](../configuration/queue-service.md) connector is registered, scripts
-receive the `$Queue` binding — an `IQueueClient`. Use it to publish messages to a
-message-oriented middleware (e.g. NATS) for asynchronous integration. This page covers usage
-from JavaScript; the connector configuration is in
-[configuration/queue-service.md](../configuration/queue-service.md), and the queue transport
-(consuming requests *from* a queue) is in
-[architecture/extensibility.md](../architecture/extensibility.md).
+When a [queue service](../configuration/queue-service.md) connector is registered, scripts receive the `$Queue` binding — an `IQueueClient`. Use it to publish messages to a message-oriented middleware (e.g. NATS) for asynchronous integration. This page covers usage from JavaScript; the connector configuration is in [configuration/queue-service.md](../configuration/queue-service.md), and the queue transport (consuming requests *from* a queue) is in [architecture/extensibility.md](../architecture/extensibility.md).
 
 ## Two distinct concepts
 

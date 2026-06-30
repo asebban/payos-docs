@@ -100,6 +100,15 @@ Fonctions principales :
 - `addHeader(key: String, value: String) : void`
 - `removeHeader(key: String) : void`
 - `getHeader(key: String) : String`
+- `getContextData() : Map<String, Object>`
+- `setContextData(contextData: Map<String, Object>) : void`
+- `addContextData(key: String, value: Object) : void`
+- `getContextData(key: String) : Object`
+- `removeContextData(key: String) : void`
+
+> **`contextData` n'est pas renvoyé au client**
+>
+> `contextData` sert à transporter des données internes au backend (consommées côté Java, ex. après l'exécution du script JS) — contrairement à `body`, `statusCode`, `message` et `cookies`, il n'est jamais sérialisé dans la réponse HTTP.
 
 Points d'attention sur `Response.getJsonBody()` :
 

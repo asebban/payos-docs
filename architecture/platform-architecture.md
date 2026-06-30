@@ -57,10 +57,11 @@ Each layer is the subject of its own document:
 Whatever the protocol, the kernel works with two transport-neutral objects:
 
 - `ma.s2m.payos.servers.exchanges.Request` — method, type (`api`/`page`/`component`/`menu`),   path, headers, query parameters, body, and a `contextData` map (tenant, correlation,   appId).
-- `ma.s2m.payos.servers.exchanges.Response` — status code, message, headers, and a byte
-  `body`.
+- `ma.s2m.payos.servers.exchanges.Response` — status code, message, headers, cookies, a byte
+  `body`, and a `contextData` map for backend-internal data (not part of the serialized
+  response).
 
-Each transport adapter (`payos-server-http`, `payos-server-tcp`, `payos-server-queue`) converts its wire format into a `Request`, calls the kernel, and serializes the `Response` back. This is what makes PayOS protocol-agnostic: the resource, scripting, and service layers never see HTTP, TCP, or a queue message.
+Each transport adapter (`payos-server-http`, `payos-server-tcp`, `payos-server-queue`) converts its wire format into a `Request`, calls the kernel, and serializes the `Response` back — except `Response.contextData`, which stays internal to the backend and is never put on the wire. This is what makes PayOS protocol-agnostic: the resource, scripting, and service layers never see HTTP, TCP, or a queue message.
 
 ## Separation of identity (app) and execution (server)
 

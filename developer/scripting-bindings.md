@@ -26,11 +26,14 @@ var corr = $Request.getContextData().get("correlationId");
 ### `$Response`
 
 The mutable [`Response`](../architecture/request-processing.md) for the current call. Set
-status, headers, and (optionally) body explicitly.
+status, headers, and (optionally) body explicitly. Also exposes `contextData`, a
+`Map<String, Object>` for passing backend-internal data from the script to later Java
+processing — it is never serialized into the HTTP response.
 
 ```javascript
 $Response.setStatusCode(200);
 $Response.setHeader("X-Custom", "value");
+$Response.addContextData("skipAudit", true);
 ```
 
 ### `$Api`

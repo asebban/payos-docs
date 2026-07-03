@@ -11,7 +11,7 @@ script usage is in [developer/secrets-usage.md](../developer/secrets-usage.md).
 | --- | --- | --- |
 | Recommended for | Edge/on-prem with no Vault | Centralized, production secret management |
 | Master key | Key file or `PAYOS_SECRET_MASTER_KEY` | Vault auth (AppRole/token) |
-| Tokenization | ✅ | ❌ |
+| Tokenization | ✅ | ✅ |
 
 Whichever you pick, ensure the provider connector JAR is on the
 [connectors path](../configuration/extensions-connectors.md).
@@ -56,15 +56,17 @@ Manage filesystem secrets with [`spm`](../cli-tools/spm.md) (the Secret Package 
    ```json
    {
      "secret-service": {
-       "enabled": true,
-       "type": "vault",
-       "address": "https://vault.internal:8200",
-       "kv-mount": "secret",
-       "namespace": "payos",
-       "approle-mount": "approle",
-       "role-id": "${VAULT_ROLE_ID}",
-       "secret-id": "${VAULT_SECRET_ID}",
-       "timeout": 10
+       "configuration": {
+         "enabled": true,
+         "type": "vault",
+         "address": "https://vault.internal:8200",
+         "kv-mount": "secret",
+         "namespace": "payos",
+         "approle-mount": "approle",
+         "role-id": "${VAULT_ROLE_ID}",
+         "secret-id": "${VAULT_SECRET_ID}",
+         "timeout": 10
+       }
      }
    }
    ```
@@ -72,14 +74,19 @@ Manage filesystem secrets with [`spm`](../cli-tools/spm.md) (the Secret Package 
    AppRole credentials take precedence over a static `token`. Avoid `tls-skip-verify` outside
    of development.
 
-> The Vault provider stores secret bytes under the field key `encryptionKey` and reads them
-> as Base64 (with a UTF-8 fallback), so values written by older tooling remain readable.
+> Each secret is stored as its own KV v2 entry (`<kvMount>/data/<tenantId>/<name>`), with the
+> secret's own `name` as the JSON field key inside `data` (not a fixed field name) and the value
+> Base64-encoded (falling back to raw UTF-8 on read if a value isn't valid Base64, for secrets
+> written by other tooling). Tokens (`ITokenProvider`) are stored the same way, namespaced under
+> `<tenantId>/tokens/<uuid>`.
 
 ## Rotation
 
-- **Application secrets:** rotate by writing the new value (`$Secrets.setSecret` or `spm`/Vault),
-  then retiring the old version. Both providers track versions
-  (`VERSION`/`describe`).
+- **Application secrets:** rotate by writing the new value via `spm` (filesystem) or the Vault
+  CLI/API — not from scripts, since `$Secrets` doesn't expose writes (see
+  [developer/secrets-usage.md](../developer/secrets-usage.md)). Both providers track versions
+  (`describe` reports the current version); `filesystem` additionally keeps a readable version
+  history via `IVersionedSecretProvider` (Java API only, not yet exposed by `spm`).
 - **Vault AppRole secret-id:** re-issue the `secret-id` periodically and update
   `${VAULT_SECRET_ID}`; PayOS picks it up on [reload](hot-reload.md) or restart.
 - **Filesystem master key / bundle key:** plan key rotation with re-encryption; coordinate

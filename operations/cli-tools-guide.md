@@ -661,7 +661,7 @@ spm --version
 Génère un fichier de clé aléatoire de 32 octets (AES-256). À exécuter une seule fois lors de la mise en place du service de secrets.
 
 ```bash
-secrets keygen --out <path>
+spm keygen --out <path>
 ```
 
 | Option | Description |

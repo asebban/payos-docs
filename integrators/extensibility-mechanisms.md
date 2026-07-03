@@ -1256,16 +1256,12 @@ Each customer has their own secrets for third-party systems (PSP, ERP, anti-frau
 ```javascript
 //atlas-payment-gateway/api/payments/create.js
 function execute(request, controlData) {
-    var key = $Secrets.getSecret("atlas-psp-api-key");   // automatically resolve "atlas/atlas-psp-api-key"
-    try {
-        return callAtlasPsp(key.asString(), controlData);
-    } finally {
-        key.close();   // clear the value from memory
-    }
+    var key = $Secrets.get("atlas-psp-api-key");   // returns a String, scoped to the current tenant
+    return callAtlasPsp(key, controlData);
 }
 ```
 
-`$Secrets` is injected only if `secret-service.enabled = true` in configuration and that a connector (`filesystem` or `vault`) is present in `connectors-dir` — check these two points before delivering.
+`$Secrets` only exposes `get`, `list`, `tokenize`, and `detokenize` to scripts — no write/delete/describe (see [developer/secrets-usage.md](../developer/secrets-usage.md)). It is injected only if `secret-service.configuration.enabled = true` in configuration and a connector (`filesystem` or `vault`) is present in `connectors-dir` — check these two points before delivering.
 
 ### 11.2 Provisioning a secret for the client tenant (`spm`) with the filesystem secret provider
 
@@ -1320,13 +1316,15 @@ There are two ways to authenticate to vault: approle or access token. To configu
 ```json
 {
   "secret-service": {
-    "type": "vault",
-    "address": "https://vault.example.com:8200",
-    "role-id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-    "secret-id": "${file:/run/secrets/vault_secret_id}",
-    "approle-mount": "approle", // URI path to approle configuration
-    "kv-mount": "secret", // URI path to the secret storage configured in vault
-    "timeout": 10
+    "configuration": {
+      "type": "vault",
+      "address": "https://vault.example.com:8200",
+      "role-id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "secret-id": "${file:/run/secrets/vault_secret_id}",
+      "approle-mount": "approle",
+      "kv-mount": "secret",
+      "timeout": 10
+    }
   }
 }
 ```
@@ -1336,11 +1334,13 @@ To configure access with a token:
 ```json
 {
   "secret-service": {
-    "type": "vault",
-    "address": "https://vault.example.com:8200",
-    "token": "sv-xxxxxxx",
-    "kv-mount": "secret", // URI path to the secret storage configured in vault
-    "timeout": 10
+    "configuration": {
+      "type": "vault",
+      "address": "https://vault.example.com:8200",
+      "token": "sv-xxxxxxx",
+      "kv-mount": "secret",
+      "timeout": 10
+    }
   }
 }
 ```
@@ -1460,16 +1460,16 @@ secret-service-acme/
     └── resources/
       └── META-INF/
         └── services/
-          └── ma.s2m.payos.queue.IQueueClientFactory
+          └── ma.s2m.payos.secret.api.ISecretProviderFactory
 ```
-and the content of the `ma.s2m.payos.queue.IQueueClientFactory` file will be:
+and the content of the `ma.s2m.payos.secret.api.ISecretProviderFactory` file will be:
 
 ```
-ma.s2m.payos.secret.filesystem.FileSystemSecretProviderFactory
+com.acme.payos.secret.AcmeSecretProviderFactory
 ```
 
 3. Build the JAR and drop it into `connectors-dir` (always as a fat Jar).
-4. Reference its `type` and its other meta-data in the configuration (`secret-service.type: "my-provider"`, etc.).
+4. Reference its `type` and its other meta-data in the configuration (`secret-service.configuration.type: "my-provider"`, etc.).
 
 > - This adds an **artifact to maintain and evolve** with each kernel version, but the kernel does not depend on it
 > - involve the publisher from the design stage.

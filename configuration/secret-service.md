@@ -5,6 +5,8 @@ The `secret-service` block configures the secret provider that backs the `$Secre
 
 ## Common keys
 
+All keys below live under `secret-service.configuration`.
+
 | Key | Purpose |
 | --- | --- |
 | `enabled` | Enable the secret service (injects `$Secrets`). |
@@ -20,10 +22,12 @@ Local, AES-256-GCM encrypted storage. Provider:
 ```json
 {
   "secret-service": {
-    "enabled": true,
-    "type": "filesystem",
-    "root": "secrets",
-    "keyfile": "config/secret.key"
+    "configuration": {
+      "enabled": true,
+      "type": "filesystem",
+      "root": "secrets",
+      "keyfile": "config/secret.key"
+    }
   }
 }
 ```
@@ -45,16 +49,18 @@ HashiCorp Vault KV v2 over HTTP. Provider: `VaultSecretProvider` (factory type `
 ```json
 {
   "secret-service": {
-    "enabled": true,
-    "type": "vault",
-    "address": "https://vault.internal:8200",
-    "kv-mount": "secret",
-    "namespace": "payos",
-    "approle-mount": "approle",
-    "role-id": "${VAULT_ROLE_ID}",
-    "secret-id": "${VAULT_SECRET_ID}",
-    "tls-skip-verify": false,
-    "timeout": 10
+    "configuration": {
+      "enabled": true,
+      "type": "vault",
+      "address": "https://vault.internal:8200",
+      "kv-mount": "secret",
+      "namespace": "payos",
+      "approle-mount": "approle",
+      "role-id": "${VAULT_ROLE_ID}",
+      "secret-id": "${VAULT_SECRET_ID}",
+      "tls-skip-verify": false,
+      "timeout": 10
+    }
   }
 }
 ```
@@ -72,10 +78,13 @@ HashiCorp Vault KV v2 over HTTP. Provider: `VaultSecretProvider` (factory type `
 | `timeout` | `10` | HTTP timeout in seconds. |
 
 **Auth precedence:** if `role-id`/`secret-id` are present, **AppRole** is used; otherwise the
-static `token`. Capabilities: GET/SET/DELETE/LIST/DESCRIBE/VERSION (**no TOKENIZE**).
+static `token`. Capabilities: GET/SET/DELETE/LIST/DESCRIBE/VERSION and **TOKENIZE** (tokens are
+stored as ordinary KV v2 entries under a `tokens/` sub-path of the tenant's namespace, and are
+excluded from ordinary secret listings).
 
-> The Vault provider stores secret bytes under the field key `encryptionKey` and reads values
-> as Base64 (with a UTF-8 fallback). Operational setup is in
+> Each secret is one KV v2 entry (`<kv-mount>/data/<tenantId>/<name>`), stored under the
+> secret's own `name` as the JSON field key (not a fixed field name) and Base64-encoded (with a
+> UTF-8 fallback on read). Operational setup is in
 > [operations/secrets-management.md](../operations/secrets-management.md).
 
 ## Choosing a provider
@@ -83,7 +92,7 @@ static `token`. Capabilities: GET/SET/DELETE/LIST/DESCRIBE/VERSION (**no TOKENIZ
 | | `filesystem` | `vault` |
 | --- | --- | --- |
 | Best for | Local/dev, simple on-prem | Production, centralized secret management |
-| Tokenization | ✅ | ❌ |
+| Tokenization | ✅ | ✅ |
 | External infra | None | Vault server |
 
 ## Next

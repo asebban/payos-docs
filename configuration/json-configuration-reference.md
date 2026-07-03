@@ -702,6 +702,8 @@ const names = $Secrets.list();
 |---------|-----------|-------------|
 | `get` | `get(name: string): string` | Retourne la valeur du secret identifié par `name`. Lance une exception si le secret est introuvable. |
 | `list` | `list(): string[]` | Retourne la liste des noms de secrets disponibles pour le tenant courant. |
+| `tokenize` | `tokenize(value: string): string` | Remplace une valeur sensible par un token opaque (UUID v4), non réversible sans le provider. Lance `UnsupportedOperationException` si le provider ne supporte pas la tokenisation. |
+| `detokenize` | `detokenize(token: string): string` | Retrouve la valeur sensible associée à un token. |
 
 Le binding est scopé au tenant courant de la requête : `$Secrets.get("key")` résout `{tenantId}/{key}` sur le provider. Un secret manquant génère une `SecretNotFoundException` qui remonte comme erreur 500.
 
@@ -747,13 +749,13 @@ Si `keyfile` est absent de la configuration, le provider lit `PAYOS_SECRET_MASTE
 
 ##### Étape 4 — Provisionner un secret
 
-> **Le binding `$Secrets` dans les scripts JS est en lecture seule** (`get` et `list` uniquement). Le provisionnement passe par le CLI `secrets` (module `secret-service-filesystem`).
+> **Le binding `$Secrets` dans les scripts JS n'expose que `get`, `list`, `tokenize` et `detokenize`** — pas d'écriture. Le provisionnement passe par le CLI `spm` (module `secret-service-filesystem`).
 
-**Avec le CLI `secrets.jar`** (méthode recommandée) :
+**Avec le CLI `spm`** (méthode recommandée ; JAR `spm.jar`) :
 
 ```bash
 # Valeur passée en argument
-java -jar secrets.jar set \
+java -jar spm.jar set \
   --root /opt/payos/secrets \
   --keyfile /opt/payos/secrets/.keyfile \
   --tenant acme \
@@ -762,7 +764,7 @@ java -jar secrets.jar set \
   --type api-key
 
 # Valeur lue depuis stdin (pour éviter de l'exposer dans l'historique shell)
-echo -n "sk_live_xxxx" | java -jar secrets.jar set \
+echo -n "sk_live_xxxx" | java -jar spm.jar set \
   --root /opt/payos/secrets \
   --keyfile /opt/payos/secrets/.keyfile \
   --tenant acme \
@@ -771,12 +773,12 @@ echo -n "sk_live_xxxx" | java -jar secrets.jar set \
 
 # Si la clé maîtresse est dans la variable d'environnement (pas de --keyfile)
 export PAYOS_SECRET_MASTER_KEY=<base64>
-java -jar secrets.jar set --root /opt/payos/secrets --tenant acme --name db-password --value s3cr3t
+java -jar spm.jar set --root /opt/payos/secrets --tenant acme --name db-password --value s3cr3t
 ```
 
-Le JAR `secrets.jar` est produit par `mvn package` dans le module `secret-service-filesystem`.
+Le JAR `spm.jar` est produit par `mvn package` dans le module `secret-service-filesystem`. Une fois les wrappers installés (`scripts/install.sh` / `install.ps1`), la commande `spm` est disponible directement sans `java -jar`.
 
-Pour les providers externes (HashiCorp Vault, AWS Secrets Manager, Azure Key Vault…), utiliser l'interface native du provider — PayOS lit les secrets, il ne les écrit pas.
+Pour le provider `vault` (module `secret-service-vault`, livré avec PayOS), utiliser le CLI/API Vault natif pour provisionner — PayOS lit les secrets, il ne les écrit pas via ce provider. Pour d'autres backends externes (AWS Secrets Manager, Azure Key Vault…), un connecteur `ISecretProviderFactory` dédié doit être implémenté ; voir [configuration/secret-service.md](secret-service.md).
 
 ##### Étape 5 — Lire le secret dans un script
 
@@ -825,8 +827,8 @@ try {
 Rappeler `set` sur le même nom — la version est incrémentée automatiquement, la nouvelle valeur est chiffrée avec un nouvel IV AES. **Du côté des scripts, aucune modification n'est nécessaire** : `$Secrets.get("stripe-api-key")` retourne toujours la valeur courante.
 
 ```bash
-# La version passe de 1 à 2 ; l'ancien .enc est remplacé atomiquement
-java -jar secrets.jar set \
+# La version passe de 1 à 2 ; l'ancien .enc est archivé sous versions/, le nouveau remplace .enc atomiquement
+java -jar spm.jar set \
   --root /opt/payos/secrets \
   --keyfile /opt/payos/secrets/.keyfile \
   --tenant acme \
@@ -838,14 +840,15 @@ java -jar secrets.jar set \
 
 | Commande | Description |
 |----------|-------------|
-| `secrets keygen --out <path>` | Générer un fichier clé AES-256 de 32 octets |
-| `secrets set --root <dir> --tenant <id> --name <name> [--value <val>] [--type <type>]` | Stocker ou mettre à jour un secret |
-| `secrets get --root <dir> --tenant <id> --name <name>` | Lire la valeur d'un secret (stdout) |
-| `secrets list --root <dir> --tenant <id>` | Lister les noms des secrets d'un tenant |
-| `secrets delete --root <dir> --tenant <id> --name <name>` | Supprimer un secret |
-| `secrets describe --root <dir> --tenant <id> --name <name>` | Afficher les métadonnées sans exposer la valeur |
+| `spm keygen --out <path>` | Générer un fichier clé AES-256 de 32 octets |
+| `spm set --root <dir> --tenant <id> --name <name> [--value <val>] [--type <type>]` | Stocker ou mettre à jour un secret |
+| `spm get --root <dir> --tenant <id> --name <name>` | Lire la valeur d'un secret (stdout) |
+| `spm list --root <dir> --tenant <id>` | Lister les noms des secrets d'un tenant |
+| `spm delete --root <dir> --tenant <id> --name <name>` | Supprimer un secret |
+| `spm describe --root <dir> --tenant <id> --name <name>` | Afficher les métadonnées sans exposer la valeur |
 
-`--keyfile` est optionnel sur toutes les commandes sauf `keygen` — si absent, lit `$PAYOS_SECRET_MASTER_KEY`.
+`--keyfile` est optionnel sur toutes les commandes sauf `keygen` — si absent, lit `$PAYOS_SECRET_MASTER_KEY`. Le provider `filesystem` conserve aussi un historique de versions
+(`IVersionedSecretProvider`) et supporte la tokenisation (`ITokenProvider`), mais `spm` n'expose pas encore de sous-commandes pour ces opérations (API Java directe uniquement).
 
 ---
 

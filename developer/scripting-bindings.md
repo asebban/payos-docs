@@ -96,10 +96,12 @@ $Queue.publish("payments.events", JSON.stringify({ id: 42 }));
 
 ### `$Secrets`
 
-The secret provider (`ISecretProvider`), backed by a [secret service](../configuration/secret-service.md) (`filesystem` or `vault`). See [secrets usage](secrets-usage.md).
+A `SecretsBinding` wrapping the tenant's configured `ISecretProvider`, backed by a
+[secret service](../configuration/secret-service.md) (`filesystem` or `vault`). Exposes
+`get`/`list`/`tokenize`/`detokenize` only — no writes. See [secrets usage](secrets-usage.md).
 
 ```javascript
-var apiKey = $Secrets.getSecret("psp-api-key");
+var apiKey = $Secrets.get("psp-api-key");
 ```
 
 ### `$I18n`

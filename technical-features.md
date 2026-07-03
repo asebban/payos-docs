@@ -556,7 +556,7 @@ Le connector framework se matérialise par plusieurs niveaux :
 | Webhook dispatcher | Implémentation injectable via runtime config | `webhook-service-http`. |
 | Audit sink | Interface `IAuditLogger` remplaçable | SLF4J par défaut, queue/SIEM possible. |
 | Database service | Service optionnel injecté dans les scripts via `$DB` | `database-service`. |
-| Secret provider | Interface `ISecretProviderFactory` via SPI | `secret-service-filesystem`, providers cloud/HSM possibles. |
+| Secret provider | Interface `ISecretProviderFactory` via SPI | `secret-service-filesystem`, `secret-service-vault` ; providers cloud/HSM additionnels possibles. |
 
 **Intérêt technique :** les intégrations sont des adaptateurs autour du kernel. PayOS peut accueillir un nouveau transport, un nouveau broker, un nouveau sink d'audit ou un nouveau dispatcher sans casser le modèle applicatif.
 
@@ -572,31 +572,31 @@ PayOS intègre un service de gestion des secrets accessible aux scripts via le b
 
 Le service est désactivé par défaut et s'active via la clé `secret-service.configuration.enabled: true` dans `bootstrap.json`. L'implémentation concrète est un connecteur chargé depuis `connectors-dir` via SPI Java (`ISecretProviderFactory`).
 
-L'implémentation de référence est `secret-service-filesystem`, qui stocke les secrets chiffrés (AES-256-GCM) sur le système de fichiers local.
+Deux connecteurs sont livrés avec PayOS : `secret-service-filesystem` (référence, stockage chiffré AES-256-GCM sur disque local) et `secret-service-vault` (HashiCorp Vault KV v2, pour la production).
 
-#### CLI d'administration `secrets`
+#### CLI d'administration `spm`
 
-Le module `secret-service-filesystem` embarque un outil CLI autonome (`secrets.jar`) pour provisionner et gérer les secrets sans passer par une API applicative.
+Le module `secret-service-filesystem` embarque un outil CLI autonome (`spm.jar`) pour provisionner et gérer les secrets du provider filesystem sans passer par une API applicative.
 
 ```bash
 # Générer la clé maîtresse AES-256
-secrets keygen --out /opt/payos/secrets/.keyfile
+spm keygen --out /opt/payos/secrets/.keyfile
 
 # Stocker un secret
-secrets set --root /opt/payos/secrets --keyfile /opt/payos/secrets/.keyfile \
+spm set --root /opt/payos/secrets --keyfile /opt/payos/secrets/.keyfile \
   --tenant acme --name stripe-api-key --value sk_live_xxx --type api-key
 
 # Rotation d'un secret (version auto-incrémentée)
-secrets set --root /opt/payos/secrets --keyfile /opt/payos/secrets/.keyfile \
+spm set --root /opt/payos/secrets --keyfile /opt/payos/secrets/.keyfile \
   --tenant acme --name stripe-api-key --value sk_live_yyy
 
 # Lister, décrire, supprimer
-secrets list     --root ... --keyfile ... --tenant acme
-secrets describe --root ... --keyfile ... --tenant acme --name stripe-api-key
-secrets delete   --root ... --keyfile ... --tenant acme --name stripe-api-key
+spm list     --root ... --keyfile ... --tenant acme
+spm describe --root ... --keyfile ... --tenant acme --name stripe-api-key
+spm delete   --root ... --keyfile ... --tenant acme --name stripe-api-key
 ```
 
-Des scripts d'installation (`install.sh` / `install.ps1`) sont fournis dans le module pour rendre la commande `secrets` disponible globalement dans le PATH. Voir le [Guide des outils CLI](developers/operations/cli-tools-guide.md#8-secrets--secret-provider-cli).
+Des scripts d'installation (`install.sh` / `install.ps1`) sont fournis dans le module pour rendre la commande `spm` disponible globalement dans le PATH. Voir le [Guide des outils CLI](operations/cli-tools-guide.md#8-spm--secret-package-manager).
 
 #### API `$Secrets` dans les scripts
 
@@ -604,15 +604,17 @@ Des scripts d'installation (`install.sh` / `install.ps1`) sont fournis dans le m
 |---------|-------------|
 | `$Secrets.get(name)` | Retourne la valeur du secret `name` pour le tenant courant. |
 | `$Secrets.list()` | Retourne la liste des noms de secrets disponibles pour le tenant courant. |
+| `$Secrets.tokenize(value)` | Remplace une valeur sensible par un token opaque (UUID v4), non réversible sans le provider. |
+| `$Secrets.detokenize(token)` | Retrouve la valeur sensible associée à un token. |
 
 ```javascript
 const token = $Secrets.get("external-api-token");
 $Response.setBody({ ok: true });
 ```
 
-Les secrets sont scopés au tenant courant : l'accès est isolé par tenant sans configuration supplémentaire.
+Les secrets sont scopés au tenant courant : l'accès est isolé par tenant sans configuration supplémentaire. `$Secrets` n'expose pas d'écriture (`set`/`delete`/`describe`) — ces opérations passent par `spm`, l'API Vault, ou l'API Java directe.
 
-**Intérêt sécurité :** les credentials (clés API, mots de passe, certificats) ne transitent pas dans les fichiers de configuration. Le provider est remplaçable sans modifier les scripts (HashiCorp Vault, KMS cloud, HSM, etc.).
+**Intérêt sécurité :** les credentials (clés API, mots de passe, certificats) ne transitent pas dans les fichiers de configuration. Le provider est remplaçable sans modifier les scripts (Vault est déjà livré ; KMS cloud, HSM, etc. peuvent être ajoutés via un connecteur custom).
 
 **Intérêt PCI DSS :** le contrôle d'accès aux secrets via un provider dédié contribue à Req 3 (protection des données sensibles) et Req 7 (contrôle d'accès aux données).
 

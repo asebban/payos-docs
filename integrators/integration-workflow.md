@@ -363,10 +363,12 @@ The corresponding config for the runtime to be able to read the created keys:
 ```json
 {
   "secret-service": {
-    "enabled": true,
-    "type": "filesystem",
-    "root": "./secrets/dev",
-    "keyfile": "${config:secret-service.root}/master.key"
+    "configuration": {
+      "enabled": true,
+      "type": "filesystem",
+      "root": "./secrets/dev",
+      "keyfile": "${config:secret-service.configuration.root}/master.key"
+    }
   }
 }
 ```

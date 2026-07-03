@@ -32,17 +32,21 @@ It uses the same master key as the runtime — supplied via the provider `keyfil
 
 ## Typical operations
 
-`spm` exposes the filesystem provider's capabilities:
+`spm` exposes a subset of the filesystem provider's capabilities as subcommands:
 
-| Capability | Purpose |
+| Subcommand | Purpose |
 | --- | --- |
-| `GET` | Read a secret. |
-| `SET` | Create/update a secret. |
-| `DELETE` | Remove a secret. |
-| `LIST` | List secret names for a tenant. |
-| `DESCRIBE` | Show metadata (type, version, timestamps). |
-| `VERSION` | Inspect/select versions. |
-| `TOKENIZE` | Create/resolve tokens (filesystem provider only). |
+| `keygen` | Generate a 32-byte AES-256 master key file. |
+| `set` | Create/update a secret. |
+| `get` | Read a secret. |
+| `list` | List secret names for a tenant. |
+| `delete` | Remove a secret. |
+| `describe` | Show metadata (type, current version, timestamps). |
+
+The filesystem provider also supports version history (`IVersionedSecretProvider`) and
+tokenization (`ITokenProvider`) at the Java API level, but `spm` doesn't yet expose CLI
+subcommands for them (no `restore`, `destroy-version`, `tokenize`, or `detokenize`) — use the
+Java API directly for those until CLI support is added.
 
 Point `spm` at the provider's `root` and master key (matching your
 [`secret-service`](../configuration/secret-service.md) config) and specify the tenant whose

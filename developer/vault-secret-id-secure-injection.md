@@ -82,13 +82,15 @@ Le `bootstrap.json` est baked dans l'image Docker (ne change pas pendant la vie 
 ```json
 {
   "secret-service": {
-    "type": "vault",
-    "address": "https://vault.example.com:8200",
-    "role-id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-    "secret-id": "${file:/run/secrets/vault_secret_id}",
-    "approle-mount": "approle",
-    "kv-mount": "secret",
-    "timeout": 10
+    "configuration": {
+      "type": "vault",
+      "address": "https://vault.example.com:8200",
+      "role-id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "secret-id": "${file:/run/secrets/vault_secret_id}",
+      "approle-mount": "approle",
+      "kv-mount": "secret",
+      "timeout": 10
+    }
   }
 }
 ```

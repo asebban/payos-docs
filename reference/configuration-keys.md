@@ -136,6 +136,8 @@ rather than reusing `$Queue`'s client.
 
 ## `secret-service` — [secret-service.md](../configuration/secret-service.md)
 
+Keys below live under `secret-service.configuration.*`.
+
 | Key | Default | Purpose |
 | --- | --- | --- |
 | `enabled` | — | Enable `$Secrets`. |

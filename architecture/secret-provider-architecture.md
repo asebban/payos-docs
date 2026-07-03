@@ -1,8 +1,8 @@
 # Architecture — Secret Provider
 
 **Audience :** architectes, tech leads, contributeurs au kernel  
-**Périmètre :** modules `payos-secret-api`, `secret-service-filesystem`, intégration kernel  
-**Dernière mise à jour :** 2026-05-31
+**Périmètre :** modules `payos-secret-api`, `secret-service-filesystem`, `secret-service-vault`, intégration kernel  
+**Dernière mise à jour :** 2026-07-03
 
 ---
 
@@ -25,6 +25,8 @@
    - [Chiffrement AES-GCM](#chiffrement-aes-gcm)
    - [Chargement de la clé maîtresse](#chargement-de-la-clé-maîtresse)
    - [Écriture atomique](#écriture-atomique)
+   - [Historique de versions (`IVersionedSecretProvider`)](#historique-de-versions-iversionedsecretprovider)
+7bis. [Implémentation : VaultSecretProvider](#7bis-implémentation--vaultsecretprovider)
 8. [Intégration kernel](#8-intégration-kernel)
    - [Initialisation au démarrage](#initialisation-au-démarrage)
    - [Chargement SPI des providers](#chargement-spi-des-providers)
@@ -76,7 +78,8 @@ flowchart TD
 - L'implémentation concrète vit dans un module séparé et est découverte via `ServiceLoader<ISecretProviderFactory>`.
 - En pratique, `SecretProviders` interroge `ServiceLoader` avec `PayOSConfig.getConnectorClassLoader()` : si `connectors-dir` est configuré, ce classloader inclut les JARs du répertoire ; sinon la résolution retombe sur le classloader par défaut.
 - La frontière tenant est appliquée à deux niveaux : dans `AbstractSecretProvider` (validation du tenantId) et dans `SecretPath` (résolution des chemins).
-- Le binding `$Secrets` expose une API réduite et sûre pour les scripts (lecture + liste uniquement).
+- Le binding `$Secrets` expose une API réduite et sûre pour les scripts : lecture, liste, et tokenisation (`get`, `list`, `tokenize`, `detokenize`) — pas d'écriture, de suppression, de métadonnées ni de gestion de versions (voir [§8](#injection-dans-les-scripts--secretsbinding)).
+- Deux connecteurs sont livrés avec PayOS : `secret-service-filesystem` (stockage local chiffré, référence) et `secret-service-vault` (HashiCorp Vault KV v2, pour la production).
 
 ---
 
@@ -123,6 +126,14 @@ classDiagram
         +restoreVersion(tenantId, name, version)
         +destroyVersion(tenantId, name, version)
     }
+    class ITokenProvider {
+        <<interface>>
+        +tokenize(tenantId, sensitiveValue) String
+        +detokenize(tenantId, token) byte[]
+        +tokenExists(tenantId, token) boolean
+        +revokeToken(tenantId, token)
+        +listTokens(tenantId) List~String~
+    }
     class ICryptoSecretProvider {
         <<interface>>
         +encrypt(tenantId, keyName, plaintext) byte[]
@@ -159,20 +170,31 @@ classDiagram
         -EncryptedFileStore store
         -byte[] masterKey
     }
+    class VaultSecretProvider {
+        -VaultClient client
+        -VaultTokenProvider tokenProvider
+    }
 
     ISecretProvider <|-- IVersionedSecretProvider
     ISecretProvider <|.. AbstractSecretProvider
     AbstractSecretProvider <|-- FileSystemSecretProvider
+    AbstractSecretProvider <|-- VaultSecretProvider
+    ITokenProvider <|.. FileSystemSecretProvider
+    ITokenProvider <|.. VaultSecretProvider
+    IVersionedSecretProvider <|.. FileSystemSecretProvider
 ```
 
-| Interface | Méthodes | Usage |
-|-----------|----------|-------|
-| `ICryptoSecretProvider` | `encrypt`, `decrypt`, `sign`, `verify` | Chiffrement de données applicatives et signature HMAC via une clé nommée stockée dans le provider |
-| `IVersionedSecretProvider` | `getSecretVersion`, `listVersions`, `restoreVersion`, `destroyVersion` | Historique de versions, rollback, conformité PCI Req 3.5 |
-| `IWatchableSecretProvider` | `watch`, `unwatch` | Notification sur changement de secret (ex. rotation automatique) |
-| `ICertificateSecretProvider` | `getCertificate`, `listCertificates` | Accès à des certificats X.509 stockés dans le provider |
+| Interface | Méthodes | Usage | Implémentée par |
+|-----------|----------|-------|-----------------|
+| `ITokenProvider` | `tokenize`, `detokenize`, `tokenExists`, `revokeToken`, `listTokens` | Tokenisation opaque (PCI scope reduction) : remplace une valeur sensible par un token UUID v4 non réversible sans le provider | `FileSystemSecretProvider` (fichiers chiffrés sous `tokens/`), `VaultSecretProvider` (entrées KV v2 sous `tokens/`) |
+| `IVersionedSecretProvider` | `getSecretVersion`, `listVersions`, `restoreVersion`, `destroyVersion` | Historique de versions, rollback, conformité PCI Req 3.5 | `FileSystemSecretProvider` (archive l'enveloppe précédente à chaque `setSecret`) |
+| `ICryptoSecretProvider` | `encrypt`, `decrypt`, `sign`, `verify` | Chiffrement de données applicatives et signature HMAC via une clé nommée stockée dans le provider | Aucun provider livré |
+| `IWatchableSecretProvider` | `watch`, `unwatch` | Notification sur changement de secret (ex. rotation automatique) | Aucun provider livré |
+| `ICertificateSecretProvider` | `getCertificate`, `listCertificates` | Accès à des certificats X.509 stockés dans le provider | Aucun provider livré |
 
-Ces interfaces ne sont pas implémentées par `FileSystemSecretProvider` (référence minimale). Elles sont destinées aux providers HSM, KMS cloud (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault) ou PKCS#11.
+`ICryptoSecretProvider`, `IWatchableSecretProvider` et `ICertificateSecretProvider` ne sont implémentées par aucun des deux connecteurs livrés (`filesystem`, `vault`) ; elles sont destinées aux providers HSM, KMS cloud (AWS Secrets Manager, Azure Key Vault) ou PKCS#11.
+
+`VaultSecretProvider` déclare la capacité `VERSION` dans `capabilities()` mais s'appuie uniquement sur le `current_version` renvoyé par Vault KV v2 via `describeSecret` — il n'implémente pas (encore) `IVersionedSecretProvider` ; seul `FileSystemSecretProvider` le fait aujourd'hui.
 
 ### ISecretProviderFactory — point d'entrée SPI
 
@@ -226,10 +248,15 @@ public record SecretMetadata(
 ### SecretCapability
 
 ```java
-public enum SecretCapability { GET, SET, DELETE, LIST, DESCRIBE, VERSION }
+public enum SecretCapability { GET, SET, DELETE, LIST, DESCRIBE, VERSION, TOKENIZE }
 ```
 
 Un provider déclare explicitement ce qu'il supporte via `capabilities()`. Le kernel et les scripts peuvent ainsi détecter les providers en lecture seule (ex. provider qui lit depuis un KMS en mode lecture uniquement) ou les providers sans support de `DESCRIBE`.
+
+| Provider | Capacités déclarées |
+|----------|---------------------|
+| `filesystem` (`FileSystemSecretProvider`) | `GET`, `SET`, `DELETE`, `LIST`, `DESCRIBE`, `VERSION`, `TOKENIZE` |
+| `vault` (`VaultSecretProvider`) | `GET`, `SET`, `DELETE`, `LIST`, `DESCRIBE`, `VERSION`, `TOKENIZE` |
 
 ---
 
@@ -267,6 +294,7 @@ La même validation est redoublée dans `SecretPath.validateTenantId()` pour pro
 | `SecretNotFoundException` | `RuntimeException` | Secret absent pour ce tenant/nom |
 | `SecretAccessDeniedException` | `RuntimeException` | tenantId invalide ou accès refusé |
 | `SecretProviderException` | `RuntimeException` | Erreur I/O, chiffrement, config |
+| `TokenNotFoundException` | `RuntimeException` | Token absent ou révoqué (`ITokenProvider.detokenize`/`revokeToken`) |
 
 Ces exceptions remontent sans wrapping jusqu'au script. Le runtime les traite comme des erreurs 500 (`buildInternalErrorResponse`), à moins qu'un hook `on-error` ne les intercepte.
 
@@ -390,6 +418,56 @@ flowchart TD
     C -->|"Échec"| F["deleteSilently(tmp)\nSecretProviderException"]
 ```
 
+### Historique de versions (`IVersionedSecretProvider`)
+
+`FileSystemSecretProvider` implémente `IVersionedSecretProvider` en archivant l'enveloppe
+chiffrée **avant** de l'écraser à chaque `setSecret` :
+
+```
+{root}/{tenantId}/{name}.enc                    ← version courante (lue par getSecret)
+{root}/{tenantId}/versions/{name}/{version}.enc ← versions archivées (1..N-1)
+```
+
+- `getSecretVersion(tenantId, name, version)` : lit la version courante si `version` correspond
+  au numéro courant (déduit de `{name}.meta.json`), sinon lit l'archive correspondante.
+- `listVersions(tenantId, name)` : union du numéro courant et des fichiers présents dans
+  `versions/{name}/`.
+- `restoreVersion(tenantId, name, version)` : relit le contenu de la version demandée et le
+  réécrit via `setSecret` — cela crée une **nouvelle** version (l'historique n'est jamais
+  réécrit), à l'identique de la sémantique "restore" de Vault KV v2 ou d'AWS Secrets Manager.
+- `destroyVersion(tenantId, name, version)` : supprime définitivement une version archivée.
+  Refuse de détruire la version courante (`SecretProviderException`) — utiliser
+  `deleteSecret` pour supprimer le secret entièrement.
+- `deleteSecret` purge aussi le dossier `versions/{name}/` : une suppression est complète, elle
+  ne laisse pas d'enveloppes chiffrées orphelines sur disque.
+
+`VaultSecretProvider` n'implémente pas cette interface : son `describeSecret` expose le
+`current_version` géré nativement par Vault KV v2, mais l'historique des versions Vault n'est
+pas encore exposé via `IVersionedSecretProvider` (voir [§7bis](#7bis-implémentation-vaultsecretprovider)).
+
+---
+
+## 7bis. Implémentation : `VaultSecretProvider`
+
+`VaultSecretProvider` (module `secret-service-vault`) est le second connecteur livré avec
+PayOS — pour les déploiements de production s'appuyant sur un cluster HashiCorp Vault existant
+plutôt que sur un stockage fichier local.
+
+- Backend : Vault **KV v2** (`<kvMount>/data/<tenantId>/<name>` pour lire/écrire,
+  `<kvMount>/metadata/<tenantId>/<name>` pour `describeSecret`/`deleteSecret`/`listSecrets`).
+- Authentification : token statique ou AppRole (`role-id`/`secret-id`), avec ré-authentification
+  automatique sur un `403` (`VaultAuth.onTokenRejected()`).
+- Valeurs stockées en Base64 sous la clé JSON `<name>` du champ `data` (fallback UTF-8 à la
+  lecture si le décodage Base64 échoue).
+- **Tokenisation (`ITokenProvider`)** : `VaultTokenProvider` stocke chaque token comme une entrée
+  KV v2 ordinaire sous `<tenantId>/tokens/<uuid>`. Comme `listSecrets` ne liste que le premier
+  niveau du namespace du tenant, Vault renvoie `tokens/` comme un simple marqueur de
+  sous-répertoire — déjà filtré par le client — donc les tokens n'apparaissent jamais dans
+  `listSecrets`/`list()`. `VaultClient.listUnderPrefix(tenantId, "tokens")` est utilisé pour les
+  énumérer spécifiquement (`listTokens`).
+- Capacités déclarées : `GET`, `SET`, `DELETE`, `LIST`, `DESCRIBE`, `VERSION`, `TOKENIZE` —
+  identiques à `filesystem` (voir [§4 — SecretCapability](#secretcapability)).
+
 ---
 
 ## 8. Intégration kernel
@@ -458,8 +536,20 @@ public class SecretsBinding {
     public List<String> list() {
         return provider.listSecrets(tenantId);
     }
+    public String tokenize(String value) {
+        // throws UnsupportedOperationException if provider isn't an ITokenProvider
+        return tokenProvider.tokenize(tenantId, value.getBytes(StandardCharsets.UTF_8));
+    }
+    public String detokenize(String token) {
+        byte[] bytes = tokenProvider.detokenize(tenantId, token);
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
 }
 ```
+
+`setSecret`, `deleteSecret`, `describeSecret` et `capabilities()` ne sont **pas** exposés par
+`SecretsBinding` — ce sont des opérations Java directes sur `ISecretProvider`, réservées aux
+outils d'administration (`spm`, tests d'intégration) et aux implémentations de providers.
 
 Le pattern try-with-resources assure le zeroing du `SecretValue` avant que la méthode retourne.
 
@@ -575,6 +665,12 @@ Pour le provider filesystem, chaque tenant dispose d'un répertoire dédié `{ro
 
 ## 12. Créer un provider custom
 
+> Cette section illustre le pattern SPI générique avec un exemple hypothétique
+> (`AwsSecretsManagerProvider`, non livré avec PayOS). Pour Vault, **inutile de réimplémenter
+> ce pattern** : `secret-service-vault` est un connecteur livré et prêt à l'emploi (voir
+> [§7bis](#7bis-implémentation--vaultsecretprovider) et
+> [configuration/secret-service.md](../configuration/secret-service.md)).
+
 ### 1. Dépendance Maven
 
 ```xml
@@ -589,18 +685,17 @@ Pour le provider filesystem, chaque tenant dispose d'un répertoire dédié `{ro
 ### 2. Implémenter la factory SPI
 
 ```java
-public class VaultSecretProviderFactory implements ISecretProviderFactory {
+public class AwsSecretsManagerProviderFactory implements ISecretProviderFactory {
 
     @Override
     public String type() {
-        return "vault";
+        return "aws-secrets-manager";
     }
 
     @Override
     public ISecretProvider create(Map<String, Object> configuration) {
-        String address = (String) configuration.getOrDefault("address", "http://127.0.0.1:8200");
-        String token   = (String) configuration.get("token");
-        return new VaultSecretProvider(address, token);
+        String region = (String) configuration.getOrDefault("region", "eu-west-1");
+        return new AwsSecretsManagerProvider(region);
     }
 }
 ```
@@ -608,13 +703,13 @@ public class VaultSecretProviderFactory implements ISecretProviderFactory {
 ### 3. Implémenter le provider via AbstractSecretProvider
 
 ```java
-public class VaultSecretProvider extends AbstractSecretProvider {
+public class AwsSecretsManagerProvider extends AbstractSecretProvider {
 
     @Override
     protected SecretValue doGetSecret(String tenantId, String name) {
-        // appel Vault API — ne pas implémenter la validation tenantId ici,
+        // appel AWS API — ne pas implémenter la validation tenantId ici,
         // elle est déjà faite par AbstractSecretProvider.getSecret()
-        byte[] value = vaultClient.readSecret(tenantId + "/" + name);
+        byte[] value = awsClient.readSecret(tenantId + "/" + name);
         return new SecretValue(value);
     }
 
@@ -633,7 +728,7 @@ public class VaultSecretProvider extends AbstractSecretProvider {
 Créer le fichier `META-INF/services/ma.s2m.payos.secret.api.ISecretProviderFactory` dans les ressources du JAR :
 
 ```
-com.example.payos.vault.VaultSecretProviderFactory
+com.example.payos.aws.AwsSecretsManagerProviderFactory
 ```
 
 ### 5. Déploiement
@@ -646,9 +741,8 @@ Déposer le JAR dans `connectors-dir` (défaut `.connectors/`). Le kernel le dé
 "secret-service": {
   "configuration": {
     "enabled": true,
-    "type": "vault",
-    "address": "https://vault.internal:8200",
-    "token": "s.xxxxxxxx"
+    "type": "aws-secrets-manager",
+    "region": "eu-west-1"
   }
 }
 ```
@@ -659,7 +753,10 @@ Déposer le JAR dans `connectors-dir` (défaut `.connectors/`). Le kernel le dé
 
 Cette section s'adresse aux développeurs qui appellent l'API Java du provider directement : initializers de capabilities, utilitaires d'administration, tests d'intégration.
 
-> **Important** : le binding `$Secrets` exposé dans les scripts JS est **en lecture seule** (`get` et `list` uniquement). Le provisionnement des secrets est une opération administrative réalisée via le CLI `secrets.jar` (module `secret-service-filesystem`) ou directement via l'API Java.
+> **Important** : le binding `$Secrets` exposé dans les scripts JS n'expose que `get`, `list`,
+> `tokenize` et `detokenize` — pas d'écriture. Le provisionnement des secrets est une opération
+> administrative réalisée via le CLI `spm` (module `secret-service-filesystem`, voir
+> [cli-tools/spm.md](../cli-tools/spm.md)) ou directement via l'API Java.
 
 ### Obtenir le provider
 
@@ -681,7 +778,7 @@ if (!caps.contains(SecretCapability.SET)) {
 }
 ```
 
-Le `FileSystemSecretProvider` supporte `GET`, `SET`, `DELETE`, `LIST`, `DESCRIBE`.
+Le `FileSystemSecretProvider` supporte `GET`, `SET`, `DELETE`, `LIST`, `DESCRIBE`, `VERSION`, `TOKENIZE`. `VaultSecretProvider` déclare le même jeu de capacités (voir [§4 — SecretCapability](#secretcapability)).
 
 ### Stocker un secret
 
@@ -742,19 +839,21 @@ flowchart TD
     A["1. Générer le fichier clé\nopenssl rand -out .keyfile 32"] --> B["2. Créer le répertoire root\nmkdir -p /opt/payos/secrets\nchmod 700"]
     B --> C["3. Configurer bootstrap.json\nsecret-service.configuration"]
     C --> D["4. Démarrer PayOS\nSecretServiceInitializer charge le provider"]
-    D --> E["5. Provisionner avec secrets.jar\njava -jar secrets.jar set ..."]
+    D --> E["5. Provisionner avec spm\njava -jar spm.jar set ..."]
     E --> F["6. Lire dans les scripts JS\n\$Secrets.get('nom')"]
 ```
 
-### CLI `secrets` — wrapper et installation
+### CLI `spm` — wrapper et installation
 
-Le module `secret-service-filesystem` fournit, en plus du JAR, des scripts d'intégration système dans `scripts/` :
+Le module `secret-service-filesystem` fournit, en plus du JAR (`spm.jar`, point d'entrée
+`ma.s2m.payos.secret.filesystem.cli.SecretsCli`), des scripts d'intégration système dans
+`scripts/` :
 
 | Fichier | Rôle |
 |---|---|
-| `scripts/secrets` | Wrapper Bash — résolution de symlinks, vérification Java, délégation à `secrets.jar` |
-| `scripts/secrets.ps1` | Wrapper PowerShell — utilise `$PSScriptRoot` pour localiser `secrets.jar` |
-| `scripts/secrets.cmd` | Wrapper cmd.exe — pour les terminaux non-PowerShell sous Windows |
+| `scripts/spm` | Wrapper Bash — résolution de symlinks, vérification Java, délégation à `spm.jar` |
+| `scripts/spm.ps1` | Wrapper PowerShell — utilise `$PSScriptRoot` pour localiser `spm.jar` |
+| `scripts/spm.cmd` | Wrapper cmd.exe — pour les terminaux non-PowerShell sous Windows |
 | `scripts/install.sh` | Installeur Linux/macOS — copie JAR + wrapper, met à jour `PATH` dans les profils shell |
 | `scripts/install.ps1` | Installeur Windows — copie JAR + wrappers, met à jour le `PATH` utilisateur dans le registre |
 
@@ -763,19 +862,23 @@ Le module `secret-service-filesystem` fournit, en plus du JAR, des scripts d'int
 ```bash
 # Linux / macOS
 mvn package -DskipTests
-cp target/secrets.jar scripts/
 ./scripts/install.sh              # → ~/.payos/bin (ou $PAYOS_HOME/bin)
 source ~/.bashrc
-secrets --help
+spm --help
 ```
 
 ```powershell
 # Windows
 mvn package -DskipTests
-Copy-Item target\secrets.jar scripts\
 .\scripts\install.ps1             # → %USERPROFILE%\.payos\bin (ou $env:PAYOS_HOME\bin)
-secrets --help                    # disponible immédiatement dans la session
+spm --help                        # disponible immédiatement dans la session
 ```
+
+Sous-commandes disponibles aujourd'hui : `keygen`, `set`, `get`, `list`, `delete`, `describe`.
+Il n'existe pas encore de sous-commande CLI pour l'historique de versions
+(`getSecretVersion`/`listVersions`/`restoreVersion`/`destroyVersion`) ni pour la tokenisation
+(`tokenize`/`detokenize`) — ces opérations ne sont accessibles qu'via l'API Java directe pour
+l'instant.
 
 Les installeurs acceptent un répertoire cible en argument (`./install.sh /usr/local/bin`) et respectent la variable `PAYOS_HOME` si elle est définie.
 
@@ -805,14 +908,15 @@ payos-secret-api/                 ← API / SPI (interfaces, modèles, abstracti
   ma.s2m.payos.secret.api/
     ISecretProvider               ← contrat noyau
     ISecretProviderFactory        ← point d'entrée SPI
-    ICryptoSecretProvider         ← capacité optionnelle
-    IVersionedSecretProvider      ← capacité optionnelle
-    IWatchableSecretProvider      ← capacité optionnelle
-    ICertificateSecretProvider    ← capacité optionnelle
+    ITokenProvider                ← capacité optionnelle — implémentée par filesystem + vault
+    IVersionedSecretProvider      ← capacité optionnelle — implémentée par filesystem
+    ICryptoSecretProvider         ← capacité optionnelle — aucun provider livré
+    IWatchableSecretProvider      ← capacité optionnelle — aucun provider livré
+    ICertificateSecretProvider    ← capacité optionnelle — aucun provider livré
   ma.s2m.payos.secret.model/
     SecretValue                   ← conteneur sécurisé
     SecretMetadata                ← record de métadonnées
-    SecretCapability              ← enum des capacités
+    SecretCapability               ← enum des capacités
   ma.s2m.payos.secret.spi/
     AbstractSecretProvider        ← template method + audit
   ma.s2m.payos.secret.audit/
@@ -822,15 +926,28 @@ payos-secret-api/                 ← API / SPI (interfaces, modèles, abstracti
     SecretNotFoundException
     SecretAccessDeniedException
     SecretProviderException
+    TokenNotFoundException
 
 secret-service-filesystem/        ← implémentation de référence (connecteur)
   ma.s2m.payos.secret.filesystem/
     FileSystemSecretProviderFactory  ← type="filesystem", SPI entry point
-    FileSystemSecretProvider         ← implémentation concrète
+    FileSystemSecretProvider         ← implémentation concrète (ISecretProvider, ITokenProvider, IVersionedSecretProvider)
     EncryptedFileStore               ← chiffrement AES-GCM
     MasterKeyLoader                  ← chargement clé (keyfile / env var)
-    SecretPath                       ← résolution + validation des chemins
+    SecretPath                       ← résolution + validation des chemins, y compris archives de versions
+    FileSystemTokenProvider          ← coffre de tokens (ITokenProvider)
     AtomicFileWriter                 ← écriture atomique via temp+move
+    cli.SecretsCli                   ← CLI `spm` (keygen/set/get/list/delete/describe)
+  META-INF/services/
+    ma.s2m.payos.secret.api.ISecretProviderFactory  ← enregistrement SPI
+
+secret-service-vault/              ← second connecteur livré (production, HashiCorp Vault)
+  ma.s2m.payos.secret.vault/
+    VaultSecretProviderFactory       ← type="vault", SPI entry point
+    VaultSecretProvider              ← implémentation concrète (ISecretProvider, ITokenProvider)
+    VaultClient                      ← client HTTP KV v2 (data/metadata paths)
+    VaultTokenProvider                ← tokens stockés comme entrées KV v2 sous tokens/
+    auth.TokenVaultAuth / AppRoleVaultAuth ← stratégies d'authentification
   META-INF/services/
     ma.s2m.payos.secret.api.ISecretProviderFactory  ← enregistrement SPI
 
@@ -839,7 +956,7 @@ payos/ (kernel)
     SecretServiceInitializer      ← bootstrap
     SecretProviders               ← SPI loader + cache
   ma.s2m.payos.scripting/
-    SecretsBinding                ← binding $Secrets pour les scripts JS
+    SecretsBinding                ← binding $Secrets pour les scripts JS (get/list/tokenize/detokenize)
 ```
 
 **Règle de dépendance :**
@@ -848,19 +965,24 @@ payos/ (kernel)
 graph LR
     API["payos-secret-api\ncontrat SPI\ninterfaces, modèles, abstractions"]
     FS["secret-service-filesystem\nconnecteur de référence"]
+    VAULT["secret-service-vault\nconnecteur production"]
     KERNEL["payos — kernel"]
     BOM["payos-bom\ngestion des versions"]
 
     FS -->|"dépend de"| API
+    VAULT -->|"dépend de"| API
     KERNEL -->|"dépend de"| API
     KERNEL -. "ne dépend PAS de" .-> FS
+    KERNEL -. "ne dépend PAS de" .-> VAULT
     BOM -. "gère les versions" .-> API
     BOM -. "gère les versions" .-> FS
+    BOM -. "gère les versions" .-> VAULT
 
     style API fill:#fff3cd,stroke:#856404,color:#000
     style FS fill:#d1ecf1,stroke:#0c5460,color:#000
+    style VAULT fill:#d1ecf1,stroke:#0c5460,color:#000
     style KERNEL fill:#d4edda,stroke:#155724,color:#000
     style BOM fill:#f8f9fa,stroke:#6c757d,color:#000
 ```
 
-Le kernel et les providers se connaissent uniquement via `payos-secret-api`. Les providers sont des connecteurs externes. Cette séparation garantit que le kernel ne dépend pas d'une implémentation spécifique et que les providers peuvent être déployés indépendamment.
+Le kernel et les providers se connaissent uniquement via `payos-secret-api`. Les providers sont des connecteurs externes, tous deux au même niveau architectural — le kernel ne favorise pas `filesystem` par rapport à `vault`. Cette séparation garantit que le kernel ne dépend pas d'une implémentation spécifique et que les providers peuvent être déployés indépendamment.

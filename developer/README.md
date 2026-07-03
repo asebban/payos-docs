@@ -17,6 +17,7 @@ For developers **building applications on PayOS**. Applications are written prim
 10. [Java extensions](java-extensions.md) — calling Java libraries via `Java.type()`.
 11. [API documentation](api-documentation.md) — `@payos.openapi` annotations and `pdoc`.
 12. [Debugging](debugging.md) — debugging server-side JavaScript.
+13. [Observability](./observability-event-contract-proposal.md) - Observability event structure
 
 ## Related references
 

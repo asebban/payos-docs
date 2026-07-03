@@ -30,6 +30,7 @@ versions without repeating each version.
 | webhook-service-http | 1.0.3 |
 | payos-secret-api | 1.0.0 |
 | secret-service-filesystem | 1.0.0 |
+| secret-service-vault | 1.0.0 |
 | payosv2-packer (`edc`) | 1.2.0-RELEASE |
 | payos-pm (`apm`/`cpm`/`ppm`) | 1.1.2-RELEASE |
 | pdoc | 1.0.0-SNAPSHOT |

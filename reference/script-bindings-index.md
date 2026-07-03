@@ -21,7 +21,7 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 | --- | --- | --- | --- |
 | `$DB` | database-service | `IDatabaseService` | [data-access.md](../developer/data-access.md) |
 | `$Queue` | queue-service | `IQueueClient` | [queue-messaging.md](../developer/queue-messaging.md) |
-| `$Secrets` | secret-service | `ISecretProvider` | [secrets-usage.md](../developer/secrets-usage.md) |
+| `$Secrets` | secret-service | `SecretsBinding` (wraps `ISecretProvider`; exposes `get`/`list`/`tokenize`/`detokenize` only) | [secrets-usage.md](../developer/secrets-usage.md) |
 | `$I18n` | i18n | i18n accessor | [internationalization.md](../developer/internationalization.md) |
 | `$WebHooks` | webhooks | `WebhookHooksProxy` | [webhooks-and-hooks.md](../developer/webhooks-and-hooks.md) |
 

@@ -15,7 +15,7 @@ For developers **building applications on PayOS**. Applications are written prim
 8. [Internationalization](internationalization.md) — using `$I18n` and the i18n config.
 9. [Webhooks & hooks](webhooks-and-hooks.md) — subscribing to events, `$WebHooks`.
 10. [Java extensions](java-extensions.md) — calling Java libraries via `Java.type()`.
-11. [API documentation](api-documentation.md) — `@payos.openapi` annotations and `pdoc`.
+11. [API documentation](api-documentation.md) — `@payos.openapi` annotations and `pdoc`. For the full reference, see [PayOS OpenAPI documentation guide](./openapi-docs/openapi-documentation-guide.md).
 12. [Debugging](debugging.md) — debugging server-side JavaScript.
 13. [Observability](./observability-event-contract-proposal.md) - Observability event structure
 
@@ -28,8 +28,7 @@ For developers **building applications on PayOS**. Applications are written prim
 
 ## The shortest possible application
 
-An application is a directory of resources registered in the runtime. The smallest useful
-piece is a single API script:
+An application is a directory of resources registered in the runtime. The smallest useful piece is a single API script:
 
 ```javascript
 // apps/hello/api/greet.js

@@ -46,8 +46,8 @@ Internal/effective: `RUNTIME_CONFIG_FILE = payos.json`, `RUNTIME_BASE_DIRECTORY 
 | `port` | Bind port. |
 | `keystore` / `keystorePassword` / `keystoreType` / `keyAlias` / `keyPassword` | TLS (https). |
 | `tcp-handlers-dir` | TCP plugin dir (tcp). |
-| `queueClient` | Queue connector type (queue). |
-| `server-topic` | Consumer topic (queue; default `default-topic`). |
+| `type` | Queue connector type (queue). |
+| `consumer-topic` | Consumer topic (queue; default `default-topic`). |
 
 ### `swaggerUI`
 

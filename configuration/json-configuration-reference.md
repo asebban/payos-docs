@@ -180,8 +180,8 @@ Tableau de serveurs à démarrer. Chaque entrée déclare un point d'écoute.
   },
   {
     "protocol": "queue",
-    "queueClient": "nats",
-    "server-topic": "payos.requests"
+    "type": "nats",
+    "consumer-topic": "payos.requests"
   }
 ]
 ```
@@ -192,8 +192,8 @@ Tableau de serveurs à démarrer. Chaque entrée déclare un point d'écoute.
 | `port` | int | Oui (HTTP/TCP) | — | Port d'écoute |
 | `protocol` | string | Oui | — | `"http"`, `"tcp"`, ou `"queue"` |
 | `tcp-handlers-dir` | string | Non | — | Dossier contenant les handlers TCP (JAR ou scripts). Surcharge la valeur globale `tcp-handlers-dir` |
-| `queueClient` | string | Non | `"nats"` | Type de client MoM pour le serveur queue |
-| `server-topic` | string | Non | — | Sujet NATS sur lequel le serveur écoute les requêtes entrantes |
+| `type` | string | Non | `"nats"` | Type de client MoM pour le serveur queue |
+| `consumer-topic` | string | Non | — | Sujet NATS sur lequel le serveur écoute les requêtes entrantes |
 | `keystore` | string | Non | — | Chemin vers le fichier keystore pour TLS/HTTPS |
 | `keystorePassword` | string | Non | — | Mot de passe du keystore |
 | `keyPassword` | string | Non | — | Mot de passe de la clé privée dans le keystore |
@@ -1083,8 +1083,8 @@ Pour chaque clé de configuration, la résolution suit cet ordre (du plus priori
     },
     {
       "protocol": "queue",
-      "queueClient": "nats",
-      "server-topic": "payos.requests"
+      "type": "nats",
+      "consumer-topic": "payos.requests"
     }
   ],
   "applications": [

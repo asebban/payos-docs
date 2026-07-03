@@ -13,12 +13,15 @@ implementation is `queue-service-nats` (`type = "nats"`). The connector register
 ```json
 {
   "queue-service": {
-    "name": "primary",
-    "type": "nats",
-    "host": "localhost",
-    "port": 4222,
-    "publisher-topic": "payos.events",
-    "consumer-topic": "payos.requests"
+    "configuration": {
+      "enabled": true,
+      "name": "primary",
+      "type": "nats",
+      "host": "localhost",
+      "port": 4222,
+      "publisher-topic": "payos.events",
+      "consumer-topic": "payos.requests"
+    }
   }
 }
 ```
@@ -29,6 +32,7 @@ From `IConfigSpec.QueueService`:
 
 | Key | Default | Purpose |
 | --- | --- | --- |
+| `enabled` | `false` | Enable initialization of the queue client at bootstrap. |
 | `name` | — | Logical name of the queue service. |
 | `type` | — | Connector type; selects the `IQueueClientFactory` (e.g. `nats`). |
 | `host` | `localhost` | Broker host. |

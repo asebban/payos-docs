@@ -19,7 +19,7 @@ protocol through `ServiceLoader`. The transport architecture is in
       "tcp-handlers-dir": "tcp-handlers" },
 
     { "protocol": "queue", "host": "localhost", "port": 4222,
-      "queueClient": "nats", "server-topic": "payos.requests" }
+      "type": "nats", "consumer-topic": "payos.requests" }
   ]
 }
 ```
@@ -61,8 +61,8 @@ apply. See [architecture/extensibility.md](../architecture/extensibility.md).
 
 | Key | Purpose |
 | --- | --- |
-| `queueClient` | Queue connector type (e.g. `nats`). |
-| `server-topic` | Topic the server consumes requests from (consumer topic; default `default-topic`). |
+| `type` | Queue connector type (e.g. `nats`). |
+| `consumer-topic` | Topic the server consumes requests from (consumer topic; default `default-topic`). |
 
 The queue transport consumes request envelopes and replies on the reply topic. See
 [queue-service.md](queue-service.md) for the connector itself.

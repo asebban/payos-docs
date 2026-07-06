@@ -17,6 +17,7 @@ Internal design of PayOS for **architects** and anyone who needs to understand h
 10. [Architecture Decision Records](adr/README.md) — significant decisions captured over time.
 11. [Server side i18n localization service](./server-side-i18n-architecture.md) — Architecture of the backend localization system
 12. [Ecosystem surface](./ecosystem-surface.md) — a description of the surface that enables access to the PayOS platform
+13. [Queue server](./queue-architecture.md) — Queue server architecture
 
 ## Cross-cutting principles
 

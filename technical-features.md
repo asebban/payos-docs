@@ -22,7 +22,7 @@ Ses features techniques les plus notables sont :
 | Multi-tenancy native | Le tenant est une dimension structurante du runtime : routage, sécurité, quotas, logs et réponses. |
 | Surface gouvernée | APIs, événements, hooks et extension points sont exposés de façon contrôlée, versionnable et auditable. |
 | Sécurité OIDC intégrée | PayOS gère login, callback, logout, session et `/me` via un service de sécurité configurable. |
-| Idempotency service | Les appels sensibles peuvent être protégés contre les doubles soumissions via `X-Idempotency-Key` et un cache de réponse TTL. |
+| Idempotency service | Quand le service est activé, les appels API doivent fournir `X-Idempotency-Key`; PayOS bloque les clés absentes ou vides. |
 | Audit log structuré | Les événements sécurité, session, autorisation, API et système sont journalisés en JSON avec tenant et corrélation. |
 | Gestion des erreurs métier (`$Errors`) | Les scripts peuvent lever des erreurs normalisées (code, message, statut HTTP) converties automatiquement en JSON structuré. |
 | Secret service (`$Secrets`) | Les secrets sont gérés via un provider pluggable (SPI) et injectés dans les scripts sous `$Secrets`. |
@@ -461,10 +461,10 @@ PayOS intègre un service d'idempotence pour sécuriser les appels API sensibles
 Le fonctionnement est le suivant :
 
 - le runtime lit une clé d'idempotence dans le header configuré, par défaut `X-Idempotency-Key` ;
-- si la clé est absente, la requête suit le flux normal ;
+- si la clé est absente ou vide, la requête est bloquée avant l'exécution du script avec une erreur `400 Bad Request` ;
 - si la clé existe et qu'une réponse non expirée est déjà stockée, PayOS retourne directement la réponse en cache ;
 - la réponse rejouée reçoit le header `X-Idempotency-Replayed: true` ;
-- si la clé n'existe pas, la requête est exécutée et la réponse est stockée avec un TTL ;
+- si aucune réponse n'est stockée pour cette clé, la requête est exécutée et la réponse est stockée avec un TTL après exécution réussie ;
 - le TTL par défaut est de 24 heures (`86400` secondes), configurable par propriété système ou variable d'environnement.
 
 Le service est conçu autour d'une abstraction de store :

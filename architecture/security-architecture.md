@@ -77,9 +77,10 @@ API resources may declare required roles (`ApiResource.getRoles()`). When roles 
 ## Idempotency
 
 `IdempotencyService` provides safe retries for mutating requests: the pipeline calls
-`checkIdempotency(request)` before execution (returning a cached `Response` on a repeat) and
-`storeResponse(request, response)` after success. This protects financial operations from
-duplicate side effects on client retries.
+`checkIdempotency(request)` before execution. When idempotency is enabled, a missing or blank
+idempotency key is rejected before script execution; a repeat with a valid cached record returns
+the cached `Response`. The pipeline calls `storeResponse(request, response)` after successful
+execution. This protects financial operations from duplicate side effects on client retries.
 
 ## Transport hardening (HTTP)
 

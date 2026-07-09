@@ -144,14 +144,14 @@ For `api` resources, `ApiResourceHandler.handle(application, request)` runs the 
      SecurityServiceFactory.create(application, request)
      authenticate(request)  → non-null Response means stop (e.g. redirect to login)
      check(request, roles)  → non-null Response means forbidden
-3. Idempotency: IdempotencyService.checkIdempotency(request) → cached Response if present
+3. Idempotency: IdempotencyService.checkIdempotency(request) → reject missing/blank keys, or return cached Response if present
 4. Request scope: databaseService.setCurrentTenant(tenant); beginRequestScope()
 5. Create scripting engine + inject bindings (see below)
 6. Hook API_PRE_SCRIPT  + dispatch native webhook "api.pre-request"
 7. response = scriptingEngine.executeScript(apiScript, sourceUri, request)
 8. On success:
      Hook API_POST_SCRIPT + dispatch native webhook "api.post-request"
-     IdempotencyService.storeResponse(request, response)
+    IdempotencyService.storeResponse(request, response)
    On exception:
      Hook API_ON_ERROR + dispatch native webhook "api.on-error"
      unwrap BusinessException if present

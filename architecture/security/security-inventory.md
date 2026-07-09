@@ -152,7 +152,8 @@ ma.s2m.payos.resources.api      → ApiResourceHandler (injection des bindings)
 
 ### Idempotency (`IdempotencyService`)
 
-- Clé d'idempotency extraite du header de requête (nom configurable)
+- Clé d'idempotency extraite du header de requête (nom configurable) et obligatoire quand le service est activé
+- Requête bloquée en `400 Bad Request` si la clé est absente ou vide
 - Cache de réponses avec TTL configurable (en secondes)
 - Sur replay : retourne la réponse en cache avec `X-Idempotency-Replayed: true`
 - Activable / désactivable par configuration

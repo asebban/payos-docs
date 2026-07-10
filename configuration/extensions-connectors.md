@@ -7,6 +7,14 @@ plugins for TCP, is configured per server. This page covers the discovery paths 
 classloader hierarchy; the design rationale is in
 [architecture/extensibility.md](../architecture/extensibility.md).
 
+> **Not to be confused with the connector *framework*.** The "connectors" on this page are SPI
+> backend plugins (database/queue/secret factories) selected by `connectors-dir` and already
+> wired into `BootServer`. PayOS also has a separate, newer **connector framework** for
+> business/payment connectors invoked from scripts via `$Connector(...)`, configured through
+> `connectors.json` and a `META-INF/connector.properties` descriptor — see
+> [connector-framework-parameters-v1-2026-07-10.md](connector-framework-parameters-v1-2026-07-10.md).
+> The two mechanisms share the word "connector" but are otherwise independent.
+
 ## Discovery paths
 
 | Plugin family | Bootstrap key | Env var | System property |

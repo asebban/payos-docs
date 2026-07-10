@@ -36,7 +36,8 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | `secret-service` | [secret-service.md](secret-service.md) | Secret provider (`filesystem`/`vault`). |
 | `webhooks` / `http-webhook-service` | [webhook-service.md](webhook-service.md) | Webhook dispatcher. |
 | `i18n` | [i18n.md](i18n.md) | Locale resolution. |
-| `connectors-dir` / `extensions-dir` | [extensions-connectors.md](extensions-connectors.md) | Plugin discovery paths and classloaders. |
+| `connectors-dir` / `extensions-dir` | [extensions-connectors.md](extensions-connectors.md) | Plugin discovery paths and classloaders (legacy SPI-backend loader). |
+| Connector framework (`connectors.json`, connector descriptor) | [connector-framework-parameters-v1-2026-07-10.md](connector-framework-parameters-v1-2026-07-10.md) | Business/payment connector plugin system — `connectors.json`, `META-INF/connector.properties`, credential references, hot-reload, tenant scoping. Not yet wired into `BootServer`. |
 | Complete reference guide of configuration | [Json configuration reference](./json-configuration-reference.md) | |
 
 ## A complete index

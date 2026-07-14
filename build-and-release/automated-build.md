@@ -198,25 +198,34 @@ Without runtime embed:
 
 1. `payos-parent` install
 2. `payos-core-bom` install
-3. `payos-kernel` install
-4. Internal modules install
-5. `payos-runtime` package
+3. API dependency modules install: `payos-secret-api`, `payos-notification-api`, `payos-connector-sdk`
+4. `payos-kernel` install
+5. Internal modules install (`payos-server-http`, `payos-server-tcp`, `payos-server-queue`,
+   `database-service`, `queue-service-nats`, `webhook-service-http`, `payos-pm`,
+   `payos-service-notification`, `secret-service-filesystem`, `secret-service-vault`,
+   `payos-notification-connector`)
+6. `payos-runtime` package
 
 ### 8.2 `module` and `new-module` modes
 
 1. `payos-parent` install
 2. `payos-core-bom` install
-3. `payos-kernel` install
-4. Changed module install
-5. `payos-runtime` package
+3. API dependency modules install: `payos-secret-api`, `payos-notification-api`, `payos-connector-sdk`
+4. `payos-kernel` install
+5. Changed module install
+6. `payos-runtime` package
 
 ### 8.3 `parent` mode
 
 1. `payos-parent` install
 2. `payos-core-bom` install
-3. `payos-kernel` install
-4. Internal modules install
-5. `payos-runtime` package
+3. API dependency modules install: `payos-secret-api`, `payos-notification-api`, `payos-connector-sdk`
+4. `payos-kernel` install
+5. Internal modules install (`payos-server-http`, `payos-server-tcp`, `payos-server-queue`,
+   `database-service`, `queue-service-nats`, `webhook-service-http`, `payos-pm`,
+   `payos-service-notification`, `secret-service-filesystem`, `secret-service-vault`,
+   `payos-notification-connector`)
+6. `payos-runtime` package
 
 ### 8.4 `release` mode
 
@@ -228,8 +237,10 @@ Without runtime embed:
 6. Run one consolidated build sequence:
    - `payos-parent` install
    - `payos-core-bom` install
+   - API dependency modules install: `payos-secret-api`, `payos-notification-api`, `payos-connector-sdk`
    - `payos-kernel` install
-   - standard internal modules install
+   - standard internal modules install (including `payos-service-notification` and
+     `payos-notification-connector`)
    - additionally changed/new modules install
    - `payos-runtime` package
 

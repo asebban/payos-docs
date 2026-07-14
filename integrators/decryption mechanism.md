@@ -1,7 +1,51 @@
 
 # Decryption mechanism
 
-- The editor will deliver a protected vault instance to all integrators. This instance will contain the encryption key of the bundles delivered to the integrator. This instance will include inside it an RSA key pair. The licence file will contain the encryption key (AES symmetric key) encrypted with the public key of this pair.
-- When the runtime starts, it will extract the AES key encrypted with the public key of the pair and ask vault to decrypt it with the private key and send back the decrypted key
-- When the decrypted key is received, it is cut into two halves. Two random numbers are generated. Each random number is xored with each half of the key. The xored halves and the two random numbers are stored in non contiguous areas of the memory to prevent encryption key discovering by memory dump.
-- whenever the runtime needs to decrypt a file of the bundle, it rebuilds the encryption key, decrypts the file, and zeroes the memory zone of the encryption key
+> This page previously described an RSA-envelope + Vault-decrypt + split-key-with-XOR memory
+> protection scheme. That design was never implemented — the actual code (verified against
+> `payos/src/main/java/ma/s2m/payos/security/CryptoService.java`) is materially simpler. This
+> page has been rewritten to match the shipped mechanism.
+
+## How it actually works
+
+1. The AES symmetric key (`encryptionKey`) is stored as a plain secret in the configured
+   [secret provider](../operations/secrets-management.md) (`filesystem` or `vault`) — there is
+   **no RSA key pair, no envelope encryption, and no "ask Vault to decrypt with a private key"
+   step**. The secret provider is asked for the raw key bytes directly.
+2. At runtime, `CryptoService.loadKey()` calls
+   `secretProvider.getSecret(tenantId, "encryptionKey")` and reads the key bytes straight out
+   of the returned `SecretValue`. Accepted key sizes are 16, 24, or 32 bytes (AES-128/192/256);
+   256-bit is recommended for PCI-DSS Req 3.6.1, but 128/192 are still accepted for backward
+   compatibility.
+3. Whenever a bundle file needs decrypting, `CryptoService.decryptIfEncrypted(data)` detects
+   the format from a 4-byte magic header and decrypts in memory:
+   - **`P8G2`** — `AES/GCM/NoPadding` (12-byte IV, 128-bit authentication tag). The current,
+     PCI-DSS-compliant format, produced by `edc`/`payosv2-packer`.
+   - **`P8OS`** — `AES/ECB/PKCS5Padding`. Legacy format, decryption-only (read-only backward
+     compatibility) — `edc` no longer produces it.
+4. The decrypted `SecretKeySpec`/key bytes are held only as long as the `SecretValue` /
+   `Cipher` operation needs them. `SecretValue.close()` (called via try-with-resources) zeroes
+   its internal byte array (`Arrays.fill(bytes, (byte) 0)`) once the caller is done with it —
+   there is no split-key/XOR/non-contiguous-memory scheme; the protection is "hold the key for
+   as short a time as possible and zero it afterward," not memory-layout obfuscation.
+
+There is no re-derivation step, no two-random-number XOR reconstruction, and no split storage
+across non-contiguous memory regions. If you need genuinely hardened in-memory key protection
+(e.g. to defend against memory-dump attacks), that is **not** a property this mechanism
+currently provides — flag it as a requirement rather than assuming it's already covered.
+
+## Where the key actually comes from
+
+The key is provisioned exactly like any other secret in the platform — via `spm`/`edc`'s
+`--secret-provider` flags, or directly through the filesystem/Vault secret provider — see
+[operations/secrets-management.md](../operations/secrets-management.md) and
+[cli-tools/edc.md](../cli-tools/edc.md). There is no separate "vault instance delivered by the
+editor containing an RSA key pair" — the secret provider **is** the vault, and it stores the
+AES key directly.
+
+## References
+
+- `payos/src/main/java/ma/s2m/payos/security/CryptoService.java` — `decryptIfEncrypted(...)`, `loadKey()`.
+- `payos-secret-api/src/main/java/ma/s2m/payos/secret/model/SecretValue.java` — the zero-on-close behavior.
+- [integrators/assembling and encrypting a bundle.md](assembling%20and%20encrypting%20a%20bundle.md) — the encryption side (`edc`).
+- [operations/bundle-encryption.md](../operations/bundle-encryption.md) — operational guidance.

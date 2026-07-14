@@ -30,7 +30,7 @@ Core stack versions (managed via the [parent POM](versioning.md) and the
 
 | Library | Version |
 | --- | --- |
-| Undertow | 2.3.11.Final |
+| Undertow | 2.3.18.Final |
 | GraalVM Polyglot/JS | 24.1.1 |
 | Jackson Databind | 2.16.1 / 2.17.2 |
 | pac4j (core/oidc) | 6.0.0 |

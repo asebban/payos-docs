@@ -144,10 +144,10 @@ For `api` resources, `ApiResourceHandler.handle(application, request)` runs the 
      SecurityServiceFactory.create(application, request)
      authenticate(request)  → non-null Response means stop (e.g. redirect to login)
      check(request, roles)  → non-null Response means forbidden
-3. Idempotency: IdempotencyService.checkIdempotency(request) → reject missing/blank keys, or return cached Response if present
-4. Request scope: databaseService.setCurrentTenant(tenant); beginRequestScope()
-5. Create scripting engine + inject bindings (see below)
-6. Hook API_PRE_SCRIPT  + dispatch native webhook "api.pre-request"
+3. Idempotency: IdempotencyService.checkIdempotency(request) → reject missing/blank keys (unless failOnAbsenceOfIdempotencyKey=false), or return cached Response if present
+4. Create scripting engine + inject bindings (see below) — `$DB` is bound here already, so hooks can see it
+5. Hook API_PRE_SCRIPT  + dispatch native webhook "api.pre-request"
+6. Request scope: databaseService.setCurrentTenant(tenant); beginRequestScope() — activated **after** the pre-hook, deliberately (preserves original behavior)
 7. response = scriptingEngine.executeScript(apiScript, sourceUri, request)
 8. On success:
      Hook API_POST_SCRIPT + dispatch native webhook "api.post-request"
@@ -181,6 +181,8 @@ corresponding service is configured:
 | `$Queue` | only if a queue client is configured | `IQueueClient` |
 | `$Secrets` | only if a secret provider is configured | `SecretsBinding(provider, tenant)` |
 | `$WebHooks` | only if a dispatcher is configured | `WebhookHooksProxy` |
+| `$Connector` | only if `PayOSConfig.getConnectorRegistry()` is set (never true today — `BootServer` doesn't wire it) | `ConnectorBinding` |
+| `$Notification` | only if a notification service factory is configured | `NotificationBinding` |
 
 The complete binding contract is in [developer/scripting-bindings.md](../developer/scripting-bindings.md) and [reference/script-bindings-index.md](../reference/script-bindings-index.md).
 

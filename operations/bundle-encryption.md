@@ -10,7 +10,7 @@ reference is also summarized in [cli-tools/edc.md](../cli-tools/edc.md).
 magic header (`P8OS`). It supports two modes — **pack** (encrypt) and **unpack** (decrypt) —
 and can source its encryption key from a flag, a generated key, or a secret provider.
 
-- Main class: `ma.s2m.Main` (module `payosv2-packer`, version `1.2.0-RELEASE`).
+- Main class: `ma.s2m.Main` (module `payosv2-packer`, version `1.3.0-RELEASE`).
 - Installed as the command `edc` via `install-edc.sh` / `install-edc.ps1`.
 
 ## Install

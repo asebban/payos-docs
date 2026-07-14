@@ -98,7 +98,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Property | Value |
 |---|---|
-| **Artifact** | `ma.s2m.payos:payos-kernel:1.3.0-RELEASE` |
+| **Artifact** | `ma.s2m.payos:payos-kernel:1.8.0-RELEASE` |
 | **Language** | Java 21 |
 | **Build** | Maven + `maven-shade-plugin:3.5.1` |
 | **Entry Point** | `ma.s2m.payos.BootServer` |
@@ -141,8 +141,8 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Library | Version | Role |
 |---|---|---|
-| `ma.s2m.payos:payos-kernel` | 1.3.0-RELEASE | Platform kernel contracts |
-| `io.undertow:undertow-core` | 2.3.11.Final | Undertow HTTP listener |
+| `ma.s2m.payos:payos-kernel` | 1.8.0-RELEASE | Platform kernel contracts |
+| `io.undertow:undertow-core` | 2.3.18.Final | Undertow HTTP listener |
 
 **SPI registration:** `HttpServerProvider` implements `ServerProvider` → registered via `META-INF/services`.
 
@@ -160,7 +160,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Library | Version | Role |
 |---|---|---|
-| `ma.s2m.payos:payos-kernel` | 1.3.0-RELEASE | Platform kernel contracts |
+| `ma.s2m.payos:payos-kernel` | 1.8.0-RELEASE | Platform kernel contracts |
 
 **Plugin loading:** `TcpServerProvider` scans a configurable directory (`tcp-handlers-dir`) for JAR files at runtime using `URLClassLoader` + reflection. Implementations of `TcpMessageDecoder`, `TcpMessageEncoder`, and `TcpMessageHandler` are discovered dynamically — **no compile-time dependency on plugin JARs**.
 
@@ -172,7 +172,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Property | Value |
 |---|---|
-| **Artifact** | `ma.s2m.payos:payos-server-queue:1.0.6-RELEASE` |
+| **Artifact** | `ma.s2m.payos:payos-server-queue:1.1.0-RELEASE` |
 | **Language** | Java 21 |
 | **Build** | Maven |
 
@@ -180,7 +180,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Library | Version | Role |
 |---|---|---|
-| `ma.s2m.payos:payos-kernel` | 1.3.0-RELEASE | Platform kernel contracts |
+| `ma.s2m.payos:payos-kernel` | 1.8.0-RELEASE | Platform kernel contracts |
 | `com.fasterxml.jackson.core:jackson-databind` | 2.17.2 | Queue message serialization |
 
 **SPI registration:** `QueueServerProvider` implements `ServerProvider` → registered via `META-INF/services`.
@@ -191,7 +191,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Property | Value |
 |---|---|
-| **Artifact** | `ma.s2m.payos:queue-service-nats:1.0.6-RELEASE` |
+| **Artifact** | `ma.s2m.payos:queue-service-nats:1.1.0-RELEASE` |
 | **Language** | Java 21 |
 | **Build** | Maven + `maven-surefire-plugin:3.2.5` |
 
@@ -199,7 +199,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Library | Version | Role |
 |---|---|---|
-| `ma.s2m.payos:payos-kernel` | 1.3.0-RELEASE | Kernel interfaces (scope: provided) |
+| `ma.s2m.payos:payos-kernel` | 1.8.0-RELEASE | Kernel interfaces (scope: provided) |
 | `io.nats:jnats` | 2.17.0 | NATS JVM client |
 | `org.slf4j:slf4j-api` | 2.0.12 | Logging (scope: provided) |
 | `org.junit.jupiter:junit-jupiter` | 5.10.2 | Tests (scope: test) |
@@ -213,7 +213,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Property | Value |
 |---|---|
-| **Artifact** | `ma.s2m.payos:webhook-service-http:1.0.3-RELEASE` |
+| **Artifact** | `ma.s2m.payos:webhook-service-http:1.0.4-RELEASE` |
 | **Language** | Java 21 |
 | **Build** | Maven + `maven-surefire-plugin:3.2.5` |
 
@@ -221,7 +221,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Library | Version | Role |
 |---|---|---|
-| `ma.s2m.payos:payos-kernel` | 1.3.0-RELEASE | Kernel interfaces (scope: provided) |
+| `ma.s2m.payos:payos-kernel` | 1.8.0-RELEASE | Kernel interfaces (scope: provided) |
 | `com.fasterxml.jackson.core:jackson-databind` | 2.17.2 | Webhook payload JSON mapping (scope: provided) |
 | `org.slf4j:slf4j-api` | 2.0.12 | Logging API (scope: provided) |
 | `org.junit.jupiter:junit-jupiter` | 5.10.2 | Tests (scope: test) |
@@ -236,7 +236,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Property | Value |
 |---|---|
-| **Artifact** | `ma.s2m:dynamic-database-service:1.1.7-RELEASE` |
+| **Artifact** | `ma.s2m:dynamic-database-service:1.1.9-RELEASE` |
 | **Language** | Java 21 |
 | **Build** | Maven + `maven-surefire-plugin:3.2.5`, `exec-maven-plugin:3.3.0` |
 
@@ -244,7 +244,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Library | Version | Role |
 |---|---|---|
-| `ma.s2m.payos:payos-kernel` | 1.3.0-RELEASE | Kernel interfaces (scope: provided) |
+| `ma.s2m.payos:payos-kernel` | 1.8.0-RELEASE | Kernel interfaces (scope: provided) |
 | `org.hibernate:hibernate-core` | 5.6.15.Final | ORM — dynamic map entity mode (HBM XML) |
 | `com.h2database:h2` | 2.3.232 | H2 embedded DB (scope: test) |
 | `org.postgresql:postgresql` | 42.7.3 | PostgreSQL JDBC driver |
@@ -259,7 +259,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Property | Value |
 |---|---|
-| **Artifact** | `ma.s2m.payos:payos-runtime:1.3.0-RELEASE` |
+| **Artifact** | `ma.s2m.payos:payos-runtime:1.8.0-RELEASE` |
 | **Language** | Java 21 |
 | **Build** | Maven + `maven-shade-plugin:3.5.1` (fat JAR) |
 | **Entry Point** | `ma.s2m.payos.BootServer` |
@@ -268,11 +268,11 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Module | Version |
 |---|---|
-| `payos-kernel` | 1.3.0-RELEASE |
+| `payos-kernel` | 1.8.0-RELEASE |
 | `payos-server-http` | 1.2.0-RELEASE |
 | `payos-server-tcp` | 1.0.6-RELEASE |
-| `payos-server-queue` | 1.0.6-RELEASE |
-| `webhook-service-http` | 1.0.3-RELEASE |
+| `payos-server-queue` | 1.1.0-RELEASE |
+| `webhook-service-http` | 1.0.4-RELEASE |
 
 **Shade transformers:** `ManifestResourceTransformer` (main class), `ServicesResourceTransformer` (merges SPI `META-INF/services` files).
 
@@ -284,7 +284,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Property | Value |
 |---|---|
-| **Artifact** | `ma.s2m.payos:payos-pm:1.1.2-RELEASE` |
+| **Artifact** | `ma.s2m.payos:payos-pm:1.2.1-RELEASE` |
 | **Language** | Java 21 |
 | **Build** | Maven + `maven-shade-plugin:3.5.1` (produces `cpm.jar`, `ppm.jar`, and `apm.jar`) |
 | **Entry Points** | `ma.s2m.payos.pm.cpm.Cpm`, `ma.s2m.payos.pm.ppm.Ppm`, `ma.s2m.payos.pm.apm.Apm` |
@@ -293,7 +293,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Library | Version | Role |
 |---|---|---|
-| `ma.s2m.payos:payos-kernel` | 1.3.0-RELEASE | Platform kernel |
+| `ma.s2m.payos:payos-kernel` | 1.8.0-RELEASE | Platform kernel |
 | `com.fasterxml.jackson.core:jackson-databind` | 2.17.2 | JSON processing |
 | `org.graalvm.polyglot:polyglot` | 24.1.1 | Scripting (re-declared explicitly) |
 | `org.graalvm.polyglot:js` | 24.1.1 | GraalVM JS (re-declared explicitly) |
@@ -337,13 +337,139 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 ---
 
+### 12. `payos-secret-api` — Secret Provider SPI
+
+| Property | Value |
+|---|---|
+| **Artifact** | `ma.s2m.payos:payos-secret-api:1.0.0-RELEASE` |
+| **Language** | Java 21 |
+| **Build** | Maven + `maven-surefire-plugin` |
+
+**Dependencies:**
+
+| Library | Version | Role |
+|---|---|---|
+| `org.slf4j:slf4j-api` | 2.0.12 | Logging facade (scope: provided) |
+| `ch.qos.logback:logback-classic` | 1.5.13 | Logging backend (scope: test) |
+| `org.junit.jupiter:junit-jupiter` | 5.10.2 | Tests (scope: test) |
+| `org.assertj:assertj-core` | 3.25.3 | Assertions (scope: test) |
+
+**Role:** Defines `ISecretProvider`, `ISecretProviderFactory`, and secret model/exception types consumed by all secret provider connectors.
+
+---
+
+### 13. `secret-service-filesystem` — Filesystem Secret Provider
+
+| Property | Value |
+|---|---|
+| **Artifact** | `ma.s2m.payos:secret-service-filesystem:1.1.0-RELEASE` |
+| **Language** | Java 21 |
+| **Build** | Maven + `maven-shade-plugin` (produces `spm.jar`) |
+| **Entry Point** | `ma.s2m.payos.secret.filesystem.cli.SecretsCli` |
+
+**Dependencies:**
+
+| Library | Version | Role |
+|---|---|---|
+| `ma.s2m.payos:payos-kernel` | 1.8.0-RELEASE | Kernel interfaces (scope: provided) |
+| `ma.s2m.payos:payos-secret-api` | 1.0.0-RELEASE | Secret provider SPI |
+| `org.slf4j:slf4j-api` | 2.0.12 | Logging (optional; shaded into `spm.jar`) |
+| `info.picocli:picocli` | 4.7.5 | CLI parsing (optional; shaded into `spm.jar`) |
+| `ch.qos.logback:logback-classic` | 1.5.13 | Logging backend (optional; shaded into `spm.jar`) |
+
+**Role:** AES-256-GCM file-based `ISecretProvider` implementation; also ships the `spm` CLI.
+
+---
+
+### 14. `secret-service-vault` — HashiCorp Vault Secret Provider
+
+| Property | Value |
+|---|---|
+| **Artifact** | `ma.s2m.payos:secret-service-vault:1.1.0-RELEASE` |
+| **Language** | Java 21 |
+| **Build** | Maven + `maven-shade-plugin:3.5.1` |
+
+**Dependencies:**
+
+| Library | Version | Role |
+|---|---|---|
+| `ma.s2m.payos:payos-kernel` | 1.8.0-RELEASE | Kernel interfaces (scope: provided) |
+| `ma.s2m.payos:payos-secret-api` | 1.0.0-RELEASE | Secret provider SPI |
+| `com.fasterxml.jackson.core:jackson-databind` | 2.17.2 | JSON processing |
+| `org.slf4j:slf4j-api` | 2.0.12 | Logging (optional) |
+
+**Role:** `ISecretProvider` implementation backed by HashiCorp Vault KV v2; shaded directly into `payos-runtime`.
+
+---
+
+### 15. `payos-notification-api` — Notification Publishing SPI
+
+| Property | Value |
+|---|---|
+| **Artifact** | `ma.s2m.payos:payos-notification-api:1.1.0-RELEASE` |
+| **Language** | Java 21 |
+| **Build** | Maven + `maven-surefire-plugin` |
+
+**Dependencies:**
+
+| Library | Version | Role |
+|---|---|---|
+| `org.junit.jupiter:junit-jupiter` | 5.10.2 | Tests (scope: test) |
+| `org.assertj:assertj-core` | 3.25.3 | Assertions (scope: test) |
+
+**Role:** Dependency-light notification publishing SPI contract; `payos-runtime` embeds this at `1.0.0-RELEASE` (an explicit pin, not the module's own current version).
+
+---
+
+### 16. `payos-service-notification` — Notification Daemon
+
+| Property | Value |
+|---|---|
+| **Artifact** | `ma.s2m.payos:payos-service-notification:1.2.0-RELEASE` |
+| **Language** | Java 21 |
+| **Build** | Maven + `maven-shade-plugin` (standalone daemon jar) |
+| **Entry Point** | `ma.s2m.payos.notification.NotificationDaemon` |
+
+**Dependencies:**
+
+| Library | Version | Role |
+|---|---|---|
+| `ma.s2m.payos:payos-kernel` | 1.8.0-RELEASE | `IQueueClient`/`IDatabaseService` contracts |
+| `ma.s2m.payos:queue-service-nats` | 1.1.0-RELEASE | Broker adapter |
+| `ma.s2m:dynamic-database-service` | 1.1.7-RELEASE | DB adapter (module-pinned; not yet aligned to `1.1.9-RELEASE`) |
+| `org.slf4j:slf4j-api` / `ch.qos.logback:logback-classic` | 2.0.12 / 1.5.13 | Standalone logging (own JVM, not hosted in `payos-runtime`) |
+| `org.eclipse.angus:angus-mail` | 2.0.3 | Email channel adapter |
+
+**Role:** Standalone process (own JVM) that consumes queued notification requests and dispatches them across channels.
+
+---
+
+### 17. `connector-sdk` (`payos-connector-sdk`) — Connector SDK Contract
+
+| Property | Value |
+|---|---|
+| **Artifact** | `ma.s2m.payos:connector-sdk:1.2.0-RELEASE` |
+| **Language** | Java 21 |
+| **Build** | Maven + `maven-surefire-plugin` |
+
+**Dependencies:**
+
+| Library | Version | Role |
+|---|---|---|
+| `org.junit.jupiter:junit-jupiter` | 5.10.2 | Tests (scope: test) |
+| `org.assertj:assertj-core` | 3.25.3 | Assertions (scope: test) |
+
+**Role:** Connector SDK contract for PayOS external integration plugins; shaded into `payos-runtime`.
+
+---
+
 ## Cross-Cutting Technology Summary
 
 | Concern | Technology | Version |
 |---|---|---|
 | Language (backend) | Java | 21 |
 | Build system | Apache Maven | 3.x |
-| HTTP server | Undertow | 2.3.11.Final |
+| HTTP server | Undertow | 2.3.18.Final |
 | Scripting engine | GraalVM Polyglot (JS) | 24.1.1 |
 | JSON | Jackson Databind | 2.17.2 |
 | Security / OIDC | pac4j-core + pac4j-oidc | 6.0.0 |

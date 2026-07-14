@@ -35,13 +35,16 @@ cpm [global-options] <action> [options]
 | `--cascade` | Cascade the operation (e.g. dependent capabilities). |
 | `--drop-schema` | On uninstall, drop the capability's database schema. |
 
+> When `--install` is used and `--path` is omitted, `cpm` automatically defaults
+> `--from-catalog` to `true` — you do not need to pass `--from-catalog` explicitly to pull a capability from the configured catalog.
+
 ### Global options
 
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `--bundle-path <path>` | `.` | The target bundle. |
 | `-h`, `--help` | | Show help. |
-| `-V`, `--version` | | Show version. |
+| `-v` | | Show version. Unlike `apm`/`ppm`, `cpm` defines only the bare `-v` short flag for this — there is no `--version` long form. |
 
 ## State files
 

@@ -18,7 +18,7 @@ installed into your `PATH` (typically `~/.payos/bin`).
 ## Common conventions
 
 - The package managers (`apm`, `cpm`, `ppm`) are built with **picocli** and share global
-  options: `--bundle-path` (default `.`), `-h`/`--help`, `-V`/`--version`.
+  options: `--bundle-path` (default `.`), `-h`/`--help`, `-v`/`--version`.
 - Exit codes: `0` success, `1` error, `2` usage error.
 - Each tool installs via the module's `install-*.sh` / `install-*.ps1` script.
 

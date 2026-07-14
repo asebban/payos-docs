@@ -34,7 +34,13 @@ BootServer.main(args)
   │     ├─ QueueServiceInitializer     → setQueueClient(...)
   │     ├─ SecretServiceInitializer    → setSecretProvider(...)
   │     ├─ WebhookServiceInitializer   → setWebhookDispatcher(...)
+  │     ├─ NotificationServiceInitializer → setNotificationServiceFactory(...)
   │     └─ (idempotency, activation store, …)
+  │
+  │  NOTE: the business/payment connector framework (setConnectorRegistry, $Connector) is
+  │  NOT initialized here — ConnectorConfigurationLoader/ConnectorJarScanner/
+  │  ConnectorRuntimeInitializer exist and are fully tested but BootServer never calls them.
+  │  See connector-framework-parameters-v2-2026-07-12.md.
   │
   ├─ for each entry in settings["servers"]:
   │     Servers.start(host, port, protocol, serverConfig)   ← ServiceLoader<ServerProvider>
@@ -72,6 +78,8 @@ the singleton services that the request pipeline and scripts depend on.
 | `setWebhookDispatcher` / `getWebhookDispatcher` | `IWebhookDispatcher` | The webhook dispatcher. |
 | `setActivationStore` / `getActivationStore` | `IActivationStore` | Capability activation state. |
 | `setIdempotencyService` / `getIdempotencyService` | `IdempotencyService` | Idempotent response cache. |
+| `setNotificationServiceFactory` / `getNotificationServiceFactory` | `INotificationServiceFactory` | The `$Notification` provider. |
+| `setConnectorRegistry` / `getConnectorRegistry` | `TenantConnectorRegistry` | The `$Connector` provider — defined, but never set by `BootServer` today; always `null` in a running deployment. |
 | `setConnectorClassLoader` / `getConnectorClassLoader` | `ClassLoader` | Loads connector SPI JARs. |
 | `setExtensionClassLoader` / `getExtensionClassLoader` | `ClassLoader` | Loads extension JARs for `Java.type()`. |
 | `setRuntimeBaseDirectory` / `getRuntimeBaseDirectory` | `String` | Effective bundle base path for relative resolution. |

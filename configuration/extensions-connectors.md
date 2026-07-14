@@ -12,7 +12,7 @@ classloader hierarchy; the design rationale is in
 > wired into `BootServer`. PayOS also has a separate, newer **connector framework** for
 > business/payment connectors invoked from scripts via `$Connector(...)`, configured through
 > `connectors.json` and a `META-INF/connector.properties` descriptor — see
-> [connector-framework-parameters-v1-2026-07-10.md](connector-framework-parameters-v1-2026-07-10.md).
+> [connector-framework-parameters-v2-2026-07-12.md] (connector-framework-parameters-v2-2026-07-12.md).
 > The two mechanisms share the word "connector" but are otherwise independent.
 
 ## Discovery paths

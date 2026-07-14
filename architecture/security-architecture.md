@@ -78,9 +78,12 @@ API resources may declare required roles (`ApiResource.getRoles()`). When roles 
 
 `IdempotencyService` provides safe retries for mutating requests: the pipeline calls
 `checkIdempotency(request)` before execution. When idempotency is enabled, a missing or blank
-idempotency key is rejected before script execution; a repeat with a valid cached record returns
-the cached `Response`. The pipeline calls `storeResponse(request, response)` after successful
-execution. This protects financial operations from duplicate side effects on client retries.
+idempotency key is rejected before script execution — unless `failOnAbsenceOfIdempotencyKey` is
+set to `false`, in which case the request simply proceeds without an idempotency check. A repeat
+with a valid cached record returns the cached `Response`. The pipeline calls
+`storeResponse(request, response)` after successful execution. This protects financial
+operations from duplicate side effects on client retries. Configuration is in
+[configuration/idempotency.md](../configuration/idempotency.md).
 
 ## Transport hardening (HTTP)
 

@@ -2,7 +2,7 @@
 
 `edc` packs and encrypts (or unpacks and decrypts) PayOS bundles for regulated, tamper-evident
 delivery. It is the `payosv2-packer` module (main class `ma.s2m.Main`, version
-`1.2.0-RELEASE`). Operational guidance is in
+`1.3.0-RELEASE`). Operational guidance is in
 [operations/bundle-encryption.md](../operations/bundle-encryption.md).
 
 ## Install
@@ -40,6 +40,30 @@ Instead of `--key`, `edc` can pull the key from a secret provider (mirrors the r
 | `--keyfile` | — | Filesystem provider master key file. |
 | `--secret-config` | — | Secret provider config path. |
 | `--connectors-dir` | — | Where to load the provider connector from. |
+
+### Vault provider flags
+
+When `--secret-provider vault` is used, these additional flags configure the Vault client
+(each also has a `PAYOS_VAULT_*` environment variable fallback):
+
+| Flag | Default | Purpose |
+| --- | --- | --- |
+| `--vault-address` | — | Vault server URL (e.g. `https://vault.internal:8200`). |
+| `--vault-namespace` | — | Vault namespace (optional). |
+| `--vault-kv-mount` | `secret` | KV v2 mount path. |
+| `--vault-auth-method` | `token` | Auth method: `token` or `approle`. |
+| `--vault-token` | — | Vault token (for token auth). |
+| `--vault-approle-mount` | `approle` | AppRole mount path. |
+| `--vault-role-id` | — | AppRole role-id (for approle auth). |
+| `--vault-secret-id` | — | AppRole secret-id (for approle auth). |
+| `--vault-timeout` | `10` | HTTP timeout, in seconds. |
+
+## Key length requirement
+
+Pack and unpack always require an **exactly 16-character** key — `PayOSPacker` rejects any
+other length (`key.length() != 16`) for both `pack` and `unpack`. This is independent of
+`--generatekey <n>`, which can generate a key of any length `n`; if you intend to use the
+generated key with `pack`/`unpack`, generate it with `n = 16`.
 
 ## Examples
 

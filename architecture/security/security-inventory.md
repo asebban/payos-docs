@@ -112,7 +112,7 @@ Les scripts JS déposés par les clients s'exécutent dans un contexte GraalVM P
 Context.newBuilder("js")
     .allowAllAccess(false)                        // deny-all par défaut
     .allowHostAccess(HostAccess.ALL)              // proxies Java explicites uniquement
-    .allowHostClassLookup(className -> false)     // bloque java.lang.System et toutes classes JVM
+    .allowHostClassLookup(className -> !"java.lang.System".equals(className))  // autorise toutes les classes sauf java.lang.System
     .allowIO(IOAccess.NONE)                       // aucun accès filesystem
     .allowCreateThread(false)                     // aucun threading
     .allowNativeAccess(false)                     // aucun code natif
@@ -153,10 +153,10 @@ ma.s2m.payos.resources.api      → ApiResourceHandler (injection des bindings)
 ### Idempotency (`IdempotencyService`)
 
 - Clé d'idempotency extraite du header de requête (nom configurable) et obligatoire quand le service est activé
-- Requête bloquée en `400 Bad Request` si la clé est absente ou vide
+- Requête bloquée en `400 Bad Request` si la clé est absente ou vide, sauf si `failOnAbsenceOfIdempotencyKey` est désactivé (la requête procède alors sans vérification)
 - Cache de réponses avec TTL configurable (en secondes)
 - Sur replay : retourne la réponse en cache avec `X-Idempotency-Replayed: true`
-- Activable / désactivable par configuration
+- Activable / désactivable par configuration (voir [configuration/idempotency.md](../../configuration/idempotency.md))
 
 ---
 

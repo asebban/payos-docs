@@ -70,12 +70,20 @@ This avoids tearing connections out from under active requests. See
 
 ## When a restart is still required
 
-- Replacing **connector/extension JARs** on the classpath (the classloaders are built at
-  startup).
+- Replacing **SPI connector/extension JARs** (`connectors-dir`/`extensions-dir`) on the
+  classpath — those classloaders are built at startup.
 - Changing the set of **server listeners** in ways that require rebinding ports.
 
-For these, perform a controlled restart (e.g. `/stop` then relaunch, or your service
-manager). See [deployment.md](deployment.md).
+**Exception: business/payment connector JARs (the `$Connector` framework) support hot
+in-place replacement**, reusing this same `config-hot-reload-enabled` flag —
+`ConnectorRuntimeReloader` validates the replacement JAR reaches `READY`, drains in-flight
+calls against the current connector, then switches. See
+[configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
+§4. (This framework is not yet wired into `BootServer`, so this only applies to whatever wires
+`ConnectorRuntimeReloader` in directly today.)
+
+For everything else, perform a controlled restart (e.g. `/stop` then relaunch, or your
+service manager). See [deployment.md](deployment.md).
 
 ## Next
 

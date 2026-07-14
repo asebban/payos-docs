@@ -1,6 +1,6 @@
 # `apm` — Application Package Manager
 
-`apm` installs, uninstalls, and inspects **applications** in a bundle. It is part of the `payos-pm` module (picocli; main class `ma.s2m.payos.pm.apm.Apm`, version `1.1.2-RELEASE`). For the application model, see [developer/application-model.md](../developer/application-model.md); for capabilities and products use [`cpm`](cpm.md) and [`ppm`](ppm.md).
+`apm` installs, uninstalls, and inspects **applications** in a bundle. It is part of the `payos-pm` module (picocli; main class `ma.s2m.payos.pm.apm.Apm`, version `1.2.1-RELEASE`). For the application model, see [developer/application-model.md](../developer/application-model.md); for capabilities and products use [`cpm`](cpm.md) and [`ppm`](ppm.md).
 
 ## Install the tool
 
@@ -38,7 +38,7 @@ apm [global-options] <action> [options]
 | --- | --- | --- |
 | `--bundle-path <path>` | `.` | The target bundle (directory or `payos.json`). |
 | `-h`, `--help` | | Show help. |
-| `-V`, `--version` | | Show version. |
+| `-v`, `--version` | | Show version. |
 
 ## Examples
 

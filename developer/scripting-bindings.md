@@ -70,6 +70,30 @@ var roles  = $Principal.get("roles");
 The resolved tenant identifier for the current request (see
 [multi-tenancy](../architecture/multi-tenancy.md)).
 
+### `$Logger`
+
+A plain SLF4J logger. The simplest way to emit a log line from a script; unlike `$WebHooks` or
+the audit trail, it has no structured event contract — just message + level.
+
+```javascript
+$Logger.info("processing order " + orderId);
+$Logger.warn("unexpected discount code: " + code);
+```
+
+### `$Errors`
+
+`ErrorsProxy` — throws typed, script-facing business errors that the kernel translates into
+the appropriate HTTP response.
+
+```javascript
+if (!order) {
+    $Errors.notFound("Order not found");
+}
+if (amount <= 0) {
+    $Errors.badRequest("amount must be positive");
+}
+```
+
 ## Available when configured
 
 These bindings are injected only when the corresponding service is configured at bootstrap.
@@ -91,7 +115,12 @@ Backed by a [queue connector](../configuration/queue-service.md) such as NATS. S
 [queue messaging](queue-messaging.md).
 
 ```javascript
-$Queue.publish("payments.events", JSON.stringify({ id: 42 }));
+// publish(destination, QueueMessage) — the overload for targeting an explicit destination.
+// There is no publish(topic, message) two-string overload; see queue-messaging.md for the
+// full set of publish/subscribe overloads.
+var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
+    orderId, JSON.stringify({ id: 42 }), {}, "payments.events");
+$Queue.publish("payments.events", message);
 ```
 
 ### `$Secrets`
@@ -124,6 +153,47 @@ The webhook hooks proxy (`WebhookHooksProxy`), available when a
 Loads shared JavaScript from the application's `lib/` directory (see
 [writing APIs](writing-apis.md#using-shared-libraries)).
 
+### `$Connector`
+
+A `ConnectorBinding`, injected when a `TenantConnectorRegistry` is set via
+`PayOSConfig.setConnectorRegistry(...)`. This is the business/payment connector framework —
+see [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
+for the full configuration and behavioral contract (idempotency, deduplication, retry, DLQ
+routing, diagnostics).
+
+> **Not yet reachable in a running deployment.** `PayOSConfig.setConnectorRegistry(...)` is
+> defined but `BootServer` never calls it — so `$Connector` is always absent today unless
+> something else in your bundle wires a registry in explicitly.
+
+```javascript
+var handle = $Connector('CardNetwork', 'visa'); // or $Connector('CardNetwork') for the first match
+var response = handle.execute({ amount: 100, currency: "MAD" });
+
+if (response.status() == "SUCCESS") {
+    return response.data();
+}
+// response.errorCategory(): NONE | RETRYABLE_ERROR | PERMANENT_ERROR | TIMEOUT | UNKNOWN_ERROR
+$Errors.badRequest(response.errorMessage());
+```
+
+`.execute(payload)` is the connector's **sole** interaction method — there is no separate
+lookup/connect step. The idempotency key (if any) is not a parameter to `.execute()`; it comes
+from the `X-Idempotency-Key` request header and is bound in automatically. Deduplication,
+retry scheduling, execution-state persistence, and DLQ/terminal-state routing are all handled
+by the platform, never by the connector or the calling script — see the configuration doc
+linked above for the full decision sequence.
+
+### `$Notification`
+
+A `NotificationBinding`, injected when a notification service factory is registered via
+`PayOSConfig.setNotificationServiceFactory(...)` (this **is** wired into `BootServer` today,
+unlike `$Connector`). See [configuration/notification-service.md](../configuration/notification-service.md).
+
+```javascript
+var result = $Notification.send(
+    "Your payment of 100 MAD was received", "+212600000000", "sms");
+```
+
 ## Java interop
 
 In addition to bindings, scripts may reach whitelisted Java classes via `Java.type()` (the
@@ -134,5 +204,5 @@ sandbox blocks a denylist such as `java.lang.System`). See
 
 Bindings are injected by `ApiResourceHandler` immediately before script execution, after the
 tenant scope is opened and security has run. Optional bindings (`$DB`, `$Queue`, `$Secrets`,
-`$I18n`, `$WebHooks`) are injected only when their service is present. The full pipeline is
-in [architecture/request-processing.md](../architecture/request-processing.md).
+`$I18n`, `$WebHooks`, `$Connector`, `$Notification`) are injected only when their service is
+present. The full pipeline is in [architecture/request-processing.md](../architecture/request-processing.md).

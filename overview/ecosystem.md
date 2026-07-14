@@ -18,6 +18,9 @@ and the **tooling / build coordination** modules.
 | `payos-secret-api` | `ma.s2m.payos:payos-secret-api` | Service (API) | The secret-provider SPI and model types. |
 | `secret-service-filesystem` | `ma.s2m.payos:secret-service-filesystem` | Service | File-based `ISecretProvider` (AES-256-GCM, type `filesystem`). |
 | `secret-service-vault` | `ma.s2m.payos:secret-service-vault` | Service | HashiCorp Vault `ISecretProvider` (KV v2, type `vault`). |
+| `payos-notification-api` | `ma.s2m.payos:payos-notification-api` | Service (API) | The notification-service SPI and model types (`INotificationServiceFactory`). |
+| `payos-service-notification` | `ma.s2m.payos:payos-service-notification` | Service | Default `INotificationServiceFactory` implementation (`$Notification`). |
+| `payos-connector-sdk` | `ma.s2m.payos:connector-sdk` | Service (API) | Business/payment connector SDK contract — `IConnector`, `AbstractConnector`. Not yet wired into `BootServer`. |
 | `payos-runtime` | `ma.s2m.payos:payos-runtime` | Distribution | The runnable, all-in-one server JAR (`BootServer`). |
 | `payosv2-packer` | `ma.s2m:payosv2-packer` | Tooling | `edc` — bundle encryption/decryption CLI. |
 | `payos-pm` | `ma.s2m.payos:payos-pm` | Tooling | `apm` / `cpm` / `ppm` — application, capability, and product package managers. |
@@ -55,9 +58,9 @@ and the **tooling / build coordination** modules.
         ─ payos-pm:  apm / cpm / ppm     ─ pdoc       ─ payosv2-packer: edc
 ```
 
-### The seven extensibility mechanisms
+### The nine extensibility mechanisms
 
-PayOS extends without modifying the core through seven distinct mechanisms. Knowing which is which is essential; they are fully described in [architecture/extensibility.md](../architecture/extensibility.md).
+PayOS extends without modifying the core through nine distinct mechanisms. Knowing which is which is essential; they are fully described in [architecture/extensibility.md](../architecture/extensibility.md).
 
 | Mechanism | Directory | Discovery | Used for |
 | --- | --- | --- | --- |
@@ -65,6 +68,8 @@ PayOS extends without modifying the core through seven distinct mechanisms. Know
 | **Application resource inheritance** | application `base.path` | `extends` field in application config | Applications can inherit APIs, pages, menus, libraries, and hooks from capabilities or from other applications. |
 | **Internal hooks** | application `hook/` directory | Registered in `hooks` configuration | JavaScript scripts that intercept lifecycle events (API_BEFORE_EXECUTE, API_AFTER_EXECUTE, API_ON_ERROR, etc.) in the request processing pipeline; observe and modify request/response context. |
 | **Service connectors** | `connectors-dir` | Java `ServiceLoader` (SPI) | Database, queue, secret, and (some) webhook providers. |
+| **Notification service** | `connectors-dir` | Java `ServiceLoader` (SPI) | `$Notification`; wired into `BootServer`. |
+| **Business/payment connector framework** | `connectors.json` + connector JARs | `ConnectorJarScanner` + descriptor | `$Connector(type[, name]).execute(payload)`. **Not yet wired into `BootServer`.** |
 | **Java extensions** | `extensions-dir` | `Java.type('…')` from scripts | Arbitrary Java libraries callable from JavaScript (e.g. jPOS). |
 | **Transport providers** | bundled / classpath | `ServiceLoader<ServerProvider>` | New protocols (`http`, `tcp`, `queue`, …). |
 | **TCP codec/handler plugins** | `tcp-handlers-dir` | JAR scanning for concrete `TcpMessageDecoder/Encoder/Handler` | Custom wire-format parsing for the TCP transport; decodes bytes to `Request`, encodes `Response` to bytes, and provides message-specific processing logic. |

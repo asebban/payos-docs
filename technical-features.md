@@ -22,7 +22,7 @@ Ses features techniques les plus notables sont :
 | Multi-tenancy native | Le tenant est une dimension structurante du runtime : routage, sécurité, quotas, logs et réponses. |
 | Surface gouvernée | APIs, événements, hooks et extension points sont exposés de façon contrôlée, versionnable et auditable. |
 | Sécurité OIDC intégrée | PayOS gère login, callback, logout, session et `/me` via un service de sécurité configurable. |
-| Idempotency service | Quand le service est activé, les appels API doivent fournir `X-Idempotency-Key`; PayOS bloque les clés absentes ou vides. |
+| Idempotency service | Quand le service est activé, les appels API doivent fournir `X-Idempotency-Key`; PayOS bloque les clés absentes ou vides (sauf si `failOnAbsenceOfIdempotencyKey` est désactivé). |
 | Audit log structuré | Les événements sécurité, session, autorisation, API et système sont journalisés en JSON avec tenant et corrélation. |
 | Gestion des erreurs métier (`$Errors`) | Les scripts peuvent lever des erreurs normalisées (code, message, statut HTTP) converties automatiquement en JSON structuré. |
 | Secret service (`$Secrets`) | Les secrets sont gérés via un provider pluggable (SPI) et injectés dans les scripts sous `$Secrets`. |
@@ -461,11 +461,13 @@ PayOS intègre un service d'idempotence pour sécuriser les appels API sensibles
 Le fonctionnement est le suivant :
 
 - le runtime lit une clé d'idempotence dans le header configuré, par défaut `X-Idempotency-Key` ;
-- si la clé est absente ou vide, la requête est bloquée avant l'exécution du script avec une erreur `400 Bad Request` ;
+- si la clé est absente ou vide, la requête est bloquée avant l'exécution du script avec une erreur `400 Bad Request` — sauf si `failOnAbsenceOfIdempotencyKey` est mis à `false`, auquel cas la requête est simplement exécutée sans vérification d'idempotence ;
 - si la clé existe et qu'une réponse non expirée est déjà stockée, PayOS retourne directement la réponse en cache ;
 - la réponse rejouée reçoit le header `X-Idempotency-Replayed: true` ;
 - si aucune réponse n'est stockée pour cette clé, la requête est exécutée et la réponse est stockée avec un TTL après exécution réussie ;
-- le TTL par défaut est de 24 heures (`86400` secondes), configurable par propriété système ou variable d'environnement.
+- le TTL par défaut est de 24 heures (`86400` secondes).
+
+Tous ces paramètres (`enabled`, `ttlSeconds`, `headerName`, `failOnAbsenceOfIdempotencyKey`) sont configurables via le bloc `idempotency` de `bootstrap.json`, avec repli sur propriété système ou variable d'environnement — voir [configuration/idempotency.md](configuration/idempotency.md).
 
 Le service est conçu autour d'une abstraction de store :
 
@@ -542,11 +544,16 @@ PayOS ne remplace pas une certification PCI DSS complète, qui dépend aussi de 
 
 ---
 
-## 24. Connector framework
+## 24. Connector framework (SPI backends) et connector framework métier/paiement
 
 PayOS est conçu pour brancher des technologies d'intégration sans modifier le kernel.
 
-Le connector framework se matérialise par plusieurs niveaux :
+> **Deux mécanismes distincts partagent le mot « connecteur »** : les connecteurs SPI
+> ci-dessous (backends database/queue/secret/webhook, câblés dans `BootServer`) et un
+> **connector framework métier/paiement** plus récent (`IConnector`, `$Connector(...)`,
+> `connectors.json`, module `connector-sdk`) — voir la sous-section dédiée après le tableau.
+
+Le connector framework (SPI) se matérialise par plusieurs niveaux :
 
 | Niveau | Mécanisme | Exemple |
 |---|---|---|
@@ -563,6 +570,29 @@ Le connector framework se matérialise par plusieurs niveaux :
 **Intérêt delivery :** cela facilite l'adaptation aux contraintes clients : on-premise, réseau fermé, broker imposé, SIEM existant, base de données ou connecteur spécifique.
 
 **Intérêt architecture :** ce modèle protège le core et évite les forks. La variabilité est portée par les connecteurs, les providers et la configuration.
+
+### Connector framework métier/paiement (`$Connector`) — mécanisme distinct
+
+Un second mécanisme, plus récent et sans rapport avec les connecteurs SPI ci-dessus, permet
+d'intégrer des systèmes de paiement (réseaux carte, switch national, PSP) directement depuis
+les scripts, via `$Connector(type[, name]).execute(payload)`. Construit sur 5 épics :
+
+| Capacité | Mécanisme |
+|---|---|
+| Contrat SDK indépendant | Module Maven `connector-sdk` (`IConnector`, `AbstractConnector`) — aucune dépendance sur `payos-kernel` |
+| Descripteur auto-déclaratif | `META-INF/connector.properties` (`connector.type`, `connector.name`, `connector.api.version`, ...) |
+| Configuration opérateur | `connectors.json` — type/nom/JAR/paramètres, tokens `${...}` pour les secrets |
+| Isolation et rechargement à chaud | Classloading isolé par connecteur, hot-reload piloté par `config-hot-reload-enabled` |
+| Idempotence et déduplication plateforme | Le connecteur ne décide jamais de suppression/replay — la plateforme s'en charge |
+| Politique de retry déterministe | Budget de tentatives et catégories retryables configurables (code, pas encore exposé en JSON) |
+| État d'exécution persistant | Traçabilité RUNNING/SUCCEEDED/RETRYING/FAILED par tentative |
+| Routage terminal DLQ / Connector State | Décision auditable après épuisement des retries ou erreur permanente |
+| Diagnostics dédiés | Catégorie SLF4J `CONNECTOR_DIAGNOSTICS`, indépendante du journal d'audit PCI-DSS |
+
+**Statut :** entièrement implémenté et testé (`payos`, `payos-connector-sdk`), mais **pas encore
+câblé dans `BootServer`** — `$Connector` n'est donc pas disponible dans un déploiement en
+production aujourd'hui. Détails complets :
+[connector-framework-parameters-v2-2026-07-12.md](configuration/connector-framework-parameters-v2-2026-07-12.md).
 
 ---
 

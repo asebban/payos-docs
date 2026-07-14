@@ -1475,6 +1475,23 @@ com.acme.payos.secret.AcmeSecretProviderFactory
 > - involve the publisher from the design stage.
 > - If these services are not declared, or have not been deployed to `connectors-dir` the kernel starts anyway without the corresponding service
 
+### 13.2bis Business/payment connector framework (`$Connector`) — not to be confused with SPI connectors above
+
+A separate, newer mechanism shares the word "connector" but is otherwise unrelated to §13.2:
+a JAR implementing `IConnector` (from the standalone `connector-sdk` Maven module, no
+dependency on the kernel), self-declared via `META-INF/connector.properties`, configured by
+the operator via `connectors.json`, and invoked from scripts as
+`$Connector(type[, name]).execute(payload)`. This is the mechanism for integrating **payment
+networks, switches, and PSPs** — the "external custom connectors" use case mentioned at the
+top of this page most likely means this, not an SPI backend.
+
+It covers idempotency, platform-owned deduplication, a deterministic retry policy,
+execution-state persistence, and DLQ/terminal-state routing — none of which the SPI mechanism
+in §13.2 has any concept of. **It is fully implemented and tested but not yet wired into
+`BootServer`** — treat it as the stable contract for upcoming connector work, not something
+you can deploy today. Full reference:
+[configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md).
+
 ### 13.3 TCP plugins / new protocols
 
 For historical channels (ISO 8583 over TCP, proprietary protocols), `payos-server-tcp` exposes an extension point per JARs (`tcp-handlers-dir`) implementing `TcpMessageDecoder` / `TcpMessageEncoder` / `TcpMessageHandler`. See [architecture/tcp server/plugin-development.md](../architecture/tcp%20server/plugin-development.md).

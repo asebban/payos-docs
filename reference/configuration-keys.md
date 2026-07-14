@@ -10,8 +10,8 @@ block heading.
 | --- | --- | --- |
 | `runtimeBaseDir` | directory containing `payos.json` | Effective runtime base directory; computed by the loader, not normally authored in `payos.json`. |
 | `configDir` | `.` | Directory merged into the configuration, resolved relative to `runtimeBaseDir` when not absolute. |
-| `config-hot-reload-enabled` | `true` | Enable configuration hot-reload (watches config directories for changes). |
-| `connectors-dir` | — | Connector (SPI) JAR directory. |
+| `config-hot-reload-enabled` | `true` | Enable configuration hot-reload (watches config directories for changes). Also governs whether the connector framework's `ConnectorRuntimeReloader` may hot-swap a replacement connector JAR — see [connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md) §4. |
+| `connectors-dir` | — | Connector (SPI) JAR directory — the **legacy** SPI-backend loader (database/queue/secret factories), not the business/payment connector framework. See [Naming clash](../configuration/connector-framework-parameters-v2-2026-07-12.md#naming-clash-with-the-legacy-connectors-dir-loader). |
 | `extensions-dir` | — | Extension JAR directory. |
 | `tcp-handlers-dir` | — | TCP plugin directory (also per-server). |
 | `applications[]` | — | Registered applications (see below). |
@@ -175,6 +175,19 @@ Per-app subscription fields (`config/webhooks.json`): `id`, `event`, `native`, `
 | `fallbackLocale` | Fallback locale. |
 | `supportedLocales` | Allowed locales. |
 
+## `idempotency` — [idempotency.md](../configuration/idempotency.md)
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `enabled` | `true` | Enable the idempotency service. |
+| `ttlSeconds` | `86400` | Cached-response TTL (s). |
+| `headerName` | `X-Idempotency-Key` | Request header carrying the idempotency key. |
+| `failOnAbsenceOfIdempotencyKey` | `true` | Reject requests with a missing/blank key (`400`) when `true`; proceed without an idempotency check when `false`. |
+
+Each key also resolves from a system property (`payos.idempotency.<key>`) and environment
+variable (`PAYOS_IDEMPOTENCY_<KEY>`) if not set in `bootstrap.json` — see
+[idempotency.md](../configuration/idempotency.md#resolution-order).
+
 ## Plugin discovery env vars / system props — [extensions-connectors.md](../configuration/extensions-connectors.md)
 
 | Bootstrap key | Env var |
@@ -185,3 +198,15 @@ Per-app subscription fields (`config/webhooks.json`): `id`, `event`, `native`, `
 | (filesystem secrets master key) | `PAYOS_SECRET_MASTER_KEY` |
 
 Resolution order for each: system property → env var → bootstrap/server key.
+
+## Connector framework — [connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
+
+Not `IConfigSpec` constants (parsed by `ConnectorConfigurationLoader` / `ConnectorDescriptorParser` instead), so not covered by the tables above — listed here so this index stays complete.
+
+| Surface | Keys |
+| --- | --- |
+| `META-INF/connector.properties` (descriptor) | `connector.type`, `connector.name`, `connector.api.version`, `connector.required.params`, `connector.requires.idempotency` |
+| `connectors.json` (config) | `connectors[].type`, `connectors[].name`, `connectors[].jar`, `connectors[].parameters` |
+
+Not yet wired into `BootServer`. Do not confuse with the `connectors-dir` legacy SPI loader
+above — see the linked doc's "Naming clash" section.

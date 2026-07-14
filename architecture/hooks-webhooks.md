@@ -800,12 +800,15 @@ classDiagram
 
 ## 5. Configuration in `bootstrap.json`
 
+> **Only `dispatcher` actually exists.** `timeout` and `deadLetterTopic` below are aspirational
+> — `IConfigSpec.GlobalWebhooks` defines only `webhooks.dispatcher`; there is no dead-letter
+> mechanism in source today (see §7, decisions #1–#4, which are design intent, not shipped
+> behavior).
+
 ```json
 {
   "webhooks": {
-    "dispatcher": "http",
-    "timeout": 5000,
-    "deadLetterTopic": "payos.webhook.dead-letter"
+    "dispatcher": "http"
   }
 }
 ```
@@ -813,8 +816,6 @@ classDiagram
 | Key | Values | Description |
 |---|---|---|
 | `dispatcher` | `http`, `queue` | Delivery mode |
-| `timeout` | milliseconds | HTTP connection + read timeout per attempt |
-| `deadLetterTopic` | topic name | Queue topic for exhausted retries (queue mode only) |
 
 ---
 
@@ -845,13 +846,18 @@ classDiagram
 
 ## 7. Decisions
 
-1. **Dead-letter persistence**: configurable — either file-based (NDJSON, e.g. `events.ndjson`) or queue-based (`IQueueClient`). The delivery mode is set in `bootstrap.json`; both backends implement the same `IDeadLetterStore` interface.
+> **Decisions #1–#4 below are design intent, not shipped behavior.** No `IDeadLetterStore`,
+> webhook delivery log, tenant-scoped `webhooks.json` override, or `/_system/webhooks/*` admin
+> endpoint exists in source today (confirmed by search — zero hits for any of these). Decisions
+> #5–#7 are real and verified against source.
 
-2. **Webhook delivery log**: all deliveries (successful and failed) are recorded for audit compliance (PCI-DSS Req 10). Recording is **configurable** — it can be disabled per environment (e.g. dev/test) via `bootstrap.json`.
+1. **Dead-letter persistence** (aspirational): configurable — either file-based (NDJSON, e.g. `events.ndjson`) or queue-based (`IQueueClient`). The delivery mode is set in `bootstrap.json`; both backends implement the same `IDeadLetterStore` interface.
 
-3. **Tenant-scoped webhook config**: `webhooks.json` supports per-tenant override. A tenant-specific file at `config/<tenantId>/webhooks.json` takes precedence over the app-level file, following the same override semantics as other tenant-scoped config.
+2. **Webhook delivery log** (aspirational): all deliveries (successful and failed) are recorded for audit compliance (PCI-DSS Req 10). Recording is **configurable** — it can be disabled per environment (e.g. dev/test) via `bootstrap.json`.
 
-4. **Admin API**: a `GET /_system/webhooks/deliveries` endpoint is exposed to query delivery history. Access is restricted to platform administrators.
+3. **Tenant-scoped webhook config** (aspirational): `webhooks.json` supports per-tenant override. A tenant-specific file at `config/<tenantId>/webhooks.json` takes precedence over the app-level file, following the same override semantics as other tenant-scoped config.
+
+4. **Admin API** (aspirational): a `GET /_system/webhooks/deliveries` endpoint is exposed to query delivery history. Access is restricted to platform administrators.
 
 5. **Synchronous webhook variant**: not supported. Blocking outbound HTTP calls on the critical path is incompatible with the platform's latency and reliability requirements. Fraud-check and veto scenarios are addressed via **Level 1 internal hooks** (`pre-request`) which are synchronous by design.
 

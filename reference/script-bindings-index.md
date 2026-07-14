@@ -14,6 +14,8 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 | `$Principal` / `$User` | Map | Authenticated principal: `id`, `email`, `name`, `preferred_username`, `roles`. |
 | `$Tenant` | String | Resolved tenant id. |
 | `$Library` | loader | Load shared JS from `lib/`. |
+| `$Logger` | SLF4J logger | Plain log line, message + level only. |
+| `$Errors` | `ErrorsProxy` | Typed business errors (`badRequest`, `notFound`, `conflict`, ...). |
 
 ## Available when the service is configured
 
@@ -24,6 +26,8 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 | `$Secrets` | secret-service | `SecretsBinding` (wraps `ISecretProvider`; exposes `get`/`list`/`tokenize`/`detokenize` only) | [secrets-usage.md](../developer/secrets-usage.md) |
 | `$I18n` | i18n | i18n accessor | [internationalization.md](../developer/internationalization.md) |
 | `$WebHooks` | webhooks | `WebhookHooksProxy` | [webhooks-and-hooks.md](../developer/webhooks-and-hooks.md) |
+| `$Connector` | connector framework | `ConnectorBinding` (gated on `PayOSConfig.getConnectorRegistry()`; **not yet wired into `BootServer`**, so absent in a running deployment today) | [scripting-bindings.md](../developer/scripting-bindings.md), [connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md) |
+| `$Notification` | notification-service | `NotificationBinding` (gated on `PayOSConfig.getNotificationServiceFactory()`) | [scripting-bindings.md](../developer/scripting-bindings.md), [notification-service.md](../configuration/notification-service.md) |
 
 ## Java interop
 

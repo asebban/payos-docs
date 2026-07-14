@@ -184,6 +184,9 @@ Gouverné car :
 - S'exécute dans le contexte GraalVM Polyglot isolé
 - Les APIs disponibles dans `$Api` sont définies et versionnées par la plateforme
 
+**Connector framework métier/paiement (`$Connector`).** Une surface d'extension plus récente permet aux scripts d'invoquer des connecteurs de paiement tiers (réseaux carte, switch, PSP) via `$Connector(type[, name]).execute(payload)`, avec idempotence, retry et routage DLQ gérés par la plateforme (jamais par le connecteur). Entièrement implémenté (`payos`, `payos-connector-sdk`) mais **pas encore câblé dans `BootServer`** — absent d'un déploiement en production aujourd'hui.
+Voir [connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md).
+
 ### 3.2 La Sandbox — L'entrée sécurisée dans l'écosystème
 
 Avant d'accéder à la surface gouvernée en production, un partenaire passe par la **Sandbox** :

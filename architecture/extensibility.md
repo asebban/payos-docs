@@ -1,8 +1,8 @@
 # Extensibility
 
-PayOS adds behavior **without modifying the rigid core**. There are seven distinct extension mechanisms. Knowing which is which — and how each is discovered — is essential.
+PayOS adds behavior **without modifying the rigid core**. There are nine distinct extension mechanisms. Knowing which is which — and how each is discovered — is essential.
 
-## The seven mechanisms at a glance
+## The nine mechanisms at a glance
 
 | Mechanism | Directory | Discovery | Used for |
 | --- | --- | --- | --- |
@@ -10,6 +10,8 @@ PayOS adds behavior **without modifying the rigid core**. There are seven distin
 | **Application resource inheritance** | application `base.path` | `extends` field in application config | Applications can inherit APIs, pages, menus, libraries, and hooks from capabilities or from other applications. They can override behavior of inherited application without any impact on it |
 | **Internal hooks** | application `hook/` directory | Registered in `hooks` configuration | JavaScript scripts that intercept lifecycle events (API_BEFORE_EXECUTE, API_AFTER_EXECUTE, API_ON_ERROR, etc.) in the request processing pipeline; observe and modify request/response context. |
 | **Service connectors** | `connectors-dir` | Java `ServiceLoader` (SPI) | Database, queue, secret, and webhook providers. |
+| **Notification service** | `connectors-dir` | Java `ServiceLoader` (SPI), `INotificationServiceFactory` | Publisher-side `$Notification` binding; wired into `BootServer` (`NotificationServiceInitializer`). |
+| **Business/payment connector framework** | `connectors.json` + connector JARs | `ConnectorJarScanner` + descriptor (`META-INF/connector.properties`) | `$Connector(type[, name]).execute(payload)` — card networks, switches, PSPs. **Not yet wired into `BootServer`.** See [connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md). |
 | **Java extensions** | `extensions-dir` | `Java.type('…')` from scripts | Arbitrary Java libraries callable from JavaScript (e.g. jPOS). |
 | **Transport providers** | bundled / classpath | `ServiceLoader<ServerProvider>` | New protocols (`http`, `tcp`, `queue`, …). |
 | **TCP codec/handler plugins** | `tcp-handlers-dir` | JAR scanning for concrete `TcpMessageDecoder/Encoder/Handler` | Custom wire-format parsing for the TCP transport; decodes bytes to `Request`, encodes `Response` to bytes, and provides message-specific processing logic. |
@@ -90,6 +92,7 @@ A connector is a JAR in `connectors-dir`. `ConnectorLoader` builds a `URLClassLo
 | Queue | `IQueueClientFactory` | `nats` | `$Queue` |
 | Secrets | `ISecretProviderFactory` | `filesystem`, `vault` | `$Secrets` |
 | Webhooks | `IWebhookDispatcherFactory` | `http` | `$WebHooks` (dispatch) |
+| Notification | `INotificationServiceFactory` | (connector-defined) | `$Notification` |
 
 ### How a connector is selected
 

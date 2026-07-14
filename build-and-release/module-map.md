@@ -47,17 +47,20 @@ fits together. Versions are in [versioning.md](versioning.md).
 
 ## What the runtime embeds
 
-`payos-runtime` (1.3.0-RELEASE) shades:
+`payos-runtime` (1.8.0-RELEASE) shades:
 
-- payos-kernel 1.3.0
-- payos-server-http 1.2.0, payos-server-tcp 1.0.6, payos-server-queue 1.0.6
-- dynamic-database-service 1.1.7
-- queue-service-nats 1.0.6
-- webhook-service-http 1.0.3
-- payos-secret-api 1.0.0, secret-service-filesystem 1.0.0
+- payos-kernel 1.8.0-RELEASE
+- payos-server-http 1.2.0, payos-server-tcp 1.0.6, payos-server-queue 1.1.0-RELEASE
+- dynamic-database-service 1.1.9-RELEASE
+- queue-service-nats 1.1.0-RELEASE
+- webhook-service-http 1.0.4-RELEASE
+- payos-secret-api 1.0.0-RELEASE, secret-service-filesystem 1.1.0-RELEASE, secret-service-vault 1.1.0-RELEASE
+- payos-notification-api 1.0.0-RELEASE, payos-notification-connector 1.1.0-RELEASE, connector-sdk 1.2.0-RELEASE
 
-Additional/alternative backends (e.g. `secret-service-vault`, a different queue/DB) are
-deployed as connector JARs in `connectors-dir`.
+`secret-service-vault` is shaded directly into the runtime jar alongside
+`secret-service-filesystem` — it is a direct `payos-runtime` dependency, not an
+additional/alternative connector-jar-only backend. A different queue/DB backend would still
+be deployed as connector JARs in `connectors-dir`.
 
 ## Dependency direction
 

@@ -13,22 +13,36 @@ This page is about the first: emitting messages from your API logic.
 
 ## Publishing
 
+`IQueueClient.publish(...)` has three real overloads — there is **no** `publish(topic, message)`
+two-string overload. Pick the one matching your use case:
+
 ```javascript
 function execute(request, controlData) {
-    var event = { type: "payment.created", id: controlData.id, tenant: $Tenant };
-    $Queue.publish("payments.events", JSON.stringify(event));
+    var payload = JSON.stringify({ type: "payment.created", id: controlData.id, tenant: $Tenant });
+
+    // Destination-based publish — the only overload that lets you target an arbitrary
+    // destination; requires a QueueMessage envelope, not a raw string.
+    var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
+        controlData.id, payload, {}, "payments.events");
+    $Queue.publish("payments.events", message);
+
     return { id: controlData.id };
 }
 ```
 
-The `IQueueClient` interface provides:
-
 | Method | Purpose |
 | --- | --- |
-| `publish(topic, message)` | Publish a message to a topic. |
-| `publish(topic, message, replyTopic)` | Publish expecting a reply on `replyTopic`. |
+| `publish(message)` | Publish a raw string message to the connector's default configured topic (set at `connect(host, port, topic)` time). |
+| `publish(message, replyTopic)` | Same as above, but requests a reply on `replyTopic` (or the default topic if `replyTopic` is null/blank). **`replyTopic` is a reply-to topic, not a destination.** |
+| `publish(destination, QueueMessage)` | Broker-agnostic publish to an explicit `destination` — no implicit default topic. Returns a `MessageHandle`. This is the overload to use when you need to target a specific destination from a script. |
+| `subscribe(listener)` | Subscribe to the default topic (legacy `MessageListener`, no ack/nack). |
+| `subscribe(destination, AckMessageListener)` | Subscribe to an explicit destination with per-message acknowledge/reject control. Returns a `SubscriptionHandle`. |
+| `subscribe(List<String> destinations, AckMessageListener)` | Subscribe the same listener to multiple destinations at once; `QueueMessage.getDestination()` tells the listener which one a given delivery came from. |
 | `isConnected()` | Whether the client is connected. |
-| `connect()` / `disconnect()` | Lifecycle (managed by the kernel; rarely called from scripts). |
+| `connect(...)` / `disconnect()` | Lifecycle (managed by the kernel; rarely called from scripts). |
+
+See `payos/src/main/java/ma/s2m/payos/queue/IQueueClient.java` and `QueueMessage.java` for the
+authoritative signatures.
 
 > Message delivery through a MoM client is **asynchronous**. Do not assume a synchronous
 > callback after `publish`.
@@ -53,7 +67,9 @@ var event = {
     tenant: $Tenant,
     payload: controlData
 };
-$Queue.publish("payments.events", JSON.stringify(event));
+var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
+    controlData.id, JSON.stringify(event), {}, "payments.events");
+$Queue.publish("payments.events", message);
 ```
 
 See [operations/observability.md](../operations/observability.md).

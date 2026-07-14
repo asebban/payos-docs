@@ -32,7 +32,7 @@ ppm [global-options] <action> [options]
 | --- | --- | --- |
 | `--bundle-path <path>` | `.` | The target bundle. |
 | `-h`, `--help` | | Show help. |
-| `-V`, `--version` | | Show version. |
+| `-v`, `--version` | | Show version. |
 
 ## Examples
 
@@ -45,6 +45,58 @@ ppm --status --all --bundle-path /opt/payos/bundle
 
 # uninstall
 ppm --uninstall --product gateway --bundle-path /opt/payos/bundle
+```
+
+## Product manifest file naming
+
+`ppm` resolves a product manifest through two distinct, non-interchangeable conventions depending on where it is found. **They use different filenames — do not assume `manifest.json` works everywhere.**
+
+### 1. Local override (bundle working directory)
+
+Checked first, before the catalog. Only the flat filename `<productId>.json` directly under the bundle's working directory is recognized:
+
+```
+<workingDir>/<productId>.json
+```
+
+`manifest.json` is **not** supported in this location — `ProductManager.resolveManifest` only looks for `<workingDir>/<productId>.json`.
+
+Example: for product id `gateway` with working directory `/opt/payos/bundle`:
+
+```
+/opt/payos/bundle/gateway.json
+```
+
+### 2. Local-directory catalog (`productCatalog.type: "local"`)
+
+When no local override exists, `ppm` falls back to the configured `productCatalog`. For a
+`local`-type catalog, `LocalProductCatalogClient` supports **both** of the following layouts, tried in this order:
+
+- **Preferred** — per-product directory: `<catalogRoot>/<productId>/manifest.json`
+- **Fallback** — flat legacy file: `<catalogRoot>/<productId>.json`
+
+When a `--product <id>@<version>` is given, the versioned equivalents are tried:
+
+- **Preferred** — `<catalogRoot>/<productId>/<version>/manifest.json`
+- **Fallback** — `<catalogRoot>/<productId>/<version>.json`
+
+Example catalog layout (preferred, per-product-directory):
+
+```
+catalog/
+  gateway/
+    manifest.json
+    1.2.0/
+      manifest.json
+```
+
+Example catalog layout (flat legacy fallback):
+
+```
+catalog/
+  gateway.json
+  gateway/
+    1.2.0.json
 ```
 
 ## Exit codes

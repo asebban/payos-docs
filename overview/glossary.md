@@ -56,11 +56,21 @@ HTTP, TCP, and Queue transports.
 
 ## Extensibility concepts
 
-**Connector**
+**Connector (SPI)**
 : A service-provider JAR placed in `connectors-dir` and discovered through Java's
 `ServiceLoader`. Connectors implement an SPI factory (`IDatabaseServiceFactory`,
-`IQueueClientFactory`, `IWebhookDispatcherFactory`, `ISecretProviderFactory`). See
+`IQueueClientFactory`, `IWebhookDispatcherFactory`, `ISecretProviderFactory`,
+`INotificationServiceFactory`). See
 [architecture/extensibility.md](../architecture/extensibility.md).
+
+**Connector (business/payment framework)**
+: An unrelated, newer mechanism sharing the same name: a JAR implementing `IConnector`
+(from the standalone `connector-sdk` Maven module), configured via `connectors.json` and a
+`META-INF/connector.properties` descriptor, callable from scripts via
+`$Connector(type[, name]).execute(payload)`. Covers idempotency, platform-owned
+deduplication, retry policy, execution-state persistence, and DLQ/terminal-state routing —
+none of which the SPI connector above has any concept of. **Not yet wired into `BootServer`.**
+See [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md).
 
 **Extension**
 : A Java library JAR placed in `extensions-dir` whose classes become callable from

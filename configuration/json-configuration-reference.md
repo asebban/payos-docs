@@ -423,7 +423,7 @@ Configuration complète d'une source de données Hibernate/HikariCP partagée.
     "url": "jdbc:postgresql://localhost:5432/payos",
     "username": "payos_user",
     "password": "s3cr3t",
-    "driver-class": "org.postgresql.Driver",
+    "driver_class": "org.postgresql.Driver",
     "dialect": "org.hibernate.dialect.PostgreSQLDialect",
     "ddl-auto": "validate",
     "schema": "public",
@@ -445,9 +445,9 @@ Configuration complète d'une source de données Hibernate/HikariCP partagée.
 | `url` | `jdbcUrl`, `hibernate.connection.url` | string | Oui | — | URL JDBC de connexion |
 | `username` | `user`, `hibernate.connection.username` | string | Oui | — | Utilisateur BDD |
 | `password` | `hibernate.connection.password` | string | Non | `""` | Mot de passe BDD |
-| `driver-class` | `driver_class`, `hibernate.connection.driver_class` | string | Non | Auto-détecté | Classe du driver JDBC |
+| `driver_class` | `driverClass`, `hibernate.connection.driver_class` | string | Non | Auto-détecté | Classe du driver JDBC. Note : `driver-class` (avec tiret) n'est **pas** reconnu malgré son apparence similaire — seule la clé `driver_class` (underscore) et ses alias ci-dessus sont lus par `DatabaseServiceInitializer`. |
 | `dialect` | `hibernate.dialect` | string | Non | — | Dialecte Hibernate SQL |
-| `ddl-auto` | `hibernate.hbm2ddl.auto` | string | Non | `"update"` | Stratégie DDL : `validate`, `update`, `create`, `create-drop` |
+| `ddl-auto` | `hibernate.hbm2ddl.auto` | string | Non | Aucun (pas de gestion automatique du schéma sauf configuration explicite) | Stratégie DDL : `validate`, `update`, `create`, `create-drop` |
 | `schema` | — | string | Non | `"public"` | Schéma SQL utilisé pour les entités |
 | `max-pool-size` | `maximumPoolSize`, `maxPoolSize`, `pool-max` | int | Non | HikariCP défaut | Taille maximale du pool de connexions |
 | `minimum-idle` | `minimumIdle`, `minIdle`, `pool-min` | int | Non | HikariCP défaut | Nombre minimum de connexions inactives |

@@ -1,11 +1,6 @@
 # `pdoc` — Static OpenAPI generator
 
-`pdoc` generates OpenAPI 3.1 specifications from `@payos.openapi` annotations in your API
-scripts. It is **static-only**: it parses annotations and never executes code, databases,
-queues, or webhooks — which is what makes it safe for regulated, auditable delivery. Module
-`pdoc` (main class `ma.s2m.payos.pdoc.PdocApplication`, version `1.0.0-SNAPSHOT`). The
-authoring side (annotation format) is in
-[developer/api-documentation.md](../developer/api-documentation.md).
+`pdoc` generates OpenAPI 3.1 specifications from `@payos.openapi` annotations in your API scripts. It is **static-only**: it parses annotations and never executes code, databases, queues, or webhooks — which is what makes it safe for regulated, auditable delivery. Module `pdoc` (main class `ma.s2m.payos.pdoc.PdocApplication`, version `1.0.0-RELEASE`). The authoring side (annotation format) is in [developer/api-documentation.md](../developer/api-documentation.md).
 
 ## Install
 
@@ -42,6 +37,11 @@ pdoc <target> [options]
 | --- | --- |
 | `--bundle-path <path>` | The bundle to read from. |
 | `--output <path>` | Where to write the generated spec. |
+
+> If `--output` is omitted, `pdoc` writes to
+> `target/openapi/<applications|capabilities|products>/<targetId>/openapi.yaml` — the
+> directory segment matches the target kind (`--app` → `applications`, `--capability` →
+> `capabilities`, `--product` → `products`).
 
 ## Examples
 

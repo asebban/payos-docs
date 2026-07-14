@@ -62,13 +62,14 @@ where the application's hook resolution expects them; the engine invalidates its
 on [configuration reload](../operations/hot-reload.md).
 
 ```javascript
-// a post-request hook: enrich an audit trail
-$Audit && $Audit.record({
-    event: "api.post-request",
-    path: $Request.getPath(),
-    user: $Principal && $Principal.get("id")
-});
+// a post-request hook: log request completion
+$Logger.info("api.post-request path=" + $Request.getPath() +
+    " user=" + ($Principal && $Principal.get("id")));
 ```
+
+There is no `$Audit` script binding — the PCI-DSS audit trail (`AuditLogger`/`AuditEvent`) is a
+Java-side facade only, not reachable from scripts. `$Logger` (always available, a plain SLF4J
+logger) is the binding to use from a hook script.
 
 ## The `$WebHooks` binding
 

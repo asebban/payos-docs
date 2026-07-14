@@ -10,9 +10,9 @@ module agrees on a single version of each dependency.
 | --- | --- | --- |
 | Language / JVM | Java | 21 (`maven.compiler.source/target=21`) |
 | Build | Maven | parent-managed plugin versions |
-| HTTP server | Undertow | `2.3.11.Final` |
+| HTTP server | Undertow | `2.3.18.Final` |
 | Scripting engine | GraalVM Polyglot / JS | `24.1.1` |
-| JSON | Jackson Databind | `2.16.1` (kernel) / `2.17.2` (parent-managed) |
+| JSON | Jackson Databind | `2.17.2` |
 | Authentication | pac4j (core + OIDC) | `6.0.0` |
 | Logging API | SLF4J | `2.0.12` |
 | Logging backend | Logback | `1.5.13` |
@@ -20,9 +20,10 @@ module agrees on a single version of each dependency.
 | ORM (data service) | Hibernate | `5.6.15.Final` |
 | CLI framework (tooling) | picocli | `4.7.5` |
 
-> Where the kernel `pom.xml` and the parent POM list slightly different Jackson versions,
-> the value that actually applies is the one resolved by Maven for the module being built.
-> The authoritative, per-module list is in
+> The kernel `pom.xml` no longer overrides Jackson's version — it inherits the parent-managed
+> `jackson-databind` version (`2.17.2`) from `payos-parent/pom.xml`. Jackson is uniformly
+> `2.17.2` across the kernel and all modules that build against the parent POM. The
+> authoritative, per-module list is in
 > [build-and-release/module-map.md](../build-and-release/module-map.md).
 
 ## Testing

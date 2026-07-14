@@ -19,7 +19,7 @@ daemon to consume and deliver. Don't confuse the two: this page configures the c
       "type": "nats",
       "host": "nats.internal",
       "port": 4222,
-      "topic": "payos.notifications"
+      "destination": "notifications.inbound"
     }
   }
 }
@@ -34,7 +34,7 @@ From `IConfigSpec.NotificationService`:
 | `type` | connector-derived (`nats` for the queue connector) | Connector type; selects the underlying `IQueueClientFactory` (e.g. `nats`). |
 | `host` | `localhost` | Broker host. |
 | `port` | `4222` | Broker port. |
-| `topic` | `payos.notifications` | Topic/destination used for the connector's own connection. |
+| `destination` | `notifications.inbound` | Topic/destination used for the connector's own connection. |
 
 The `configuration` map is passed through verbatim (as `Map<String, String>`) to the active
 connector's `INotificationServiceFactory#initialize`, so keys beyond `type` are

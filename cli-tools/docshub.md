@@ -26,11 +26,16 @@ unified, topic-oriented hub, generating per-section and master indexes. It lives
 | `--root` | `-r` | current directory | Root directory containing the PayOS module folders. |
 | `--output` | `-o` | `<root>/docs-hub` | Destination directory for the assembled hub. |
 | `--dry-run` | | off | Preview operations without writing files. |
-| `--force` | `-f` | off | Overwrite existing destination files (including read-only). |
-| `--verbose` (PS `-Verbose`) | | off | Verbose logging. |
+| `--force` | `-f` (PowerShell only) | off | Overwrite existing destination files (including read-only). |
+| `--verbose` | `-v` (bash) / `-Verbose` (PowerShell) | off | Verbose logging. |
 
 The PowerShell entry point also accepts GNU-style long options (`--root`, `--output`,
 `--dry-run`, `--force`).
+
+> `-f` is a short alias for `--force` only in `docshub.ps1` (its GNU-style option parser
+> recognizes `--force`, `-f`, and bare `force`). The bash script `docshub.sh` only accepts the
+> long `--force` form — there is no `-f` short alias in bash. The bash script does define
+> `-v`/`--verbose` as an alias pair, unlike PowerShell's `-Verbose`-only switch.
 
 ## Examples
 

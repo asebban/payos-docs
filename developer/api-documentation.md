@@ -34,6 +34,7 @@ operation:
  * responses:
  *   "201": { description: Created }
  *   "400": { description: Validation error }
+ * /@payos.openapi
  */
 function execute(request, controlData) {
     $Response.setStatusCode(201);

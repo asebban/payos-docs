@@ -284,7 +284,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Property | Value |
 |---|---|
-| **Artifact** | `ma.s2m.payos:payos-pm:1.2.1-RELEASE` |
+| **Artifact** | `ma.s2m.payos:payos-pm:1.3.0-RELEASE` |
 | **Language** | Java 21 |
 | **Build** | Maven + `maven-shade-plugin:3.5.1` (produces `cpm.jar`, `ppm.jar`, and `apm.jar`) |
 | **Entry Points** | `ma.s2m.payos.pm.cpm.Cpm`, `ma.s2m.payos.pm.ppm.Ppm`, `ma.s2m.payos.pm.apm.Apm` |

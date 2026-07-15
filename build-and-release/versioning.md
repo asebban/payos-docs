@@ -32,7 +32,7 @@ versions without repeating each version.
 | secret-service-filesystem | 1.1.0-RELEASE |
 | secret-service-vault | 1.1.0-RELEASE |
 | payosv2-packer (`edc`) | 1.3.0-RELEASE |
-| payos-pm (`apm`/`cpm`/`ppm`) | 1.2.1-RELEASE |
+| payos-pm (`apm`/`cpm`/`ppm`) | 1.3.0-RELEASE |
 | pdoc | 1.0.0-RELEASE |
 
 (See [module-map.md](module-map.md) for what each module does and the versions embedded in

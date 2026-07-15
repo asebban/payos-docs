@@ -34,7 +34,7 @@ graph TD
     QN["<b>queue-service-nats</b><br/>1.0.6-RELEASE<br/>NATS IQueueClient impl"]
     DB["<b>dynamic-database-service</b><br/>1.1.7-RELEASE<br/>HikariCP + Hibernate connector"]
     WH["<b>webhook-service-http</b><br/>1.0.3-RELEASE<br/>HTTP IWebhookDispatcher impl"]
-    PM["<b>payos-pm</b><br/>1.1.2-RELEASE<br/>CLI tools — cpm / ppm / apm"]
+    PM["<b>payos-pm</b><br/>1.3.0-RELEASE<br/>CLI tools — cpm / ppm / apm"]
 
     RT["<b>payos-runtime</b><br/>1.3.0-RELEASE<br/><i>Layer 2 — executable fat JAR</i>"]
 
@@ -223,5 +223,5 @@ java -jar payos-runtime/target/payos-runtime-1.3.0-RELEASE.jar --bundle-path /pa
 | `queue-service-nats` | `ma.s2m.payos:queue-service-nats:1.0.6-RELEASE` | `queue-service-nats-1.0.6-RELEASE.jar` | 1 |
 | `database-service` | `ma.s2m:dynamic-database-service:1.1.7-RELEASE` | `dynamic-database-service-1.1.7-RELEASE.jar` | 1 |
 | `webhook-service-http` | `ma.s2m.payos:webhook-service-http:1.0.3-RELEASE` | `webhook-service-http-1.0.3-RELEASE.jar` | 1 |
-| `payos-pm` | `ma.s2m.payos:payos-pm:1.1.2-RELEASE` | `cpm.jar`, `ppm.jar`, `apm.jar` | 1 |
+| `payos-pm` | `ma.s2m.payos:payos-pm:1.2.2-RELEASE` | `cpm.jar`, `ppm.jar`, `apm.jar` | 1 |
 | `payos-runtime` | `ma.s2m.payos:payos-runtime:1.3.0-RELEASE` | `payos-runtime-1.3.0-RELEASE.jar` | 2 |

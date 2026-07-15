@@ -18,25 +18,29 @@ cpm [global-options] <action> [options]
 | Action | Purpose |
 | --- | --- |
 | `--install` | Install a capability into the bundle. |
-| `--uninstall` | Remove a capability. |
+| `--uninstall` | Remove a capability (or all installed capabilities with `--all`). |
 | `--activate` | Activate a capability (optionally scoped to an app/tenant). |
 | `--deactivate` | Deactivate a capability. |
+| `--status` | Show installation/activation status of a capability, or all of them without `--id`. |
 
 ### Options
 
 | Option | Purpose |
 | --- | --- |
-| `--id <id>` | Capability id. |
-| `--version <version>` | Capability version. |
-| `--path <path>` | Install from a local path. |
-| `--from-catalog` | Resolve the capability from the configured catalog. |
+| `--id <id>` | Capability id. Required for every action except `--status` (omit to show all) and `--uninstall --all`. |
+| `--version <version>` | Capability version (install only; resolves latest if omitted). |
+| `--from-git[=<baseUrl>]` | Use a git catalog for this install, optionally overriding its configured `baseUrl`. |
+| `--from-local[=<dir>]` | Use a local catalog for this install, optionally overriding its configured `path`. `<dir>` is the **root** of the catalog — it must contain one subdirectory per capability id (`<dir>/<id>/manifest.json`, optionally versioned as `<dir>/<id>/<version>/manifest.json`) — not the directory of the single capability being installed. |
+| `--all` | Uninstall every installed capability instead of a single `--id` (`--uninstall` only; mutually exclusive with `--id`). Or when `--status` is specified shows the status of all capabilities — omit `--id` there to see all. |
 | `--app <appId>` | Scope activation/deactivation to an application. |
 | `--tenant <tenantId>` | Scope activation/deactivation to a tenant. |
 | `--cascade` | Cascade the operation (e.g. dependent capabilities). |
 | `--drop-schema` | On uninstall, drop the capability's database schema. |
 
-> When `--install` is used and `--path` is omitted, `cpm` automatically defaults
-> `--from-catalog` to `true` — you do not need to pass `--from-catalog` explicitly to pull a capability from the configured catalog.
+> `--install` resolves the capability through the configured **catalog** (`capabilityCatalog`
+> in `payos.json` or `*.json` found in `configDir`) — there is no longer a plain `--path` flag for installing from an arbitrary (replaced by `--from-local`)
+> local directory outside the catalog. `--from-git`/`--from-local` are mutually exclusive
+> one-off overrides of that configured catalog's type/location; when neither is given, `cpm` uses `capabilityCatalog` as configured.
 
 ### Global options
 
@@ -63,8 +67,12 @@ capability's resources are only visible while it is active. See
 ## Examples
 
 ```bash
-# install a capability from a path
-cpm --install --path ./build/audit-capability --bundle-path /opt/payos/bundle
+# install a capability, overriding the configured catalog for this run only
+# (./build/capabilities is the catalog ROOT: it must contain ./build/capabilities/audit-capability/manifest.json)
+cpm --install --id audit-capability --from-local=./build/capabilities --bundle-path /opt/payos/bundle
+
+# install from the configured capabilityCatalog as-is
+cpm --install --id audit-capability --bundle-path /opt/payos/bundle
 
 # activate it for one application and tenant
 cpm --activate --id audit-capability --app payments --tenant acme \
@@ -74,8 +82,15 @@ cpm --activate --id audit-capability --app payments --tenant acme \
 cpm --deactivate --id audit-capability --app payments --tenant acme \
     --bundle-path /opt/payos/bundle
 
+# show status of one capability, or all of them (omit --id to show all)
+cpm --status --id audit-capability --bundle-path /opt/payos/bundle
+cpm --status --bundle-path /opt/payos/bundle
+
 # uninstall and drop its schema
 cpm --uninstall --id audit-capability --drop-schema --bundle-path /opt/payos/bundle
+
+# uninstall every installed capability
+cpm --uninstall --all --bundle-path /opt/payos/bundle
 ```
 
 ## Exit codes

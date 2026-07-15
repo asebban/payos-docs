@@ -24,7 +24,13 @@ ppm [global-options] <action> [options]
 | Option | Purpose |
 | --- | --- |
 | `--product <id>` | The product to act on. |
-| `--all` | Apply the action to all products. |
+| `--all` | Apply the action to all products (`--status` or `--uninstall`; mutually exclusive with `--product` for `--uninstall`). |
+| `--from-git[=<baseUrl>]` | Use a git product catalog for this install, optionally overriding its configured `baseUrl`. |
+| `--from-local[=<dir>]` | Use a local product catalog for this install, optionally overriding its configured `path`. `<dir>` is the **root** of the catalog — it must contain one subdirectory per product id (`<dir>/<id>/manifest.json`, see [layouts below](#2-local-directory-catalog-productcatalogtype-local)) — not the directory of the single product being installed. |
+
+> `--from-git`/`--from-local` only override the **product** catalog (`productCatalog`). The
+> secondary `applicationCatalog` — used to pull a product's constituent applications when they
+> aren't already present — stays config-driven and isn't affected by these flags.
 
 ### Global options
 
@@ -39,6 +45,10 @@ ppm [global-options] <action> [options]
 ```bash
 # install a product (its applications + shared server config)
 ppm --install --product gateway --bundle-path /opt/payos/bundle
+
+# install, overriding the configured productCatalog for this run only
+# (./build/products is the catalog ROOT: it must contain ./build/products/gateway/manifest.json)
+ppm --install --product gateway --from-local=./build/products --bundle-path /opt/payos/bundle
 
 # show installed products
 ppm --status --all --bundle-path /opt/payos/bundle

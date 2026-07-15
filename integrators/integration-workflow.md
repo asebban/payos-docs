@@ -169,7 +169,7 @@ Maintain a clear separation between the **received bundle** (read-only), your **
 
 So to add your custom application, you can add the `custom.json` file in the editor's bundle directory and declare all customization configurations you want to use in this config file.
 
-> `custom.json` is loaded **after** all other files in the `config/` directory, so any key it declares (including `apps`, server settings, or feature flags) **overrides** the editor's delivered configuration. Keep it focused on your additions and overrides only.
+> `custom.json` is loaded **after** every other `*.json` file found directly in the bundle's `configDir` (the bundle root here, alongside `payos.json`/`bootstrap.json` — not a `config/` subdirectory, which only exists inside individual applications' `base.path`), so any key it declares (including `apps`, server settings, or feature flags) **overrides** the editor's delivered configuration. Keep it focused on your additions and overrides only.
 
 ```
 integration-workspace/
@@ -411,8 +411,8 @@ curl -s http://localhost:8080/atlas-payment-gateway/api/payments \
 curl -s http://localhost:8080/atlas-payment-gateway/api/payments/test-receipt \
      -H "X-Tenant-Id: atlas" | jq .
 
-# Check capability status
-cpm --status --all --bundle-path ./build/local-bundle
+# Check capability status (omit --id to see all)
+cpm --status --bundle-path ./build/local-bundle
 
 # Reload a capability activation change without restart (automatic via hot-reload)
 cpm --activate --id loyalty-points \

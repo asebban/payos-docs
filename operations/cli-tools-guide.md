@@ -281,42 +281,48 @@ Une fois installée, une capability est enregistrée dans `bootstrap.json` comme
 ### Syntaxe générale
 
 ```
-cpm [--bundle <path>] --install    --id <id> [--version <v>] (--path <dir> | --from-catalog)
-cpm [--bundle <path>] --uninstall  --id <id> [--cascade] [--drop-schema]
-cpm [--bundle <path>] --activate   --id <id> [--app <appId>] [--tenant <tenantId>]
-cpm [--bundle <path>] --deactivate --id <id> [--app <appId>] [--tenant <tenantId>]
-cpm [--bundle <path>] --status     --id <id>
+cpm [--bundle-path <path>] --install    --id <id> [--version <v>] [--from-git[=<baseUrl>] | --from-local[=<dir>]]
+cpm [--bundle-path <path>] --uninstall  (--id <id> | --all) [--cascade] [--drop-schema]
+cpm [--bundle-path <path>] --activate   --id <id> [--app <appId>] [--tenant <tenantId>]
+cpm [--bundle-path <path>] --deactivate --id <id> [--app <appId>] [--tenant <tenantId>]
+cpm [--bundle-path <path>] --status     [--id <id>]
 ```
 
 ### Options globales
 
 | Option | Défaut | Description |
 |---|---|---|
-| `--bundle <path>` | `.` (répertoire courant) | Chemin vers le répertoire runtime contenant `payos.json` |
+| `--bundle-path <path>` | `.` (répertoire courant) | Chemin vers le répertoire runtime contenant `payos.json` |
 | `--help` / `-h` | — | Affiche l'aide et quitte |
-| `--version` / `-V` | — | Affiche la version et quitte |
+| `-v` | — | Affiche la version et quitte (`cpm` n'a pas de forme longue `--version` pour ce flag, contrairement à `apm`/`ppm`) |
 
 ### install
 
 Installe une capability dans le runtime.
 
 ```bash
-# Depuis un répertoire local
-cpm --bundle /opt/payos --install --id payment-links --path /packages/payment-links
-
 # Depuis le catalogue configuré (dernière version)
-cpm --bundle /opt/payos --install --id payment-links --from-catalog
+cpm --bundle-path /opt/payos --install --id payment-links
 
 # Depuis le catalogue, version spécifique
-cpm --bundle /opt/payos --install --id payment-links --version 1.2.0 --from-catalog
+cpm --bundle-path /opt/payos --install --id payment-links --version 1.2.0
+
+# Override ponctuel : dépôt Git explicite pour cette invocation
+cpm --bundle-path /opt/payos --install --id payment-links --from-git=https://git.example.com/payos/capabilities
+
+# Override ponctuel : répertoire local explicite pour cette invocation
+# (/packages/capabilities est la RACINE du catalogue : doit contenir /packages/capabilities/payment-links/manifest.json)
+cpm --bundle-path /opt/payos --install --id payment-links --from-local=/packages/capabilities
 ```
+
+L'installation résout **toujours** via le catalogue configuré (`capabilityCatalog` dans `payos.json`) — il n'existe pas de mode « chemin local brut sans catalogue ». `--from-git`/`--from-local` ne font que substituer ponctuellement, pour cette seule invocation, le type et l'emplacement du catalogue configuré ; en leur absence, `capabilityCatalog` est utilisé tel que configuré.
 
 | Option | Description |
 |---|---|
 | `--id <id>` | Identifiant de la capability (doit correspondre à `manifest.json:id`) |
-| `--path <dir>` | Répertoire local contenant le package. Mutuellement exclusif avec `--from-catalog` |
-| `--from-catalog` | Télécharge le package depuis le catalogue configuré dans `payos.json` |
 | `--version <v>` | Version semver à installer. Si absente, résout la dernière version disponible |
+| `--from-git[=<baseUrl>]` | Force la résolution depuis un dépôt Git pour cette invocation, en écrasant ponctuellement le type/emplacement configuré dans `capabilityCatalog`. Mutuellement exclusif avec `--from-local` |
+| `--from-local[=<dir>]` | Force la résolution depuis un répertoire local pour cette invocation, en écrasant ponctuellement le type/emplacement configuré dans `capabilityCatalog`. `<dir>` est la **racine** du catalogue — elle doit contenir un sous-répertoire par identifiant de capability (`<dir>/<id>/manifest.json`), et non le répertoire de la seule capability à installer. Mutuellement exclusif avec `--from-git` |
 
 **Séquence d'installation :**
 
@@ -336,18 +342,22 @@ cpm --bundle /opt/payos --install --id payment-links --version 1.2.0 --from-cata
 Désinstalle une capability du runtime.
 
 ```bash
-cpm --bundle /opt/payos --uninstall --id payment-links
+cpm --bundle-path /opt/payos --uninstall --id payment-links
+
+# Désinstaller toutes les capabilities installées
+cpm --bundle-path /opt/payos --uninstall --all
 
 # Avec désinstallation en cascade des capabilities dépendantes
-cpm --bundle /opt/payos --uninstall --id payment-links --cascade
+cpm --bundle-path /opt/payos --uninstall --id payment-links --cascade
 
 # En supprimant le schéma base de données associé
-cpm --bundle /opt/payos --uninstall --id payment-links --drop-schema
+cpm --bundle-path /opt/payos --uninstall --id payment-links --drop-schema
 ```
 
 | Option | Description |
 |---|---|
-| `--id <id>` | Capability à désinstaller |
+| `--id <id>` | Capability à désinstaller. Mutuellement exclusif avec `--all` |
+| `--all` | Désinstalle toutes les capabilities installées, à la place d'une seule `--id` |
 | `--cascade` | Désinstalle récursivement toutes les capabilities qui en dépendent. Sans ce flag, la commande échoue s'il existe des dépendants |
 | `--drop-schema` | Passe `dropSchema=true` au hook `uninstall` (le hook décide comment l'utiliser, ex : suppression de tables) |
 
@@ -357,13 +367,13 @@ Rend une capability disponible pour une ou toutes les applications, avec restric
 
 ```bash
 # Activation globale (toutes applications, tous tenants)
-cpm --bundle /opt/payos --activate --id payment-links
+cpm --bundle-path /opt/payos --activate --id payment-links
 
 # Activation pour une application spécifique
-cpm --bundle /opt/payos --activate --id payment-links --app my-app
+cpm --bundle-path /opt/payos --activate --id payment-links --app my-app
 
 # Activation pour une application et un tenant spécifiques
-cpm --bundle /opt/payos --activate --id payment-links --app my-app --tenant bank-a
+cpm --bundle-path /opt/payos --activate --id payment-links --app my-app --tenant bank-a
 ```
 
 | Option | Description |
@@ -377,10 +387,10 @@ cpm --bundle /opt/payos --activate --id payment-links --app my-app --tenant bank
 Retire une capability du scope applicatif sans la désinstaller.
 
 ```bash
-cpm --bundle /opt/payos --deactivate --id payment-links
+cpm --bundle-path /opt/payos --deactivate --id payment-links
 
 # Désactivation ciblée application + tenant
-cpm --bundle /opt/payos --deactivate --id payment-links --app my-app --tenant bank-a
+cpm --bundle-path /opt/payos --deactivate --id payment-links --app my-app --tenant bank-a
 ```
 
 Les options sont identiques à `activate`. La désactivation ajoute une entrée négative (`active: false`) dans `activation.json` pour neutraliser une activation de portée plus large.
@@ -390,8 +400,15 @@ Les options sont identiques à `activate`. La désactivation ajoute une entrée 
 Affiche l'état d'installation et d'activation d'une capability.
 
 ```bash
-cpm --bundle /opt/payos --status --id payment-links
+cpm --bundle-path /opt/payos --status --id payment-links
+
+# Sans --id : affiche l'état de toutes les capabilities installées
+cpm --bundle-path /opt/payos --status
 ```
+
+| Option | Description |
+|---|---|
+| `--id <id>` | Capability à afficher. Si absent, affiche l'état de toutes les capabilities installées |
 
 ### Structure d'un package capability
 
@@ -469,16 +486,18 @@ Une application PayOS est un répertoire contenant des scripts, des configuratio
 ### Syntaxe générale
 
 ```
-apm [--bundle <path>] --install   --app <id[@version]|path> [--base-path <dir>]
-apm [--bundle <path>] --uninstall --app <id>
-apm [--bundle <path>] --status    --app <id>
+apm [--bundle-path <path>] --install   --app <id[@version]|path> [--base-path <dir>] [--from-git[=<baseUrl>] | --from-local[=<dir>]]
+apm [--bundle-path <path>] --uninstall --app <id>
+apm [--bundle-path <path>] --status    --app <id>
 ```
 
 ### Options globales
 
 | Option | Défaut | Description |
 |---|---|---|
-| `--bundle <path>` | `.` (répertoire courant) | Chemin vers le répertoire runtime contenant `payos.json` |
+| `--bundle-path <path>` | `.` (répertoire courant) | Chemin vers le répertoire runtime contenant `payos.json` |
+| `--help` / `-h` | — | Affiche l'aide et quitte |
+| `--version` / `-v` | — | Affiche la version et quitte |
 
 ### install
 
@@ -486,22 +505,30 @@ Enregistre une application dans le runtime.
 
 ```bash
 # Depuis un répertoire local (contient un manifest.json)
-apm --bundle /opt/payos --install --app ./my-app
+apm --bundle-path /opt/payos --install --app ./my-app
 
 # Depuis le catalogue (dernière version)
-apm --bundle /opt/payos --install --app my-app
+apm --bundle-path /opt/payos --install --app my-app
 
 # Depuis le catalogue, version spécifique
-apm --bundle /opt/payos --install --app my-app@2.1.0
+apm --bundle-path /opt/payos --install --app my-app@2.1.0
 
 # Enregistrement minimal sans manifest (base-path déjà présent sur disque)
-apm --bundle /opt/payos --install --app my-app --base-path /opt/payos/apps/my-app
+apm --bundle-path /opt/payos --install --app my-app --base-path /opt/payos/apps/my-app
+
+# Override ponctuel du catalogue : dépôt Git explicite pour cette invocation
+apm --bundle-path /opt/payos --install --app my-app --from-git=https://git.example.com/payos/applications
+
+# Override ponctuel du catalogue : répertoire local explicite pour cette invocation
+apm --bundle-path /opt/payos --install --app my-app --from-local=/opt/payos/catalog/applications
 ```
 
 | Option | Description |
 |---|---|
 | `--app <spec>` | Spécification de l'application. Voir le tableau de résolution ci-dessous |
 | `--base-path <dir>` | Chemin de base de l'application. Fallback utilisé quand aucun manifest n'est trouvé et qu'aucun catalogue n'est configuré |
+| `--from-git[=<baseUrl>]` | Force la résolution depuis un dépôt Git pour cette invocation, en écrasant ponctuellement le type/emplacement configuré dans `applicationCatalog`. Mutuellement exclusif avec `--from-local` |
+| `--from-local[=<dir>]` | Force la résolution depuis un répertoire local pour cette invocation, en écrasant ponctuellement le type/emplacement configuré dans `applicationCatalog`. `<dir>` est la **racine** du catalogue — elle doit contenir un sous-répertoire par identifiant d'application (`<dir>/<id>/manifest.json`), et non le répertoire de la seule application à installer. Mutuellement exclusif avec `--from-git` |
 
 **Résolution de `--app <spec>` :**
 
@@ -534,7 +561,7 @@ apm --bundle /opt/payos --install --app my-app --base-path /opt/payos/apps/my-ap
 Retire l'entrée de l'application depuis `bootstrap.json`. **Les fichiers sur disque ne sont pas supprimés.**
 
 ```bash
-apm --bundle /opt/payos --uninstall --app my-app
+apm --bundle-path /opt/payos --uninstall --app my-app
 ```
 
 ### status
@@ -542,7 +569,7 @@ apm --bundle /opt/payos --uninstall --app my-app
 Affiche l'état d'enregistrement de l'application dans `bootstrap.json`.
 
 ```bash
-apm --bundle /opt/payos --status --app my-app
+apm --bundle-path /opt/payos --status --app my-app
 ```
 
 ---
@@ -556,16 +583,18 @@ Un produit est un bundle qui regroupe plusieurs applications PayOS. Il est décr
 ### Syntaxe générale
 
 ```
-ppm [--bundle <path>] --install   --product <name[@version]|path>
-ppm [--bundle <path>] --uninstall --product <name>
-ppm [--bundle <path>] --status    --product <name>
+ppm [--bundle-path <path>] --install   (--product <name[@version]|path>) [--from-git[=<baseUrl>] | --from-local[=<dir>]]
+ppm [--bundle-path <path>] --uninstall (--product <name> | --all)
+ppm [--bundle-path <path>] --status    [--product <name> | --all]
 ```
 
 ### Options globales
 
 | Option | Défaut | Description |
 |---|---|---|
-| `--bundle <path>` | `.` (répertoire courant) | Chemin vers le répertoire runtime contenant `payos.json` |
+| `--bundle-path <path>` | `.` (répertoire courant) | Chemin vers le répertoire runtime contenant `payos.json` |
+| `--help` / `-h` | — | Affiche l'aide et quitte |
+| `--version` / `-v` | — | Affiche la version et quitte |
 
 ### install
 
@@ -573,18 +602,26 @@ Installe toutes les applications déclarées dans le manifest produit.
 
 ```bash
 # Depuis un répertoire local (contient un manifest produit)
-ppm --bundle /opt/payos --install --product ./acquiring
+ppm --bundle-path /opt/payos --install --product ./acquiring
 
 # Depuis le catalogue (dernière version)
-ppm --bundle /opt/payos --install --product acquiring
+ppm --bundle-path /opt/payos --install --product acquiring
 
 # Version spécifique depuis le catalogue
-ppm --bundle /opt/payos --install --product acquiring@3.0.0
+ppm --bundle-path /opt/payos --install --product acquiring@3.0.0
+
+# Override ponctuel du catalogue produit : dépôt Git explicite pour cette invocation
+ppm --bundle-path /opt/payos --install --product acquiring --from-git=https://git.example.com/payos/products
+
+# Override ponctuel du catalogue produit : répertoire local explicite pour cette invocation
+ppm --bundle-path /opt/payos --install --product acquiring --from-local=/opt/payos/catalog/products
 ```
 
 | Option | Description |
 |---|---|
-| `--product <spec>` | Spécification du produit. Même convention que `--app` pour `apm` : chemin local, nom simple ou `name@version` |
+| `--product <spec>` | Spécification du produit. Même convention que `--app` pour `apm` : chemin local, nom simple ou `name@version`. Requis sauf pour `--status` sans `--product` (affiche tous les produits) ou `--uninstall --all` |
+| `--from-git[=<baseUrl>]` | Force la résolution depuis un dépôt Git pour cette invocation, en écrasant ponctuellement le type/emplacement configuré dans `productCatalog`. N'affecte pas l'`applicationCatalog` utilisé pour récupérer les applications du produit, qui reste piloté uniquement par la configuration. Mutuellement exclusif avec `--from-local` |
+| `--from-local[=<dir>]` | Force la résolution depuis un répertoire local pour cette invocation, en écrasant ponctuellement le type/emplacement configuré dans `productCatalog`. `<dir>` est la **racine** du catalogue — elle doit contenir un sous-répertoire par identifiant de produit (`<dir>/<id>/manifest.json`), et non le répertoire du seul produit à installer. N'affecte pas l'`applicationCatalog`. Mutuellement exclusif avec `--from-git` |
 
 **Format du manifest produit (`acquiring.json`) :**
 
@@ -617,8 +654,16 @@ ppm --bundle /opt/payos --install --product acquiring@3.0.0
 Retire le tag contributeur du produit sur chaque application. Supprime les entrées d'application dont `_contributors` devient vide.
 
 ```bash
-ppm --bundle /opt/payos --uninstall --product acquiring
+ppm --bundle-path /opt/payos --uninstall --product acquiring
+
+# Désinstaller tous les produits installés
+ppm --bundle-path /opt/payos --uninstall --all
 ```
+
+| Option | Description |
+|---|---|
+| `--product <name>` | Produit à désinstaller. Mutuellement exclusif avec `--all` |
+| `--all` | Désinstalle tous les produits installés, à la place d'un seul `--product` |
 
 > Les fichiers applicatifs sur disque ne sont pas supprimés.
 
@@ -627,8 +672,16 @@ ppm --bundle /opt/payos --uninstall --product acquiring
 Affiche l'état d'installation du produit et de ses applications.
 
 ```bash
-ppm --bundle /opt/payos --status --product acquiring
+ppm --bundle-path /opt/payos --status --product acquiring
+
+# Sans --product : affiche l'état de tous les produits
+ppm --bundle-path /opt/payos --status
 ```
+
+| Option | Description |
+|---|---|
+| `--product <name>` | Produit à afficher. Si absent, affiche l'état de tous les produits |
+| `--all` | Équivalent à omettre `--product` : affiche l'état de tous les produits |
 
 ---
 
@@ -1370,7 +1423,7 @@ Cela permet de générer la documentation sur des environnements CI/CD restreint
 
 ### Catalogue de capabilities (`capabilityCatalog`)
 
-Utilisé par `cpm --from-catalog`.
+Utilisé par `cpm --install` (résolution toujours effectuée via ce catalogue ; `--from-git`/`--from-local` permettent un override ponctuel du type/emplacement pour une seule invocation).
 
 ```json
 {
@@ -1478,45 +1531,45 @@ Utilisé par `ppm` (résolution depuis un nom ou un `name@version`).
 ./generate_app.sh --app-id payment-portal --output /opt/payos/apps
 
 # 2. Enregistrer dans le runtime
-apm --bundle /opt/payos --install --app /opt/payos/apps/payment-portal
+apm --bundle-path /opt/payos --install --app /opt/payos/apps/payment-portal
 ```
 
 ### Installer et activer une capability sur un tenant spécifique
 
 ```bash
-# 1. Installer depuis un package local
-cpm --bundle /opt/payos --install --id payment-links --path ./packages/payment-links
+# 1. Installer depuis le catalogue configuré (capabilityCatalog)
+cpm --bundle-path /opt/payos --install --id payment-links
 
 # 2. L'auto-activation globale a eu lieu — désactiver si nécessaire
-cpm --bundle /opt/payos --deactivate --id payment-links
+cpm --bundle-path /opt/payos --deactivate --id payment-links
 
 # 3. Activer uniquement pour l'app "merchant-portal" et le tenant "bank-a"
-cpm --bundle /opt/payos --activate --id payment-links --app merchant-portal --tenant bank-a
+cpm --bundle-path /opt/payos --activate --id payment-links --app merchant-portal --tenant bank-a
 ```
 
 ### Déployer un produit complet depuis un catalogue Git
 
 ```bash
 # payos.json doit contenir productCatalog et applicationCatalog configurés
-ppm --bundle /opt/payos --install --product acquiring@3.0.0
+ppm --bundle-path /opt/payos --install --product acquiring@3.0.0
 ```
 
 ### Enregistrer une application déjà déployée sur disque
 
 ```bash
 # L'app existe déjà dans /opt/payos/apps/my-app mais n'est pas encore dans bootstrap.json
-apm --bundle /opt/payos --install --app my-app --base-path /opt/payos/apps/my-app
+apm --bundle-path /opt/payos --install --app my-app --base-path /opt/payos/apps/my-app
 ```
 
 ### Désinstaller un produit puis nettoyer une capability dépendante en cascade
 
 ```bash
-ppm --bundle /opt/payos --uninstall --product acquiring
-cpm --bundle /opt/payos --uninstall --id payment-links --cascade --drop-schema
+ppm --bundle-path /opt/payos --uninstall --product acquiring
+cpm --bundle-path /opt/payos --uninstall --id payment-links --cascade --drop-schema
 ```
 
 ### Vérifier l'état d'une capability avant activation
 
 ```bash
-cpm --bundle /opt/payos --status --id payment-links
+cpm --bundle-path /opt/payos --status --id payment-links
 ```

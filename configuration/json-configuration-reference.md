@@ -89,10 +89,9 @@ Fichier racine du runtime. Son rôle est **double** selon le lecteur :
 |-----|---------|------|--------|-------------|
 | `configDir` | Runtime + cpm | string | `"."` | Chemin absolu ou relatif vers le dossier contenant `bootstrap.json` et les autres fichiers de configuration |
 | `bundle-id` | cpm / ppm | string | — | Identifiant unique de cette instance du runtime. Utilisé pour distinguer les nœuds dans un déploiement multi-instances |
-| `capabilityCatalog` | cpm | object | — | Catalogue de capabilities utilisé par `cpm --from-catalog` (voir ci-dessous) |
+| `capabilityCatalog` | cpm | object | — | Catalogue de capabilities utilisé par `cpm --install` (voir ci-dessous). `cpm --from-git`/`--from-local` permettent un override ponctuel du type/emplacement pour une seule invocation |
 | `applicationCatalog` | cpm / ppm | object | — | Catalogue d'applications. Même structure que `capabilityCatalog` (voir ci-dessous) |
 | `productCatalog` | ppm | object | — | Catalogue de produits (bundles d'applications et capabilities). Même structure que `capabilityCatalog` (voir ci-dessous) |
-| `capabilityRepository` | cpm | object | — | *(Obsolète — utiliser `capabilityCatalog`)* Alias conservé pour compatibilité ascendante |
 
 ### `capabilityCatalog`
 
@@ -101,7 +100,7 @@ Configure le catalogue distant ou local depuis lequel `cpm` installe et met à j
 - En cas d'utilisation de git, seul le chemin git de base du repository est spécifié ici (chemin du groupe de repositories ou organisation qui regroupe tous les repositories de type capability). 
 - En cas de type=local, cela veut dire qu'il faut fournir l'attribut `path` qui spécifie le répertoire racine 
 
-> **Note de compatibilité :** La clé `capabilityRepository` est conservée comme alias de `capabilityCatalog` pour les fichiers de configuration existants.
+La clé de configuration est exactement `capabilityCatalog` — il n'existe aucun alias de compatibilité ascendante pour un ancien nom `capabilityRepository`.
 
 ```json
 "capabilityCatalog": {

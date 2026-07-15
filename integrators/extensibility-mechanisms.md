@@ -1844,15 +1844,15 @@ In the case the intergator developed a whole new application or capability for t
 
 Let's suppose the integrator developed a new capability, and names the capability `cap-currency-converter`.
 
-1. Put the application/capability's main directory in a specific chosen path. Let's call it `${path}`.
+1. Put the capability's main directory under a chosen catalog root, named after its id: `${catalogRoot}/cap-currency-converter/`. `--from-local` always points at this **root** directory (it must contain one subdirectory per capability id), never at a single capability's own directory.
 2. Install the capability with `cpm` command
 
 ```bash
 # Install/activate the required capabilities for this client for application atlas-payment-gateway
-cpm --install --path ${path} --bundle-path /opt/payos/bundle --id cap-currency-converter --app atlas-payment-gateway
+cpm --install --from-local=${catalogRoot} --bundle-path /opt/payos/bundle --id cap-currency-converter --app atlas-payment-gateway
 
-# Check all capabilities status
-cpm --status --all
+# Check all capabilities status (omit --id to see all)
+cpm --status
 # or check just the specified capability status
 cpm --status --id cap-currency-converter
 ```
@@ -1866,12 +1866,10 @@ Let's suppose the integrator developed a new application, whose name is `atlas-p
 3. Install the application with `apm` command
 
 ```bash
-# Install the application atlas-payment-gateway
-apm --install --path ${path} --bundle-path /opt/payos/bundle --app atlas-payment-gateway
+# Install the application atlas-payment-gateway (${path} is the local directory containing manifest.json)
+apm --install --app ${path} --bundle-path /opt/payos/bundle
 
-# Check all applications status
-apm --status --all
-# or check just the specified application status
+# Check the application's status (apm has no --all / show-all mode — --app is always required)
 apm --status --app atlas-payment-gateway
 ```
 

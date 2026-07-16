@@ -301,20 +301,31 @@ Java-code-only today: accessed via `ConnectorTerminalRoutingPolicies.getInstance
 
 ## 11. Retry/DLQ diagnostics (Epic 5.7)
 
-A dedicated observability event category — distinct from the PCI-DSS audit trail
+The **Diagnostics** event category — distinct from the PCI-DSS audit trail
 (`IAuditLogger`/`AuditLogger`, see [system-events.md](../reference/system-events.md)) — surfaces
 every retry and terminal-routing decision for incident triage, without requiring debug logging.
+Every diagnostic event carries a mandatory `nature` field; connector retry/DLQ diagnostics use
+`nature="connector"` (the only nature implemented so far — see
+[event-category-payload-contracts-v5-2026-07-15.md](../developer/event-category-payload-contracts-v5-2026-07-15.md)
+§6 for the full category contract).
 
-`ma.s2m.payos.connector.diagnostics.Slf4jConnectorDiagnosticsRecorder` (the default and only
-shipped implementation, swappable via the static facade `ConnectorDiagnostics`) logs one JSON
-line **at `WARN`** per event to the SLF4J logger category **`CONNECTOR_DIAGNOSTICS`** —
+`ma.s2m.payos.diagnostics.Slf4jDiagnosticsRecorder` (the default and only
+shipped implementation, swappable via the static facade `Diagnostics`) logs one JSON
+line **at `WARN`** per event to the SLF4J logger category **`DIAGNOSTICS`** —
 operators should route/filter this category independently in their logback configuration, the
 same way `AUDIT` is routed separately (see [operations/observability.md](../operations/observability.md)).
+`Diagnostics`/`IDiagnosticsRecorder` are nature-agnostic (no connector types); connector retry/DLQ
+events are built by `ma.s2m.payos.connector.diagnostics.ConnectorDiagnosticsHelper`
+(`logRetryScheduled(...)`/`logTerminalRouting(...)`), the only class that imports both the
+diagnostics category and `ConnectorTerminalDestination`, and which `ConnectorScriptHandle` calls
+directly.
 
-`ConnectorDiagnosticEvent` fields: `stage` (`RETRY_SCHEDULED` | `TERMINAL_ROUTING`),
-`connectorType`, `connectorName`, `tenantId`, `correlationId`, `errorCode`,
-`rootCauseCategory`, `attemptCount`, `destination` (null unless `stage=TERMINAL_ROUTING`),
-`reason`, `recordedAt`. Like the execution-state record, it never carries payload/parameter
+`DiagnosticEvent` fields: `nature` (`"connector"`), `stage` (`RETRY_SCHEDULED` | `TERMINAL_ROUTING`),
+`tenantId`, `correlationId`, `errorCode`, `rootCauseCategory`, `attemptCount`, `reason`,
+`recordedAt`, plus a free-form `details` map carrying the connector-nature-specific fields
+(`connectorType`, `connectorName`, and `destination` — present only when
+`stage=TERMINAL_ROUTING`), flattened onto the top-level JSON object the same way `AuditEvent`
+flattens its `extra` map. Like the execution-state record, it never carries payload/parameter
 data — there is nothing to mask.
 
 A diagnostic event is "linked" to the corresponding execution-state (§9) and terminal-routing
@@ -368,7 +379,8 @@ format, no `connectors.json`, no idempotency/audit/dedup semantics, and **is** w
 - `payos/src/main/java/ma/s2m/payos/config/connector/ConnectorRetryPolicy.java`, `ConnectorRetryPolicies.java`, `ConnectorRetryContext.java`, `ConnectorRetryDecision.java`.
 - `payos/src/main/java/ma/s2m/payos/connector/state/` — `ConnectorExecutionState.java`, `ConnectorExecutionStateRecord.java`, `IConnectorExecutionStateStore.java`, `InMemoryConnectorExecutionStateStore.java`, `DatabaseConnectorExecutionStateStore.java`, `ConnectorExecutionStateStores.java`, `ConnectorTerminalRoutingRecord.java`, `IConnectorTerminalRoutingStore.java`, `InMemoryConnectorTerminalRoutingStore.java`, `ConnectorTerminalRoutingStores.java`.
 - `payos/src/main/java/ma/s2m/payos/config/connector/ConnectorTerminalDestination.java`, `ConnectorTerminalRoutingDecision.java`, `ConnectorTerminalRoutingPolicy.java`, `ConnectorTerminalRoutingPolicies.java`.
-- `payos/src/main/java/ma/s2m/payos/connector/diagnostics/` — `ConnectorDiagnosticEvent.java`, `IConnectorDiagnosticsRecorder.java`, `ConnectorDiagnostics.java`, `Slf4jConnectorDiagnosticsRecorder.java`.
+- `payos/src/main/java/ma/s2m/payos/diagnostics/` — `DiagnosticEvent.java`, `IDiagnosticsRecorder.java`, `Diagnostics.java`, `Slf4jDiagnosticsRecorder.java`.
+- `payos/src/main/java/ma/s2m/payos/connector/diagnostics/ConnectorDiagnosticsHelper.java` — connector-specific producer, builds `nature="connector"` events and calls `Diagnostics.logEvent(...)`.
 - `payos/src/main/java/ma/s2m/payos/scripting/ConnectorScriptHandle.java` — the wiring point tying §6–§11 together.
 - `payos/_bmad-output/implementation-artifacts/` — Epic 1–5 connector framework stories (`1-1-*.md` through `5-7-*.md`), in particular 5-2's Addendum for `requiresIdempotencyKey`.
 - [env-var-resolution.md](env-var-resolution.md) — full `${...}` placeholder grammar.

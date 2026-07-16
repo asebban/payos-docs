@@ -587,7 +587,7 @@ les scripts, via `$Connector(type[, name]).execute(payload)`. Construit sur 5 é
 | Politique de retry déterministe | Budget de tentatives et catégories retryables configurables (code, pas encore exposé en JSON) |
 | État d'exécution persistant | Traçabilité RUNNING/SUCCEEDED/RETRYING/FAILED par tentative |
 | Routage terminal DLQ / Connector State | Décision auditable après épuisement des retries ou erreur permanente |
-| Diagnostics dédiés | Catégorie SLF4J `CONNECTOR_DIAGNOSTICS`, indépendante du journal d'audit PCI-DSS |
+| Diagnostics dédiés | Catégorie d'évènement `Diagnostics` (`nature: "connector"`), catégorie SLF4J `DIAGNOSTICS`, indépendante du journal d'audit PCI-DSS |
 
 **Statut :** entièrement implémenté et testé (`payos`, `payos-connector-sdk`), mais **pas encore
 câblé dans `BootServer`** — `$Connector` n'est donc pas disponible dans un déploiement en

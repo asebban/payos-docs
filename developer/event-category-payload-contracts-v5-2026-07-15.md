@@ -1,6 +1,6 @@
 Created: 2026-07-10
-Last updated: 2026-07-12
-Version: v2
+Last updated: 2026-07-15
+Version: v5
 
 # Event Category Payload Contracts — Proposal
 
@@ -13,7 +13,7 @@ PayOS emits several fundamentally different kinds of events. Each kind gets its 
 
 **Why:** the categories below have mutually incompatible non-functional guarantees. The audit trail must never lose an event, is immutable/WORM, and has regulator-mandated retention. Event-sourcing needs strict per-aggregate ordering and total completeness — one missing event corrupts replay. Analytics tolerates sampling and best-effort delivery. Metrics need low-cardinality dimensions or the backend falls over. Diagnostics tolerates loss entirely (short retention, WARN-level logs). Collapsing all of this behind one router that picks a sink by inspecting the payload shape hides intent at the call site (a developer reading `log(x)` can't tell which guarantees apply without reading routing logic) and forces one schema to compromise across consumers with conflicting needs.
 
-**Reference implementation already built:** `ma.s2m.payos.security.IAuditLogger` / `AuditEvent` / `AuditLogger` (static facade, swappable via `AuditLogger.setInstance(...)`) / `Slf4jAuditLogger` (default impl), in `payos/src/main/java/ma/s2m/payos/security/`. **A second category has since been built following the same shape**: `ma.s2m.payos.connector.diagnostics.IConnectorDiagnosticsRecorder` / `ConnectorDiagnosticEvent` / `ConnectorDiagnostics` / `Slf4jConnectorDiagnosticsRecorder` (§6) — confirming the governing principle holds up as a second, independent category was added. Every new category below should follow this exact shape: `I<Category><Noun>` interface, a static facade class holding an `AtomicReference` to the active implementation, and one default implementation.
+**Reference implementation already built:** `ma.s2m.payos.security.IAuditLogger` / `AuditEvent` / `AuditLogger` (static facade, swappable via `AuditLogger.setInstance(...)`) / `Slf4jAuditLogger` (default impl), in `payos/src/main/java/ma/s2m/payos/security/`. **A second category has since been built following the same shape**: `ma.s2m.payos.diagnostics.IDiagnosticsRecorder` / `DiagnosticEvent` / `Diagnostics` / `Slf4jDiagnosticsRecorder` (§6) — confirming the governing principle holds up as a second, independent category was added. Every new category below should follow this exact shape: `I<Category><Noun>` interface, a static facade class holding an `AtomicReference` to the active implementation, and one default implementation, with the interface/facade themselves staying free of any nature-specific type (see §6 for how connector-specific convenience methods were kept out of the generic `Diagnostics` facade).
 
 ## Event categories identified
 
@@ -22,9 +22,9 @@ PayOS emits several fundamentally different kinds of events. Each kind gets its 
 3. **Event-sourcing / state-reconstruction** — a durable, ordered, replayable fact stream sufficient to rebuild an entity's state after data corruption.
 4. **Observability / metrics** — numeric time series for dashboards and alerting (distinct from both file logs and the audit trail).
 5. **Inter-service integration / domain events** — external choreography (e.g. `PaymentCompleted` triggering webhooks or reactions in other bounded contexts); distinct from event-sourcing, which is about internal replay, not external notification.
-6. **Connector retry/DLQ diagnostics** — already implemented (`IConnectorDiagnosticsRecorder`). Incident-triage data for the connector framework's retry and terminal-routing decisions — short retention, WARN-level structured logs, not the audit trail.
+6. **Diagnostics** — already implemented (`IDiagnosticsRecorder`). Incident-triage data — short retention, WARN-level structured logs, not the audit trail. Every diagnostic event carries a mandatory `nature` field discriminating what kind of diagnostic it is; the only nature implemented so far is `"connector"` (connector retry/terminal-routing decisions), the same way `AuditEvent#getEvent()` discriminates audit event types within the audit trail category. The core envelope, interface, and facade are all nature-agnostic — anything specific to a nature (e.g. `connectorType`/`connectorName` for `"connector"`) lives in the event's free-form `details` field, exactly like `AuditEvent`'s `extra`, and is built by a nature-specific helper outside the category package (`ma.s2m.payos.connector.diagnostics.ConnectorDiagnosticsHelper` for `"connector"`) rather than on `Diagnostics` itself. Future natures (e.g. a queue or secret-provider diagnostic) reuse `IDiagnosticsRecorder`/`Diagnostics`/`Slf4jDiagnosticsRecorder` unchanged and get their own helper.
 
-Every category's payload includes one field that is **intentionally unrestricted in shape** so callers can attach whatever data is relevant to that specific event without waiting for a schema change — except metrics, where that freedom must be deliberately narrowed (see §4), and diagnostics, which has no free-form field at all (see §6 — its field set is fixed and small by design).
+Every category's payload includes one field that is **intentionally unrestricted in shape** so callers can attach whatever data is relevant to that specific event without waiting for a schema change — except metrics, where that freedom must be deliberately narrowed (see §4).
 
 ---
 
@@ -174,58 +174,78 @@ Ordering is less critical than for event-sourcing — at-least-once delivery plu
 
 ---
 
-## 6. Connector retry/DLQ diagnostics — `ConnectorDiagnosticEvent` (existing, second reference shape)
+## 6. Diagnostics — `DiagnosticEvent` (existing, second reference shape)
 
-Interface: `IConnectorDiagnosticsRecorder` · Facade: `ConnectorDiagnostics` · Default impl:
-`Slf4jConnectorDiagnosticsRecorder` (JSON at `WARN` to the `CONNECTOR_DIAGNOSTICS` logger
-category), all in `payos/src/main/java/ma/s2m/payos/connector/diagnostics/`. Built for Epic
-5.7 of the connector framework — see
+Interface: `IDiagnosticsRecorder` · Facade: `Diagnostics` · Default impl:
+`Slf4jDiagnosticsRecorder` (JSON at `WARN` to the `DIAGNOSTICS` logger
+category), all in `payos/src/main/java/ma/s2m/payos/diagnostics/`. All three types are
+**nature-agnostic** — `IDiagnosticsRecorder` declares a single method, `logEvent(DiagnosticEvent)`,
+and neither it nor `Diagnostics` imports anything connector-specific.
+
+The connector-sourced diagnostics (`nature = "connector"`) were built for Epic 5.7 of the
+connector framework — see
 [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
-§11 for the full behavioral context.
+§11 for the full behavioral context. They are produced by a separate helper,
+`ma.s2m.payos.connector.diagnostics.ConnectorDiagnosticsHelper` — the only class in the
+codebase that imports both the diagnostics category and `ConnectorTerminalDestination`. It
+exposes the typed convenience methods `logRetryScheduled(...)`/`logTerminalRouting(...)`,
+builds a `DiagnosticEvent` with `nature="connector"` and the connector fields packed into
+`details`, and calls `Diagnostics.logEvent(...)` — the same generic entry point any future
+nature would use. `ConnectorScriptHandle` (the only caller) calls this helper directly; it
+never touches `Diagnostics` for connector events.
+
+Anything specific to a given nature — `connectorType`/`connectorName` for `"connector"` — is
+carried in the free-form `details` field, the same way `AuditEvent` keeps
+`connectorType`/`connectorName`/`maskedPayload` in its `extra` field rather than baking them
+into the standard envelope.
 
 | Field | Type | Notes |
 |---|---|---|
-| `stage` | String | `RETRY_SCHEDULED` \| `TERMINAL_ROUTING` |
-| `connectorType`, `connectorName` | String | required, non-blank |
+| `nature` | String | **mandatory** — what kind of diagnostic this is. Only `"connector"` exists today |
+| `stage` | String | **mandatory** — lifecycle phase, e.g. `RETRY_SCHEDULED` \| `TERMINAL_ROUTING` for connector-nature |
 | `tenantId`, `correlationId` | String (nullable) | "when available" |
 | `errorCode` | String (nullable) | |
 | `rootCauseCategory` | String (nullable) | the connector-declared raw category string, distinct from the normalized `ConnectorErrorCategory` |
 | `attemptCount` | int | ≥ 1 |
-| `destination` | enum (nullable) | `DLQ` \| `CONNECTOR_STATE` — only set when `stage = TERMINAL_ROUTING` |
 | `reason` | String (nullable) | the retry or terminal-routing decision's own stated reason |
+| **`details`** | **Map\<String,Object\>** | **free-form section, nature-specific** — for `nature="connector"`: `connectorType`, `connectorName` (required, non-blank, validated by `ConnectorDiagnosticsHelper`) and `destination` (`DLQ` \| `CONNECTOR_STATE`, only present when `stage=TERMINAL_ROUTING`) |
 | `recordedAt` | Instant | |
 
-**No free-form field at all** — unlike every proposed category above, this one deliberately
-carries zero payload/parameter data, so there is nothing to mask and no schema-evolution
-pressure the way `properties`/`data`/`tags` create elsewhere. It is "linked" to the
-corresponding execution-state and terminal-routing records purely by sharing their composite
-key (`correlationId`, `connectorType`, `connectorName`) — no separate foreign-key field exists.
+Connector-nature events are "linked" to the corresponding execution-state and terminal-routing
+records purely by sharing their composite key (`correlationId`, `connectorType`,
+`connectorName` — the latter two inside `details`) — no separate foreign-key field exists.
 
 ```json
 {
+  "nature": "connector",
   "stage": "TERMINAL_ROUTING",
-  "connectorType": "PaymentGateway",
-  "connectorName": "cmi",
   "tenantId": "tenant-a",
   "correlationId": "corr-123",
   "errorCode": "CONNECTOR_DECLINED",
   "rootCauseCategory": "PERMANENT_ERROR",
   "attemptCount": 1,
-  "destination": "DLQ",
   "reason": "error category PERMANENT_ERROR requires operator inspection",
+  "connectorType": "PaymentGateway",
+  "connectorName": "cmi",
+  "destination": "DLQ",
   "recordedAt": "2026-07-12T09:12:04Z"
 }
 ```
+
+Note that `details` entries are flattened onto the top-level JSON object (matching
+`AuditEvent.toJson()`'s treatment of `extra`) rather than nested under a `"details"` key — so
+the wire format above is what operators and log queries actually see.
 
 ---
 
 ## Shared conventions across all six
 
 - Minimal common envelope: `timestamp`/`recordedAt`, `tenantId`, `correlationId` appear in every category — by convention, not by forced inheritance. Each interface/facade stays independent so retention, delivery guarantees, and sink choice can evolve per category without touching the others.
-- Every category's free-form section (where one exists) stores only Jackson-serializable values (String, numeric, Boolean, nested Map/List) — matching `AuditEvent.Builder.field(...)`'s existing constraint.
-- Naming convention for future categories: `I<Category><Noun>` interface (e.g. `IAnalyticsRecorder`, `IConnectorDiagnosticsRecorder`), `<Category><Noun>` static facade (e.g. `AnalyticsRecorder`, `ConnectorDiagnostics`), `<Impl><Category><Noun>` default implementation (e.g. `Slf4jAnalyticsRecorder`, `Slf4jConnectorDiagnosticsRecorder`) — mirroring `IAuditLogger`/`AuditLogger`/`Slf4jAuditLogger` exactly.
+- Every category's free-form section stores only Jackson-serializable values (String, numeric, Boolean, nested Map/List) — matching `AuditEvent.Builder.field(...)`'s existing constraint. Free-form maps must not contain `null` values (only `Map.copyOf`-compatible entries) — omit a key rather than setting it to `null` when a nature-specific field doesn't apply.
+- Naming convention for future categories: `I<Category><Noun>` interface (e.g. `IAnalyticsRecorder`, `IDiagnosticsRecorder`), `<Category><Noun>` static facade (e.g. `AnalyticsRecorder`, `Diagnostics`), `<Impl><Category><Noun>` default implementation (e.g. `Slf4jAnalyticsRecorder`, `Slf4jDiagnosticsRecorder`) — mirroring `IAuditLogger`/`AuditLogger`/`Slf4jAuditLogger` exactly.
+- A category whose events span more than one kind of source (as Diagnostics now does) discriminates with a mandatory field (`nature`) rather than forking into per-source facades, keeps source-specific fields in its free-form section rather than the fixed envelope, **and keeps the interface/facade/default-impl trio itself free of any source-specific type** — a source-specific producer is a separate helper class outside the category's package that builds the event and calls the generic `logEvent(...)`, never a method added to the category's own interface or facade.
 
 ## Open questions for whoever picks this up
 
-- Default (non-audit, non-diagnostics) implementations are all "TBD" above — likely SLF4J-based placeholders to start, consistent with how `IAuditLogger` and `IConnectorDiagnosticsRecorder` both began, swapped for real sinks (analytics pipeline, durable event store, metrics backend, message queue) as each category is actually wired into a consumer.
+- Default (non-audit, non-diagnostics) implementations are all "TBD" above — likely SLF4J-based placeholders to start, consistent with how `IAuditLogger` and `IDiagnosticsRecorder` both began, swapped for real sinks (analytics pipeline, durable event store, metrics backend, message queue) as each category is actually wired into a consumer.
 - `IEventStore`'s default implementation is the one that probably can't ship as a no-op/log-only placeholder for very long, since its entire purpose is durable replay — worth flagging explicitly when scoping the first story that builds it.

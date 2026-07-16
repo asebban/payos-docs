@@ -43,6 +43,21 @@ logger (see [secrets-management.md](secrets-management.md)).
 
 For PCI DSS evidence, route audit loggers to a tamper-resistant sink / SIEM.
 
+## Diagnostics
+
+`Diagnostics` (`ma.s2m.payos.diagnostics`) is a separate event category from the audit trail —
+short-retention, WARN-level incident-triage data, not regulator-mandated evidence. `Diagnostics`
+and `IDiagnosticsRecorder` are nature-agnostic (a single `logEvent(DiagnosticEvent)` entry
+point); every diagnostic event carries a mandatory `nature` field identifying what kind of
+diagnostic it is. The only nature implemented so far is `"connector"` (connector
+retry/terminal-routing decisions), produced by a separate helper,
+`ma.s2m.payos.connector.diagnostics.ConnectorDiagnosticsHelper`, and called by
+`ConnectorScriptHandle` — see
+[configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
+§11. The default implementation logs one JSON line per event to the SLF4J **`DIAGNOSTICS`**
+logger category — route/filter it independently in logback configuration, the same way `AUDIT`
+is routed separately.
+
 ## Health and lifecycle
 
 | Endpoint | Purpose |

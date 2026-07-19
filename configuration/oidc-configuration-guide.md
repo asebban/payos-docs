@@ -1,6 +1,6 @@
 # PayOS — OIDC Security Configuration Guide
 
-Last Updated: 2026-04-15
+Last Updated: 2026-07-19
 
 ---
 
@@ -67,8 +67,9 @@ All keys belong to the `security` block, whether placed globally, per-tenant, or
 | `preferredJwsAlgorithm` | string | No | Provider default | JWS algorithm for token validation: `"RS256"`, `"HS256"`, etc. |
 | `logoutUrl` | string | No | Auto-built from discovery | Custom logout endpoint URL |
 | `postLogoutRedirectUri` | string | No | — | URI to redirect to after logout |
+| `sessionStoreType` | string | No | `"memory"` | Session storage backend: `"memory"` (single node) or `"redis"` (distributed, requires `session-service-redis`) — see §10 |
 | `sessionTtlSeconds` | int | No | `1800` (30 min) | Session lifetime in seconds |
-| `sessionMaxEntries` | int | No | `10000` | Maximum number of concurrent sessions held in memory |
+| `sessionMaxEntries` | int | No | `10000` | `memory` backend only — maximum number of concurrent sessions held in memory |
 | `sessionCookieSecure` | boolean | No | `false` | Set `Secure` flag on session cookie — must be `true` in production HTTPS deployments |
 | `allowedOrigins` | array[string] | No | — | Allowed origins for CORS |
 
@@ -261,12 +262,13 @@ In a multi-tenant deployment, each tenant can have its own OIDC configuration. T
 
 ## 10. Session configuration
 
-PayOS maintains an in-memory session store (`PayOSSessionStore`) for OIDC state. Sessions are identified by a cookie named `PAYOS_SESSION_ID`.
+`PayOSSessionStore` handles OIDC session state (cookie named `PAYOS_SESSION_ID`, session id generation, pac4j adaptation) and delegates actual storage to a pluggable `ISessionStore` backend, selected via `sessionStoreType`.
 
 | Setting | Default | Notes |
 |---------|---------|-------|
+| `sessionStoreType` | `memory` | `memory` (in-process, single node) or `redis` (distributed, requires the `session-service-redis` module — see below) |
 | `sessionTtlSeconds` | `1800` | Session expires after 30 minutes of inactivity |
-| `sessionMaxEntries` | `10000` | Old sessions are evicted when this cap is reached |
+| `sessionMaxEntries` | `10000` | `memory` backend only — old sessions are evicted when this cap is reached |
 | `sessionCookieSecure` | `false` | Set to `true` for HTTPS-only deployments |
 
 ```json
@@ -277,7 +279,28 @@ PayOS maintains an in-memory session store (`PayOSSessionStore`) for OIDC state.
 }
 ```
 
-> For multi-node deployments, the default in-memory store is not shared between nodes. Consider adding a distributed session store (e.g., Redis) for horizontal scalability.
+### Distributed sessions (multi-node deployments)
+
+The default `memory` backend is **not shared between nodes** — a user authenticated on one instance is not recognized as authenticated if a later request lands on a different instance (see `payos/docs/architects/deployment-topologies.md` for the horizontal-scaling implications). Two options:
+
+- **Sticky sessions**: keep the default `memory` backend and configure session affinity at the load balancer (route by the `PAYOS_SESSION_ID` cookie). No PayOS configuration change needed, but a pinned instance restarting or being scaled down drops its sessions.
+- **Redis-backed store**: add the `session-service-redis` module to the runtime's dependencies and set `sessionStoreType: "redis"`, with a `sessionStoreRedis` block:
+
+```json
+"security": {
+  "sessionStoreType": "redis",
+  "sessionStoreRedis": {
+    "host": "127.0.0.1",
+    "port": 6379,
+    "password": "",
+    "database": 0,
+    "tls": false,
+    "keyPrefix": "payos:session:"
+  }
+}
+```
+
+With this backend, any instance can serve any request — no load balancer affinity required, and no session loss on instance restart or scale-down. `keyPrefix` namespaces the Redis keyspace so the same Redis instance/cluster can later be shared with other distributed stores (idempotency, tenant quotas) without collisions. See `payos/docs/architects/session-store-redis-design.md` for the full design (the `ISessionStore` interface, `InMemorySessionStore` vs `RedisSessionStore`, and how to plug in a third-party backend by implementing `ISessionStoreFactory`).
 
 ---
 
@@ -409,7 +432,7 @@ PayOS enforces the following security controls relevant to PCI-DSS:
 | Runtime fails to start with "default credentials" error | `clientId` or `clientSecret` still set to placeholder values | Set real OIDC credentials in `bootstrap.json` |
 | 302 redirect loops | `callBackUri` not registered in OIDC provider | Register the callback URL in the identity provider's client configuration |
 | `401 Unauthorized` after successful login | Roles not mapped in OIDC token | Ensure the identity provider includes roles in the token claims (`realm_access.roles` or `resource_access.<clientId>.roles`) |
-| Session lost between nodes | In-memory session store not shared | Use a distributed session store for multi-node deployments |
+| Session lost between nodes | `memory` session store not shared | Enable sticky sessions at the load balancer, or set `sessionStoreType: "redis"` (§10) |
 | `discoveryUri` returns 404 | Wrong provider URL or realm name | Verify the URL: `{oidcProviderBaseUrl}/realms/{realm}/.well-known/openid-configuration` |
 | Logout does not redirect | `end_session_endpoint` not in discovery document | Set `logoutUrl` explicitly in the security configuration |
 | Cookie not sent over HTTP | `sessionCookieSecure: true` on a non-HTTPS server | Set `sessionCookieSecure: false` for HTTP dev environments |

@@ -564,6 +564,7 @@ Le connector framework (SPI) se matérialise par plusieurs niveaux :
 | Audit sink | Interface `IAuditLogger` remplaçable | SLF4J par défaut, queue/SIEM possible. |
 | Database service | Service optionnel injecté dans les scripts via `$DB` | `database-service`. |
 | Secret provider | Interface `ISecretProviderFactory` via SPI | `secret-service-filesystem`, `secret-service-vault` ; providers cloud/HSM additionnels possibles. |
+| Session store | Interface `ISessionStore`/`ISessionStoreFactory` via SPI | En mémoire par défaut (aucune dépendance externe) ; `session-service-redis` pour un stockage distribué multi-nœuds. |
 
 **Intérêt technique :** les intégrations sont des adaptateurs autour du kernel. PayOS peut accueillir un nouveau transport, un nouveau broker, un nouveau sink d'audit ou un nouveau dispatcher sans casser le modèle applicatif.
 

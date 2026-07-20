@@ -18,6 +18,7 @@ and the **tooling / build coordination** modules.
 | `payos-secret-api` | `ma.s2m.payos:payos-secret-api` | Service (API) | The secret-provider SPI and model types. |
 | `secret-service-filesystem` | `ma.s2m.payos:secret-service-filesystem` | Service | File-based `ISecretProvider` (AES-256-GCM, type `filesystem`). |
 | `secret-service-vault` | `ma.s2m.payos:secret-service-vault` | Service | HashiCorp Vault `ISecretProvider` (KV v2, type `vault`). |
+| `session-service-redis` | `ma.s2m.payos:session-service-redis` | Service | Redis `ISessionStore` implementation — distributed OIDC session storage (type `redis`). |
 | `payos-notification-api` | `ma.s2m.payos:payos-notification-api` | Service (API) | The notification-service SPI and model types (`INotificationServiceFactory`). |
 | `payos-service-notification` | `ma.s2m.payos:payos-service-notification` | Service | Default `INotificationServiceFactory` implementation (`$Notification`). |
 | `payos-connector-sdk` | `ma.s2m.payos:connector-sdk` | Service (API) | Business/payment connector SDK contract — `IConnector`, `AbstractConnector`. Not yet wired into `BootServer`. |
@@ -44,11 +45,12 @@ and the **tooling / build coordination** modules.
               ┌────────────────────┼────────────┐  IQueueClient(Factory)
               │                    │            │  IWebhookDispatcher(Factory)
    transport servers        service providers   │  ISecretProvider(Factory)
-   ─ payos-server-http      ─ database-service   │
+   ─ payos-server-http      ─ database-service   │  ISessionStore(Factory)
    ─ payos-server-tcp       ─ queue-service-nats │
    ─ payos-server-queue     ─ webhook-service-http
                             ─ secret-service-filesystem
                             ─ secret-service-vault
+                            ─ session-service-redis
               │                    │            │
               └──────────┬─────────┴────────────┘
                          ▼

@@ -30,10 +30,13 @@ fits together. Versions are in [versioning.md](versioning.md).
 | `secret-service-filesystem` | `ISecretProviderFactory` | `filesystem` | `$Secrets` |
 | `secret-service-vault` | `ISecretProviderFactory` | `vault` | `$Secrets` |
 | `payos-secret-api` | (SPI definitions) | — | (`ISecretProvider`, models, exceptions) |
+| `session-service-redis` | `ISessionStoreFactory` | `redis` | `PayOSSessionStore` (OIDC sessions) |
 
-> The webhook factory is discovered via a standard `ServiceLoader`; the database/queue/secret
-> connectors are loaded from `connectors-dir` via the connector classloader. See
-> [configuration/extensions-connectors.md](../configuration/extensions-connectors.md).
+> The webhook and session-store factories are discovered via a standard `ServiceLoader`; the
+> database/queue/secret connectors are loaded from `connectors-dir` via the connector
+> classloader. See [configuration/extensions-connectors.md](../configuration/extensions-connectors.md).
+> `session-service-redis` is optional — omitting it from `payos-runtime`'s dependencies keeps
+> `security.sessionStoreType` defaulting to the kernel's in-memory `ISessionStore`.
 
 ## Tooling
 
@@ -53,6 +56,7 @@ fits together. Versions are in [versioning.md](versioning.md).
 - payos-server-http 1.2.0, payos-server-tcp 1.0.6, payos-server-queue 1.1.0-RELEASE
 - dynamic-database-service 1.1.9-RELEASE
 - queue-service-nats 1.1.0-RELEASE
+- session-service-redis 1.0.0-RELEASE
 - webhook-service-http 1.0.4-RELEASE
 - payos-secret-api 1.0.0-RELEASE, secret-service-filesystem 1.1.0-RELEASE, secret-service-vault 1.1.0-RELEASE
 - payos-notification-api 1.0.0-RELEASE, payos-notification-connector 1.1.0-RELEASE, connector-sdk 1.2.0-RELEASE

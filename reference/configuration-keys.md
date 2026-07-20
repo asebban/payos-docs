@@ -70,6 +70,8 @@ Internal/effective: `RUNTIME_CONFIG_FILE = payos.json`, `RUNTIME_BASE_DIRECTORY 
 | `preferredJwsAlgorithm` | Token signing alg. |
 | `logoutUrl` / `postLogoutRedirectUri` | Logout. |
 | `sessionTtlSeconds` / `sessionMaxEntries` / `sessionCookieSecure` | Sessions. |
+| `sessionStoreType` | Session backend: `memory` (default) or `redis` (requires `session-service-redis` on the classpath). |
+| `sessionStoreRedis.host` / `port` / `password` / `database` / `tls` / `keyPrefix` | Redis connection, used only when `sessionStoreType` is `redis` — see [`oidc-configuration-guide.md` §10](../configuration/oidc-configuration-guide.md#10-session-configuration). |
 | `allowedOrigins` | CORS origins. |
 
 ## `multitenancy` — [multi-tenancy.md](../configuration/multi-tenancy.md)

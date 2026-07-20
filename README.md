@@ -103,6 +103,7 @@ workspace root, notably:
 - `payos-server-http`, `payos-server-tcp`, `payos-server-queue` — transport servers
 - `database-service`, `queue-service-nats`, `webhook-service-http` — service providers
 - `payos-secret-api`, `secret-service-filesystem`, `secret-service-vault` — secrets
+- `session-service-redis` — distributed OIDC session storage (Redis)
 - `payos-notification-api`, `payos-service-notification`, `payos-notification-connector` — notifications
 - `payos-connector-sdk` — business/payment connector SDK contract (`IConnector`)
 - `payos-runtime` — the runnable distribution

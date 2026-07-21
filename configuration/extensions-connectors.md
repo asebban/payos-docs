@@ -52,13 +52,17 @@ application  →  extension  →  connector  →  runtime
 
 | Put it in connectors when… | Put it in extensions when… |
 | --- | --- |
-| It implements an SPI factory (`IDatabaseServiceFactory`, `IQueueClientFactory`, `ISecretProviderFactory`). | Scripts need to call its classes via `Java.type()`. |
-| It is selected by a config `type` (e.g. `nats`, `vault`). | It is a helper library / protocol stack (e.g. jPOS). |
+| It implements an SPI factory (`IDatabaseServiceFactory`, `IQueueClientFactory`, `ISecretProviderFactory`, `ISessionStoreFactory`). | Scripts need to call its classes via `Java.type()`. |
+| It is selected by a config `type` (e.g. `nats`, `vault`, `redis`). | It is a helper library / protocol stack (e.g. jPOS). |
 | It needs a JDBC driver or broker client. | — |
 
-> The webhook dispatcher is the exception: it is discovered via a **standard** `ServiceLoader`
-> (not the connector classloader) and selected by `webhooks.dispatcher`. See
-> [webhook-service.md](webhook-service.md).
+> The webhook dispatcher and the session store are the exception: both are discovered via a
+> **standard** `ServiceLoader` (not the connector classloader) rather than staged in
+> `connectors-dir`, and selected by their own config key (`webhooks.dispatcher`,
+> `security.sessionStoreType`). See [webhook-service.md](webhook-service.md) and
+> [security-oidc.md#distributed-session-storage](security-oidc.md#distributed-session-storage).
+> In practice `session-service-redis` still only needs to be on the runtime classpath — already
+> the case when it's a `payos-runtime` dependency, same as the standard connectors below.
 
 ## TCP transport plugins
 

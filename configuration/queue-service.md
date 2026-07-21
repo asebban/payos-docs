@@ -62,5 +62,6 @@ generates a UUID. Carry correlation/tenant in your published payloads for tracea
 
 ## Next
 
+- [developer/queue-setup-guide.md](../developer/queue-setup-guide.md) — configuring and using both publisher and consumer sides end to end, with a full worked example.
 - [developer/queue-messaging.md](../developer/queue-messaging.md)
 - [servers.md](servers.md) — the queue transport.

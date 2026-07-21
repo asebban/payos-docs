@@ -28,7 +28,7 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | Bootstrap (entrypoint + top level) | [bootstrap-reference.md](bootstrap-reference.md) | `payos.json`, `bootstrap.json`, top-level runtime blocks, runtime dirs. |
 | Environment variables & config references | [env-var-resolution.md](env-var-resolution.md)<br>[config-references.md](config-references.md) | Placeholder syntax (`${...}`) for environment variables, files, and config keys. |
 | `servers` | [servers.md](servers.md) | Transport listeners (HTTP/HTTPS/TCP/queue), TLS, Swagger UI. |
-| `security` | [security-oidc.md](security-oidc.md) | OIDC/pac4j authentication, sessions, CORS. |
+| `security` | [security-oidc.md](security-oidc.md) | OIDC/pac4j authentication, sessions (including the pluggable `sessionStoreType`/Redis distributed backend), CORS. |
 | `multitenancy` | [multi-tenancy.md](multi-tenancy.md) | Tenant policy, quotas, isolation, simulator. |
 | `database-service` | [database-service.md](database-service.md) | JDBC/Hibernate connection and pooling. |
 | `queue-service` | [queue-service.md](queue-service.md) | MoM connector (e.g. NATS). |

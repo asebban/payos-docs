@@ -278,8 +278,9 @@ Identique au [bloc `security` global](#33-security-globale). Les valeurs ici sur
 | `logoutUrl` | string | — | URL de logout personnalisée |
 | `postLogoutRedirectUri` | string | — | URI de redirection après logout |
 | `sessionTtlSeconds` | int | `1800` (30 min) | Durée de vie d'une session en secondes |
-| `sessionMaxEntries` | int | `10000` | Nombre maximum de sessions simultanées en mémoire |
+| `sessionMaxEntries` | int | `10000` | Nombre maximum de sessions simultanées en mémoire (uniquement appliqué par le backend `memory`) |
 | `sessionCookieSecure` | boolean | `false` | Cookie de session transmis uniquement en HTTPS (`Secure` flag) |
+| `sessionStoreType` | string | `"memory"` | Backend de stockage des sessions : `"memory"` (aucune dépendance externe) ou `"redis"` (distribué, module `session-service-redis` requis — voir [security-oidc.md](security-oidc.md#distributed-session-storage)) |
 | `allowedOrigins` | array[string] | — | Origins autorisées pour CORS |
 
 #### Bloc `database-service` d'une application

@@ -96,3 +96,4 @@ base-uri 'none'`), plus HSTS on HTTPS. CORS is resolved app → tenant → globa
 
 - [security-oidc.md](security-oidc.md) — authentication & CORS.
 - [reference/http-endpoints.md](../reference/http-endpoints.md) — endpoint catalog.
+- [developer/queue-setup-guide.md](../developer/queue-setup-guide.md) — configuring and using the `queue` transport (consumer side) alongside the publisher side, with a full worked example.

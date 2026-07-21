@@ -1,10 +1,8 @@
 # PayOS guide for integrators — customize a delivered application for a customer
 
-> **Targeted audience:** technical teams of **partner integrators** PayOS — those who receive a PayOS application (or product) delivered by the publisher and must
-> **personalize for an end customer** (bank, fintech, PSP, merchant, etc.) without modifying the sources delivered.
+> **Targeted audience:** technical teams of **partner integrators** PayOS — those who receive a PayOS application (or product) delivered by the publisher and must **personalize for an end customer** (bank, fintech, PSP, merchant, etc.) without modifying the sources delivered.
 >
-> **Objective:** to provide, in a single document, everything you need to know to carry out a personalization mission for a client using exclusively **mechanisms
-> extensibility** of PayOS.
+> **Objective:** to provide, in a single document, everything you need to know to carry out a personalization mission for a client using exclusively **mechanisms extensibility** of PayOS.
 >
 > **Prerequisites:** basic knowledge of [PayOS architecture](../architecture/README.md) and a functional PayOS bundle (delivered by the publisher or built with [`payos-runtime`](../operations/deployment.md)).
 
@@ -98,7 +96,7 @@ This distribution is described in [architecture/ecosystem-surface.md](../archite
 
 ## 3. Overview of extensibility mechanisms
 
-PayOS defines **seven extensibility mechanisms** ([architecture/extensibility.md](../architecture/extensibility.md)). The table below reclassifies them from the perspective of an **integrator**: which ones are your daily bread, which are occasional, which require coordination with the publisher.
+PayOS defines **seven extensibility mechanisms** ([architecture/extensibility.md](../architecture/extensibility.md)). The table below reclassifies them from the perspective of an **integrator**: which ones are your daily bread, which are occasional, which require coordination with the publisher. Alongside these code-extension mechanisms, integrators also rely constantly on a **configuration-overlay** technique — the `custom.json` bundle-root override file — to tune environment-specific settings (dev/staging/production, tenant simulator, secrets placeholders) without ever touching the editor's delivered `bootstrap.json`; it's listed as row 8 below even though it isn't one of the nine mechanisms catalogued in `architecture/extensibility.md`.
 
 | # | Mechanism | Typical use for the integrator | Frequency | Section |
 | --- | --- | --- | --- | --- |
@@ -109,6 +107,7 @@ PayOS defines **seven extensibility mechanisms** ([architecture/extensibility.md
 | 5 | **Multi-tenant configuration** | Isolate the tenant from the client (DB, OIDC, quotas) | ⭐⭐⭐ Daily (initial setup) | [§10](#10-multi-tenancy--isolate-and-configure-the-client-environment) |
 | 6 | **Secrets (`$Secrets` / `spm`)** | Store customer-specific identifiers (PSP API keys, certificates, etc.) | ⭐⭐ Frequent | [§11](#11-client-specific-secrets) |
 | 7 | **SPI connectors / Java extensions / Transport providers / TCP plugins** | Plug in a specific protocol, store or library required by the client | ⭐ Occasional — **editor coordination recommended** | [§13](#13-advanced-mechanisms-under-coordination-with-the-editor) |
+| 8 | **Config override (`custom.json`)** | Apply environment-specific or per-deployment settings (tenant simulator, DB/OIDC endpoints, feature flags, ...) on top of the editor's `bootstrap.json` / `payos.json`, without editing it | ⭐⭐⭐ Daily (dev/staging/prod promotion) | [§6.10](#610-environment-specific-overrides--customjson) |
 
 ### Quick decision tree
 
@@ -136,9 +135,14 @@ The customer's need relates to...
 ├─ “The customer wants their language, their logo, their colors”
 │ → i18n/ + files/ + page override via extends [§12] + CSS
 │
-└─ “Client requires an unsupported protocol/store/library”
-      → SPI connector / Java extension / Transport / TCP plugin — see §13
-        and validate the approach with the editor (impact on runtime deployment)
+├─ “Client requires an unsupported protocol/store/library”
+│     → SPI connector / Java extension / Transport / TCP plugin — see §13
+│       and validate the approach with the editor (impact on runtime deployment)
+│
+└─ “A setting (host, feature flag, tenant simulator, DB/OIDC endpoint) needs to differ
+   per environment (dev/staging/prod) or per delivered customer, without editing the
+   editor's bootstrap.json”
+      → custom.json bundle-root override file — see §6.10
 ```
 
 ---
@@ -856,6 +860,38 @@ atlas-payment-gateway/
 ```
 
 No `config/mappings.json` or `config/routes.json` changes are required — both endpoints and the page route are **inherited** from `payment-gateway`. Only the handler and component files are overridden. The `atlas_user_extensions` table must exist in the Atlas tenant's schema before the first request.
+
+### 6.10 Environment-specific overrides — `custom.json`
+
+Unlike every other mechanism in this section, `custom.json` doesn't extend an *application* — it overrides the **merged bundle configuration** itself. It's the tool for the case the golden rule ([§2](#2-the-golden-rule--never-modify-the-delivered-application)) doesn't cover: you never touch `apps/payment-gateway/...`, but you still need `bootstrap.json` (the editor's file, at the bundle root) to behave differently per environment or per delivered customer.
+
+**Where it lives and when it loads:** at the bundle root, alongside `payos.json`/`bootstrap.json` (not inside an application's `config/` folder). The runtime loads every `*.json` file directly under `configDir` and merges them; `custom.json`, if present, is loaded **last**, so any key it declares — including `applications[]`, `servers[]`, `security`, `database-service`, `multitenancy`, or feature-flag-style custom keys — overrides whatever the same key resolved to from the editor's files.
+
+```json
+// bundle/custom.json — local-development overrides, never delivered as-is to the customer
+{
+  "multitenancy": {
+    "tenantSimulator": { "enabled": true, "tenantId": "atlas" }
+  },
+  "applications": [
+    {
+      "id": "atlas-payment-gateway",
+      "base.path": "/opt/payos/bundle/apps/atlas-payment-gateway",
+      "authorized-tenants": ["atlas"]
+    }
+  ]
+}
+```
+
+**Typical integrator uses:**
+
+- Promoting the same assembled bundle across dev → staging → production by swapping only `custom.json` (DB/OIDC endpoints, log level, tenant simulator on/off) — see [§9.2 of integration-workflow.md](../integrators/integration-workflow.md#92-configuration-overlay-pattern).
+- Registering your overlay application (`applications[]` entry) into a received editor bundle without editing its `bootstrap.json` — see [§4.1 of integration-workflow.md](../integrators/integration-workflow.md#41-directory-layout-recommendation).
+- Shipping a **templated** `custom.json` (with `${ENV_VAR}` placeholders) as part of the customer delivery artifact, filled in by the customer's ops team at install time — see [§12.1 of integration-workflow.md](../integrators/integration-workflow.md#121-delivery-package-contents).
+
+> **Keep it small.** `custom.json` is an override file, not a place to redeclare your whole configuration — put structural, reusable configuration in your overlay's own `config/application.json` ([§5.4](#54-typical-tree-structure-of-an-overlay)) and reserve `custom.json` for the handful of keys that genuinely differ per environment or per delivered instance.
+>
+> Full reference: [configuration/json-configuration-reference.md §5](../configuration/json-configuration-reference.md#5-hierarchical-resolution-of-values) and [integrators/integration-workflow.md](../integrators/integration-workflow.md) (complete workspace/promotion workflow built around this file).
 
 ---
 

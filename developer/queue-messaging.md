@@ -82,5 +82,6 @@ connector JAR on the [connectors path](../configuration/extensions-connectors.md
 
 ## Next
 
+- [Queue setup guide (de A à Z)](queue-setup-guide.md) — configuring and using both the publisher and consumer sides end to end, with a full worked example.
 - [Configuration: queue service](../configuration/queue-service.md)
 - [Architecture: extensibility (queue transport & connectors)](../architecture/extensibility.md)

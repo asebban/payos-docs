@@ -56,10 +56,42 @@ From `IConfigSpec.Security`:
 | Key | Purpose |
 | --- | --- |
 | `sessionTtlSeconds` | Session lifetime. |
-| `sessionMaxEntries` | Max concurrent sessions retained. |
+| `sessionMaxEntries` | Max concurrent sessions retained (only enforced by the in-memory backend — see below). |
 | `sessionCookieSecure` | Mark the session cookie `Secure`. |
+| `sessionStoreType` | Session storage backend: `memory` (default, zero external dependency) or `redis` (distributed, requires `session-service-redis` on the classpath — see [Distributed session storage](#distributed-session-storage) below). |
 
 Sessions use `PayOSSessionStore`; the session cookie is `PAYOS_SESSION_ID` (HttpOnly, SameSite=Lax, and Secure when configured/HTTPS). The authenticated principal is a map with `id` (OIDC `sub`), `email`, `name`, `preferred_username`, and `roles` — exposed to scripts as `$Principal`.
+
+### Distributed session storage
+
+By default, sessions are held in an in-process map (`InMemorySessionStore`) — fine for a single node, but a login on one node is invisible to any other node behind the same load balancer without sticky sessions. Setting `sessionStoreType` to `redis` switches to a Redis-backed `ISessionStore` (module `session-service-redis`), so any node can read back a session created on another:
+
+```json
+{
+  "security": {
+    "sessionStoreType": "redis",
+    "sessionStoreRedis": {
+      "host": "127.0.0.1",
+      "port": 6379,
+      "password": "...",
+      "database": 0,
+      "tls": false,
+      "keyPrefix": "payos:session:"
+    }
+  }
+}
+```
+
+| `sessionStoreRedis.*` key | Default | Purpose |
+| --- | --- | --- |
+| `host` | `localhost` | Redis host. |
+| `port` | `6379` | Redis port. |
+| `password` | *(none)* | Redis `AUTH` password, omitted from the connection when blank. |
+| `database` | `0` | Redis logical database index. |
+| `tls` | `false` | Enables TLS on the Redis connection. |
+| `keyPrefix` | `payos:session:` | Prefix applied to every session key, so the same Redis instance can later be shared with other distributed stores without collisions. |
+
+Like the other pluggable backends (`queue-service-nats`, `secret-service-filesystem`), `session-service-redis` is resolved via `ServiceLoader` and must be on the runtime classpath (already the case for `payos-runtime`, which shades it in) — an unrecognized `sessionStoreType` fails explicitly at startup rather than silently falling back to memory. Backend selection is resolved once, at first access, and is not hot-reloaded — switching backends invalidates active sessions either way, so this is considered an acceptable restart-only change. Full design rationale in [`payos/docs/architects/session-store-redis-design.md`](../../payos/docs/architects/session-store-redis-design.md); module-level reference in [`session-service-redis/README.md`](../../session-service-redis/README.md).
 
 ## CORS
 

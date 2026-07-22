@@ -38,6 +38,7 @@
     - [3.12 `secret-service` (bootstrap.json)](#312-secret-service-bootstrapjson)
     - [3.13 `extensions-dir` (bootstrap.json)](#313-extensions-dir-bootstrapjson)
     - [3.14 `notification-service` (bootstrap.json)](#314-notification-service-bootstrapjson)
+    - [3.15 `idempotency` (bootstrap.json)](#315-idempotency-bootstrapjson)
   - [4. manifest.json — Déclaration de capability](#4-manifestjson--déclaration-de-capability)
   - [5. Résolution hiérarchique des valeurs](#5-résolution-hiérarchique-des-valeurs)
   - [6. Constantes et valeurs par défaut](#6-constantes-et-valeurs-par-défaut)
@@ -251,14 +252,16 @@ Tableau des applications hébergées par le runtime.
 |-----|------|--------|--------|-------------|
 | `id` | string | Oui | — | Identifiant unique de l'application (utilisé pour le routage URI) |
 | `name` | string | Oui | — | Nom lisible de l'application |
-| `base.path` | string | Non | `"./apps/{id}"` | Dossier racine de l'application |
+| `base.path` | string | Non | `"./apps/{id}"` | Dossier racine de l'application. Alias legacy acceptés : `basePath`, `base-path`. |
 | `version` | string | Non | — | Version de l'application |
-| `authorized.tenants` ou `authorized-tenants` | array[string] | Non | Tous les tenants | Liste des `tenantId` autorisés à accéder à cette application |
-| `mapping-files` | array[string] | Non | `model/*.xml` | Fichiers HBM Hibernate relatifs à l'application (charge les entités métier de l'application) |
+| `authorized.tenants` ou `authorized-tenants` | array[string] | Non | Tous les tenants | Liste des `tenantId` autorisés à accéder à cette application. Forme legacy imbriquée équivalente : `"authorized": { "tenants": [...] }`. |
+| `mapping-files` | array[string] | Non | `model/*.xml` | Fichiers HBM Hibernate relatifs à l'application (charge les entités métier de l'application). Alias legacy : `mappingFiles`. |
 | `security` | object | Non | Hérité du global | Configuration de sécurité spécifique à l'application (voir ci-dessous) |
 | `database-service` | object | Non | Hérité du global | Configuration de source de données spécifique à l'application (voir ci-dessous) |
 | `extends` | array[string] | Non | `[]` | Liste des `id` de capabilities actives à inclure dans l'application. Géré automatiquement par `cpm`. |
 | `category` | string | Non | — | Marqueur de type : `"capability"` pour les entrées gérées par `cpm`. Ne pas définir manuellement. |
+| `defaultUrl` | string | Non | — | Chemin ou URL de redirection post-login, configuré par application |
+| `_contributors` | array | Non | — | Bookkeeping interne `payos-pm` (produit(s)/équipe(s) propriétaire de l'entrée). Ne pas définir manuellement. |
 
 #### Bloc `security` d'une application
 
@@ -281,7 +284,35 @@ Identique au [bloc `security` global](#33-security-globale). Les valeurs ici sur
 | `sessionMaxEntries` | int | `10000` | Nombre maximum de sessions simultanées en mémoire (uniquement appliqué par le backend `memory`) |
 | `sessionCookieSecure` | boolean | `false` | Cookie de session transmis uniquement en HTTPS (`Secure` flag) |
 | `sessionStoreType` | string | `"memory"` | Backend de stockage des sessions : `"memory"` (aucune dépendance externe) ou `"redis"` (distribué, module `session-service-redis` requis — voir [security-oidc.md](security-oidc.md#distributed-session-storage)) |
+| `sessionStoreRedis` | object | — | Bloc de connexion Redis, lu seulement quand `sessionStoreType` vaut `"redis"`. Voir [sous-clés ci-dessous](#sessionstoreredis--sous-clés). |
 | `allowedOrigins` | array[string] | — | Origins autorisées pour CORS |
+
+##### `sessionStoreRedis` — sous-clés
+
+Lues en dur (littéraux de chaîne, pas via `IConfigSpec`) par `RedisSessionStoreFactory.java` dans `session-service-redis` :
+
+```json
+"security": {
+  "sessionStoreType": "redis",
+  "sessionStoreRedis": {
+    "host": "127.0.0.1",
+    "port": 6379,
+    "password": "...",
+    "database": 0,
+    "tls": false,
+    "keyPrefix": "payos:session:"
+  }
+}
+```
+
+| Clé | Type | Défaut | Description |
+|-----|------|--------|-------------|
+| `host` | string | `"localhost"` | Hôte Redis |
+| `port` | int | `6379` | Port Redis |
+| `password` | string | — | Mot de passe d'authentification Redis (optionnel) |
+| `database` | int | `0` | Index de base logique Redis |
+| `tls` | boolean | `false` | Active TLS pour la connexion Redis |
+| `keyPrefix` | string | `"payos:session:"` | Préfixe de clé pour les sessions stockées — namespacé pour cohabiter sur le même Redis avec d'autres stores distribués (`payos:idempotency:` pour `idempotency-service-redis`) sans collision |
 
 #### Bloc `database-service` d'une application
 
@@ -395,10 +426,17 @@ Chaque clé est un `tenantId`. La clé `"default"` sert de modèle pour les tena
 | Clé | Type | Défaut | Description |
 |-----|------|--------|-------------|
 | `schema` | string | `"public"` | Schéma SQL du tenant |
-| `isolationMode` | string | `"shared-schema"` | Mode d'isolation : `"shared-schema"`, `"dedicated-schema"`, `"dedicated-database"` |
-| `security` | object | Hérité du global | Configuration de sécurité spécifique au tenant (mêmes clés que la section `security`) |
-| `database-service` | object | Hérité du global | Configuration BDD spécifique au tenant (mêmes clés que la section `database-service`) |
-| `quota` | object | — | Quota spécifique : `{ "enabled": true, "requestsPerMinute": 500 }` |
+| `isolationMode` | string | `"shared-schema"` | Mode d'isolation : `"shared-schema"`, `"dedicated-schema"`, `"dedicated-database"`. Alias legacy : `isolation-mode`. |
+| `tcp.handlers.dir` | string | Hérité du global | Surcharge par tenant du dossier des handlers TCP (voir [3.1 `servers`](#31-servers)), lue par `ConfigLoader.java` |
+| `security` | object | Hérité du global | Configuration de sécurité spécifique au tenant (mêmes clés que la section `security`, plus `encryptionKey` — voir note ci-dessous) |
+| `database-service` | object | Hérité du global | Configuration BDD spécifique au tenant (mêmes clés que la section `database-service`, avec une différence — voir note ci-dessous). Alias legacy pour le nom d'instance (`name`) : `database.instance`, `databaseInstance`. |
+| `quota` | object | — | Quota spécifique : `{ "enabled": true, "requestsPerMinute": 500 }`. Alias legacy pour `enabled` : `quota-enabled`. |
+
+> **`encryptionKey` (bloc `security` par tenant) : clé définie mais non lue.** `IConfigSpec.Multitenancy.Tenants.Tenant.Security.ENCRYPTION_KEY` (`"encryptionKey"`) existe dans `IConfigSpec.java` mais aucun code du kernel ne la lit (recherche confirmée) — la définir n'a aujourd'hui aucun effet.
+>
+> **Incohérence `driver-class` vs `driver_class` :** contrairement à ce qu'affirme la section [« Bloc `database-service` d'une application »](#bloc-database-service-dune-application) (« identique à la section globale »), le bloc `database-service.configuration` **par tenant** (`Tenant.DatabaseService.Configuration`) utilise la clé `driver-class` (tiret), alors que le bloc `database-service.configuration` **global** utilise `driver_class` (underscore, voir [3.5](#database-serviceconfiguration)). Les deux ne sont pas interchangeables — utiliser la variante attendue selon le niveau où la configuration est déclarée.
+>
+> **Fallback legacy complet (`Multitenancy.Legacy`) :** en plus du fallback `quotas` déjà documenté, `TenantPolicyService.java` accepte aussi une forme entièrement à plat, sans imbrication sous `multitenancy.tenants` : une clé racine `tenants` (au lieu de `multitenancy.tenants`) et une clé racine `defaultRequestsPerMinute` (au lieu de `multitenancy.default-tenant-quotas.requestsPerMinute`). Ces formes sont des repères de compatibilité ascendante ; préférer la forme imbriquée `multitenancy.*` pour toute nouvelle configuration.
 
 ##### Modes d'isolation
 
@@ -407,8 +445,6 @@ Chaque clé est un `tenantId`. La clé `"default"` sert de modèle pour les tena
 | `"shared-schema"` | Tous les tenants partagent le même schéma (colonne `tenant_id` dans les tables) |
 | `"dedicated-schema"` | Chaque tenant dispose de son propre schéma dans la même base de données |
 | `"dedicated-database"` | Chaque tenant dispose de sa propre instance de base de données |
-
-> **Format héritage (compatibilité) :** Le bloc `quotas` (sans le préfixe `default-`) surcharge le bloc `default-quota` pour un tenant particulier.
 
 ---
 
@@ -451,7 +487,7 @@ Configuration complète d'une source de données Hibernate/HikariCP partagée.
 | `schema` | — | string | Non | `"public"` | Schéma SQL utilisé pour les entités |
 | `max-pool-size` | `maximumPoolSize`, `maxPoolSize`, `pool-max` | int | Non | HikariCP défaut | Taille maximale du pool de connexions |
 | `minimum-idle` | `minimumIdle`, `minIdle`, `pool-min` | int | Non | HikariCP défaut | Nombre minimum de connexions inactives |
-| `retired-session-factory-close-delay-seconds` | — | int | Non | `30` | Délai avant fermeture d'une session factory remplacée (rechargement de config) |
+| `retired-session-factory-close-delay-seconds` | `retiredSessionFactoryCloseDelaySeconds` | int | Non | `30` | Délai avant fermeture d'une session factory remplacée (rechargement de config) |
 
 ---
 
@@ -493,17 +529,15 @@ Configuration globale du dispatcher de webhooks. Le champ `dispatcher` sélectio
 
 ```json
 "webhooks": {
-  "dispatcher": "http",
-  "timeout": 5000,
-  "deadLetterTopic": "payos.webhook.dead-letter"
+  "dispatcher": "http"
 }
 ```
 
 | Clé | Type | Requis | Défaut | Description |
 |-----|------|--------|--------|-------------|
-| `dispatcher` | string | Non | `"http"` | Implémentation du dispatcher : `"http"` (livraison HTTP POST signée) ou `"queue"` (publication MoM) |
-| `timeout` | int | Non | `5000` | Timeout en millisecondes pour chaque appel de livraison HTTP |
-| `deadLetterTopic` | string | Non | — | Topic MoM vers lequel les événements non livrables (toutes tentatives épuisées) sont publiés |
+| `dispatcher` | string | Non | `"http"` (`IConfigSpec#DEFAULT_WEBHOOK_DISPATCHER`) | Implémentation du dispatcher. `"http"` (module `webhook-service-http`) est la **seule** valeur avec une implémentation réelle dans ce workspace. |
+
+> **Correction (2026-07-22) :** cette section documentait auparavant deux clés, `timeout` et `deadLetterTopic`, ainsi qu'une valeur `dispatcher: "queue"` — aucune des trois n'existe dans le code. `IConfigSpec.GlobalWebhooks` (`payos/.../config/IConfigSpec.java`) ne définit que `dispatcher`, et `WebhookServiceInitializer.java` ne lit rien d'autre à cet endroit. Le timeout HTTP réel vient du bloc [`http-webhook-service`](#311-http-webhook-service-bootstrapjson) (`connectTimeoutMs`/`requestTimeoutMs`) ; il n'existe aucun mécanisme de dead-letter-topic ni de dispatcher `"queue"` implémenté à ce jour — si besoin, ce serait un nouveau module à écrire (même famille que `webhook-service-http`), pas une clé de config à ajouter seule.
 
 > **Convention de nommage :** La valeur de `dispatcher` détermine le bloc de configuration technique chargé : `{type}-webhook-service` (ex. `dispatcher: "http"` → bloc `http-webhook-service`, section [3.11](#311-http-webhook-service-bootstrapjson)).
 
@@ -544,16 +578,18 @@ Fichier de configuration des abonnements webhooks déclarés à la racine d'une 
 
 #### Champs d'un abonnement webhook
 
-| Champ | Type | Requis | Description |
-|-------|------|--------|-------------|
-| `id` | string | Oui | Identifiant unique de l'abonnement (utile pour le débogage et les logs) |
-| `event` | string | Oui | Nom de l'événement écouté. Libre pour `native=false` ; doit être un événement système connu pour `native=true` |
+| Champ | Type | Requis | Défaut | Description |
+|-------|------|--------|--------|-------------|
+| `id` | string | Oui | — | Identifiant unique de l'abonnement (utile pour le débogage et les logs) |
+| `event` | string | Oui | — | Nom de l'événement écouté. Libre pour `native=false` ; doit être un événement système connu pour `native=true` |
 | `native` | boolean | Non | `false` | `false` = déclenché par `$WebHooks.emit()` dans le script ; `true` = déclenché automatiquement par le kernel après chaque requête |
-| `url` | string | Oui | URL de destination du webhook |
-| `secret` | string | Non | Secret HMAC-SHA256 utilisé pour signer le body de chaque appel (header `X-PayOS-Signature`) |
-| `headers` | object | Non | En-têtes HTTP supplémentaires à ajouter à chaque appel (ex. `{"Authorization": "Bearer token"}`) |
-| `filter` | object | Non | Filtre de déclenchement (voir ci-dessous) |
-| `retry` | object | Non | Politique de retry (voir ci-dessous) |
+| `disabled` | boolean | Non | `false` | Désactive l'abonnement sans le supprimer de `webhooks.json` (utile pour couper temporairement un abonnement en conservant sa configuration) |
+| `url` | string | Oui | — | URL de destination du webhook |
+| `secret` | string | Non | — | Secret HMAC-SHA256 utilisé pour signer le body de chaque appel (header `X-PayOS-Signature`) |
+| `headers` | object | Non | — | En-têtes HTTP supplémentaires à ajouter à chaque appel (ex. `{"Authorization": "Bearer token"}`) |
+| `method` | string | Non | `"POST"` | Méthode HTTP utilisée pour l'appel sortant de livraison (ne pas confondre avec `filter.method`, qui filtre la requête entrante) |
+| `filter` | object | Non | — | Filtre de déclenchement (voir ci-dessous) |
+| `retry` | object | Non | — | Politique de retry (voir ci-dessous) |
 
 #### Champs du filtre (`filter`)
 
@@ -567,7 +603,7 @@ Fichier de configuration des abonnements webhooks déclarés à la racine d'une 
 
 | Champ | Type | Défaut | Description |
 |-------|------|--------|-------------|
-| `maxAttempts` | int | `1` | Nombre maximum de tentatives (incluant la première) |
+| `maxAttempts` | int | `3` | Nombre maximum de tentatives (incluant la première) |
 | `backoffMs` | int | `1000` | Délai entre deux tentatives en millisecondes |
 
 > **Contrainte `native=true` :** L'événement doit appartenir à l'ensemble des événements système connus (`api.*`, `page.*`, `security.*`, `capability.*`). Toute entrée invalide est rejetée au chargement avec un log WARN. Voir la catalogue complet dans [hooks-webhooks.md](../../architects/hooks-webhooks.md).
@@ -660,7 +696,7 @@ Configuration technique du dispatcher HTTP de webhooks (module `webhook-service-
 | `connectTimeoutMs` | long | Non | `5000` | Timeout de connexion en millisecondes |
 | `requestTimeoutMs` | long | Non | `10000` | Timeout de réponse par requête en millisecondes |
 
-> **Différence avec la section `3.7 webhooks`** : la section `webhooks` documente les abonnements de dispatch (dead-letter, dispatcher global). La section `http-webhook-service` configure le module d'implémentation HTTP sous-jacent utilisé pour la livraison effective.
+> **Différence avec la section `3.7 webhooks`** : la section `webhooks` ne fait que sélectionner le dispatcher (`dispatcher`). La section `http-webhook-service` configure le module d'implémentation HTTP sous-jacent utilisé pour la livraison effective (timeouts inclus).
 
 ---
 
@@ -682,9 +718,38 @@ Configuration du service de gestion des secrets. Ce service rend disponible le b
 | Clé | Type | Requis | Défaut | Description |
 |-----|------|--------|--------|-------------|
 | `enabled` | boolean | Non | `false` | Activer le service de secrets. Si `false`, `$Secrets` n'est pas injecté. |
-| `type` | string | Non | `"filesystem"` | Type de provider : `"filesystem"` (module `secret-service-filesystem`) ou tout provider SPI disponible dans `connectors-dir` |
-| `root` | string | Requis si enabled | — | Répertoire racine de stockage des secrets (pour le provider `filesystem`) |
-| `keyfile` | string | Non | — | Chemin vers le fichier de clé de chiffrement (pour le provider `filesystem` avec chiffrement AES) |
+| `type` | string | Non | `"filesystem"` | Type de provider : `"filesystem"` (module `secret-service-filesystem`), `"vault"` (module `secret-service-vault`), ou tout provider SPI disponible dans `connectors-dir` |
+| `root` | string | Requis si `type=filesystem` | — | Répertoire racine de stockage des secrets |
+| `keyfile` | string | Non (provider `filesystem`) | — | Chemin vers le fichier de clé de chiffrement AES-256. Repli sur la variable d'environnement `PAYOS_SECRET_MASTER_KEY` si absent. |
+
+#### Provider `vault` (HashiCorp Vault)
+
+```json
+"secret-service": {
+  "configuration": {
+    "enabled": true,
+    "type": "vault",
+    "address": "https://vault.example.com:8200",
+    "token": "s.XXXXXXXXXXXX",
+    "kv-mount": "secret",
+    "timeout": 10
+  }
+}
+```
+
+| Clé | Type | Requis | Défaut | Description |
+|-----|------|--------|--------|-------------|
+| `address` | string | Oui | — | Adresse du serveur Vault, schéma et port inclus |
+| `token` | string | Requis si `role-id`/`secret-id` absents | — | Token Vault statique |
+| `role-id` | string | Requis pour l'auth AppRole | — | Identifiant de rôle AppRole (avec `secret-id`) |
+| `secret-id` | string | Requis pour l'auth AppRole | — | Secret AppRole. AppRole a priorité sur `token` si les deux sont présents. |
+| `approle-mount` | string | Non | `"approle"` | Chemin de montage du moteur d'authentification AppRole |
+| `kv-mount` | string | Non | `"secret"` | Chemin de montage du moteur de secrets KV v2 |
+| `namespace` | string | Non | — | Namespace Vault Enterprise |
+| `tls-skip-verify` | boolean | Non | `false` | Désactive la vérification du certificat TLS (**développement uniquement**) |
+| `timeout` | int | Non | `10` | Timeout de connexion/requête HTTP en secondes |
+
+> **Clé module-locale, absente d'`IConfigSpec`** : `transit-mount` (défaut `"transit"`, lue directement par `VaultConfig.java` dans `secret-service-vault`) configure le moteur Transit utilisé par `ICryptoSecretProvider` (`encrypt`/`decrypt`/`sign`/`verify` avec une clé nommée). Voir le README de `secret-service-vault`, section 5, pour le détail.
 
 #### Binding `$Secrets` dans les scripts
 
@@ -939,7 +1004,7 @@ Configuration du connecteur de notification (binding `$Notification`). Volontair
     "type": "nats",
     "host": "nats.internal",
     "port": 4222,
-    "topic": "payos.notifications"
+    "destination": "notifications.inbound"
   }
 }
 ```
@@ -949,9 +1014,59 @@ Configuration du connecteur de notification (binding `$Notification`). Volontair
 | `type` | string | Non | Dérivé du connecteur (`nats` pour le connecteur queue) | Type de client MoM utilisé par le connecteur |
 | `host` | string | Non | `"localhost"` | Hôte du broker de notification |
 | `port` | int | Non | `4222` | Port du broker de notification |
-| `topic` | string | Non | `"payos.notifications"` | Sujet utilisé pour la connexion |
+| `destination` | string | Non | `"notifications.inbound"` (`NotificationServices.DEFAULT_DESTINATION`) | Sujet/destination de publication utilisé par les appels `$Notification.send()` |
+
+> **Correction (2026-07-22) :** cette clé s'appelait autrefois documentée par erreur `topic` avec un défaut `"payos.notifications"` — ni l'un ni l'autre n'existe dans le code. La clé réelle est `destination` (`IConfigSpec.NotificationService.Configuration.DESTINATION`), lue par `NotificationServiceInitializer.java:55` avec le défaut `NotificationServices.DEFAULT_DESTINATION = "notifications.inbound"` (`payos-notification-api`).
 
 > Le bloc `configuration` est transmis tel quel (`Map<String, String>`) à `INotificationServiceFactory#initialize` du connecteur actif au démarrage ; les clés au-delà de `type` sont donc spécifiques au connecteur installé dans `connectors-dir`. Si aucun connecteur de notification n'est présent, ce bloc est ignoré et `$Notification` n'est pas disponible dans les scripts.
+
+---
+
+### 3.15 `idempotency` (bootstrap.json)
+
+Configuration du service d'idempotence HTTP (`IdempotencyService`), qui met en cache une réponse par clé d'idempotence fournie par le client (`X-Idempotency-Key`) pour rendre les requêtes mutantes (paiements, etc.) sûres à rejouer. Documentation détaillée (rationale, backends, exemples complets) : [configuration/idempotency.md](idempotency.md).
+
+```json
+"idempotency": {
+  "enabled": true,
+  "ttlSeconds": 86400,
+  "headerName": "X-Idempotency-Key",
+  "failOnAbsenceOfIdempotencyKey": true,
+  "storeType": "memory",
+  "storeRedis": {
+    "host": "127.0.0.1",
+    "port": 6379,
+    "password": "...",
+    "database": 0,
+    "tls": false,
+    "keyPrefix": "payos:idempotency:"
+  }
+}
+```
+
+| Clé | Type | Défaut | Description |
+|-----|------|--------|-------------|
+| `enabled` | boolean | `true` | Active le service d'idempotence. Si `false`, `checkIdempotency` ne fait rien et `storeResponse` ne met jamais en cache. |
+| `ttlSeconds` | long | `86400` (24h) | Durée de vie d'une réponse en cache avant expiration |
+| `headerName` | string | `"X-Idempotency-Key"` | Header portant la clé d'idempotence |
+| `failOnAbsenceOfIdempotencyKey` | boolean | `true` | Si `true`, une requête sans clé d'idempotence (absente/vide) est rejetée (`400 Bad Request`) avant l'exécution du script. Si `false`, la requête procède simplement sans vérification d'idempotence. |
+| `storeType` | string | `"memory"` | Backend de stockage : `"memory"` (aucune dépendance externe) ou `"redis"` (distribué, module `idempotency-service-redis` requis) |
+| `storeRedis` | object | — | Bloc de connexion Redis, lu seulement quand `storeType` vaut `"redis"` (voir sous-clés ci-dessous) |
+
+##### `storeRedis` — sous-clés
+
+Lues via `IConfigSpec.Idempotency.Redis` par `RedisIdempotencyStoreFactory.java` dans `idempotency-service-redis` :
+
+| Clé | Type | Défaut | Description |
+|-----|------|--------|-------------|
+| `host` | string | `"localhost"` | Hôte Redis |
+| `port` | int | `6379` | Port Redis |
+| `password` | string | — | Mot de passe d'authentification Redis (optionnel) |
+| `database` | int | `0` | Index de base logique Redis |
+| `tls` | boolean | `false` | Active TLS pour la connexion Redis |
+| `keyPrefix` | string | `"payos:idempotency:"` | Préfixe de clé pour les réponses en cache — namespacé pour cohabiter sur le même Redis que `session-service-redis` (`payos:session:`) sans collision |
+
+> Un troisième type, `storeType: "database"` (`DatabaseIdempotencyStore`), a existé brièvement puis a été retiré du code — voir la note dans [configuration/idempotency.md](idempotency.md#store-backends) pour le détail (mapping Hibernate requis + incompatibilité avec le multi-tenant telle que câblée).
 
 ---
 
@@ -1035,6 +1150,18 @@ Pour chaque clé de configuration, la résolution suit cet ordre (du plus priori
 | `APPLICATION_MAPPING_FILES_DIRECTORY` | `"model"` | Dossier des fichiers HBM |
 | `CAPABILITIES_DIR` | `".capabilities"` | Dossier interne géré par `cpm` dans `configDir`. Contient `activation.json` et les capabilities installées |
 | `APPLICATIONS_DIR` | `".applications"` | Dossier interne géré par `cpm` dans `configDir`. Contient les applications installées depuis un catalogue |
+
+### Clés racine additionnelles (bootstrap.json)
+
+Ces clés de premier niveau existent dans `IConfigSpec.java` mais n'avaient pas d'entrée dédiée dans ce document :
+
+| Clé | Type | Défaut | Description |
+|-----|------|--------|-------------|
+| `config-hot-reload-enabled` | boolean | `true` | Désactive le rechargement à chaud (`ConfigWatcher`) si mis à `false`. Lu par `BootServer.java` et `ConnectorRuntimeSettingsEvaluator.java`. |
+| `connectors-dir` | string | — | Dossier des JARs de connecteurs (secret/session/idempotence/notification, etc.), résolu dans le même ordre que `extensions-dir` (propriété système `-Dconnectors-dir=...` → variable d'env `PAYOS_CONNECTORS_DIR` → clé `connectors-dir` du JSON). Voir `ConnectorLoader.java`. |
+| `servers-dir` | string | — | Dossier des JARs `ServerProvider` (implémentations de transport supplémentaires), même ordre de résolution que ci-dessus (variable d'env `PAYOS_SERVERS_DIR`). Voir `ServerProviderLoader.java`. |
+| `tcp-handlers-dir` | string | — | Valeur globale par défaut du dossier des handlers TCP — surchargée par serveur via `servers[].tcp-handlers-dir` (§3.1) et par tenant via `multitenancy.tenants.{id}.tcp.handlers.dir` (§3.4). |
+| `runtimeBaseDir` | string | Dossier de `bootstrap.json` | **Valeur calculée par `ConfigLoader`, pas destinée à être définie manuellement** — le runtime la dérive de l'emplacement effectif du fichier de configuration et la republie dans la config résolue pour que d'autres composants (résolution de chemins relatifs, etc.) puissent la lire. |
 
 ---
 

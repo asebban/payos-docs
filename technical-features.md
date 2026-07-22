@@ -476,14 +476,14 @@ Le service est conçu autour d'une abstraction de store :
 | `IdempotencyService` | Orchestre la détection, le replay et le stockage des réponses. |
 | `IdempotencyConfig` | Configure activation, TTL et nom du header. |
 | `IIdempotencyStore` | Contrat de stockage. |
-| `InMemoryIdempotencyStore` | Store mémoire, utile pour exécution simple ou tests. |
-| `DatabaseIdempotencyStore` | Store persistant pour scénarios où l'idempotence doit survivre au process. |
+| `InMemoryIdempotencyStore` | Store mémoire (défaut), utile pour exécution simple ou tests — non partagé entre instances. |
+| `RedisIdempotencyStore` | Store partagé (module `idempotency-service-redis`, `idempotency.storeType: redis`) pour un cluster multi-instances. |
 
 **Intérêt technique :** l'idempotence est traitée au niveau runtime, avant et après l'exécution du script, ce qui évite de réimplémenter cette logique dans chaque endpoint critique.
 
 **Intérêt business :** dans les paiements, cela réduit les risques de double opération lors de retries client, timeouts, refreshs ou erreurs réseau.
 
-**Point d'attention :** la qualité de garantie dépend du store utilisé. Un store mémoire est simple mais local au process ; un store persistant est préférable pour des déploiements multi-instance ou critiques.
+**Point d'attention :** la qualité de garantie dépend du store utilisé. Un store mémoire est simple mais local au process ; un store partagé (Redis) est nécessaire pour des déploiements multi-instance.
 
 ---
 

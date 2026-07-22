@@ -66,6 +66,15 @@ The return value of `emitInsight` may be a map/object, list/array, string, numbe
 
 The same script runs unchanged whether the request arrived over HTTP, TCP, or a queue.
 
+`getHeaders()` returns a Java `Map<String, String>`, not a plain JS object — iterate it with
+`entrySet()` in a `for...of` loop:
+
+```javascript
+for (var entry of request.getHeaders().entrySet()) {
+    $Logger.info(entry.getKey() + ": " + entry.getValue());
+}
+```
+
 ## Producing a response
 
 The simplest pattern is to return an object and set the status through `$Response`:

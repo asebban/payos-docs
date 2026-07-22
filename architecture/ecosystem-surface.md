@@ -176,7 +176,8 @@ var enriched = {
   ...result,
   customFee: $App.getSetting('custom-fee-rate') * result.amount
 };
-$Response.send(enriched);
+$Response.setJsonBody(enriched);
+return $Response;
 ```
 
 Gouverné car :

@@ -23,6 +23,15 @@ var body = JSON.parse($Request.getBodyAsString() || "{}");
 var corr = $Request.getContextData().get("correlationId");
 ```
 
+`getHeaders()` returns a Java `Map<String, String>`, not a plain JS object — iterate it with
+`entrySet()` in a `for...of` loop rather than `Object.keys()`/`for...in`:
+
+```javascript
+for (var entry of $Request.getHeaders().entrySet()) {
+    $Logger.info(entry.getKey() + ": " + entry.getValue());
+}
+```
+
 ### `$Response`
 
 The mutable [`Response`](../architecture/request-processing.md) for the current call. Set
@@ -79,6 +88,14 @@ the audit trail, it has no structured event contract — just message + level.
 $Logger.info("processing order " + orderId);
 $Logger.warn("unexpected discount code: " + code);
 ```
+
+> **`console.log` also works** — GraalJS provides a built-in `console` global (`log`/`info`/
+> `warn`/`error`) independently of the `$`-binding mechanism, writing to the host process's raw
+> `stdout`/`stderr`. It is convenient for ad hoc local debugging, but unlike `$Logger` it does
+> not go through SLF4J: it bypasses whatever log level/appender/aggregation the deployment has
+> configured, and its output is not tagged with the structured fields (`tenantId`,
+> `correlationId`, ...) that the platform's own log lines carry. Prefer `$Logger` for anything
+> that needs to be visible in production logs.
 
 ### `$Errors`
 

@@ -793,7 +793,7 @@ if (!apiKey) {
 }
 
 // utiliser apiKey pour appeler l'API externe
-$Response.json({ status: "ok" });
+$Response.setJsonBody({ status: "ok" });
 ```
 
 Le secret est automatiquement scopé au tenant courant de la requête. `$Secrets.get("stripe-api-key")` résout `{tenantId}/stripe-api-key` sur le provider sans que le script ait à préciser le tenant.
@@ -902,7 +902,7 @@ var IsoParser = Java.type('com.acme.iso.IsoParser');
 var parser    = new IsoParser();
 var message   = parser.parse($Request.getBodyAsString());
 
-$Response.json({ pan: message.get('PAN'), amount: message.get('AMOUNT') });
+$Response.setJsonBody({ pan: message.get('PAN'), amount: message.get('AMOUNT') });
 ```
 
 Les classes du fat JAR (kernel) sont également accessibles :

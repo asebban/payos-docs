@@ -640,7 +640,7 @@ Des scripts d'installation (`install.sh` / `install.ps1`) sont fournis dans le m
 
 ```javascript
 const token = $Secrets.get("external-api-token");
-$Response.setBody({ ok: true });
+$Response.setJsonBody({ ok: true });
 ```
 
 Les secrets sont scopés au tenant courant : l'accès est isolé par tenant sans configuration supplémentaire. `$Secrets` n'expose pas d'écriture (`set`/`delete`/`describe`) — ces opérations passent par `spm`, l'API Vault, ou l'API Java directe.

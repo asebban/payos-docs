@@ -477,7 +477,7 @@ function execute(request, controlData) {
     } else {
         // Propagate the editor's error response unchanged
         $Response.setStatusCode(baseResponse.getStatusCode());
-        $Response.setBody(baseResponse.getBody());
+        $Response.setBytesBody(baseResponse.getBytesBody());
     }
     return $Response;
 }
@@ -644,7 +644,7 @@ function execute(request, controlData) {
 
     if (baseResponse.getStatusCode() !== 200) {
         $Response.setStatusCode(baseResponse.getStatusCode());
-        $Response.setBody(baseResponse.getBody());
+        $Response.setBytesBody(baseResponse.getBytesBody());
         return $Response;
     }
 
@@ -708,7 +708,7 @@ function execute(request, controlData) {
 
     if (baseResponse.getStatusCode() !== 200) {
         $Response.setStatusCode(baseResponse.getStatusCode());
-        $Response.setBody(baseResponse.getBody());
+        $Response.setBytesBody(baseResponse.getBytesBody());
         return $Response;
     }
 

@@ -1,6 +1,6 @@
 # Guide JavaScript des Endpoints API dans PayOS
 
-Dernier alignement: 2026-04-26
+Dernier alignement: 2026-07-21
 
 Ce document explique, de façon pratique et détaillée, comment écrire des scripts JavaScript pour les endpoints API dynamiques dans PayOS.
 
@@ -73,18 +73,19 @@ var userId = request.getPathVariables()?["userId"];
 
 Fonctions principales :
 
-- `getBody() : byte[]`
+- `getBytesBody() : byte[]`
 - `getJsonBody() : Json`
-- `setBody(body: byte[]) : void`
-- `setBody(body: String) : void`
-- `setBody(body: Map<String, Object>) : void`
-- `setBody(value: Value) : void` (objet GraalVM)
-- **`setJsonBody(body: Map<String, Object>) : void`** ← à préférer en JS pour les réponses JSON
-- **`setJsonBody(body: Object) : void`** ← à préférer en JS pour les réponses JSON
-- `write(body: byte[]) : Response`
-- `write(body: String) : Response`
-- `write(body: Map<String, Object>) : Response`
-- `write(value: Value) : Response`
+- `setBytesBody(body: byte[]) : void`
+- `setStringBody(body: String) : void`
+- `setObjectBody(body: Object) : void`
+- `setValueBody(value: Value) : void` (objet GraalVM)
+- `setJsonBody(body: Map<String, Object>) : void`
+- `setJsonBody(body: Object) : void`
+- `writeBytes(body: byte[]) : Response`
+- `writeString(body: String) : Response`
+- `writeJson(body: Map<String, Object>) : Response`
+- `writeObject(body: Object) : Response`
+- `writeValue(value: Value) : Response`
 - `getStatusCode() : int`
 - `setStatusCode(statusCode: int) : void`
 - `getMessage() : String`
@@ -116,12 +117,11 @@ Points d'attention sur `Response.getJsonBody()` :
 - accepte objet JSON et tableau JSON ;
 - lève une erreur si le body n'est ni un objet ni un tableau JSON.
 
-> **`setJsonBody` vs `setBody` pour les réponses JSON**
+> **Pourquoi il n'y a plus de `setBody`/`getBody`/`write` uniques**
 >
-> En contexte JavaScript (GraalVM), `setBody` est surchargé plusieurs fois en Java. Le moteur JS peut ne pas résoudre la bonne surcharge lorsqu'on lui passe un objet JS natif.
-> `setJsonBody` est l'entrée dédiée, non surchargée, prévue pour les scripts : elle sérialise l'objet passé en JSON, encode en UTF-8 et positionne automatiquement l'en-tête `Content-Type: application/json`.
+> `setBody`/`write` étaient historiquement surchargés plusieurs fois en Java (`byte[]`, `String`, `Map<String, Object>`, `Object`, `Value`). En contexte JavaScript (GraalVM), le moteur JS peut ne pas résoudre la bonne surcharge lorsqu'on lui passe un objet JS natif — la résolution de surcharge par type d'argument n'est pas fiable en interop polyglotte. Chaque variante a donc été renommée en une méthode explicite et non ambiguë : `setBytesBody`, `setStringBody`, `setObjectBody`, `setValueBody` (idem pour `getBody` → `getBytesBody`, et `write` → `writeBytes`/`writeString`/`writeJson`/`writeObject`/`writeValue`). `setJsonBody` reste l'entrée dédiée pour les réponses JSON : elle sérialise l'objet passé en JSON, encode en UTF-8 et positionne automatiquement l'en-tête `Content-Type: application/json`.
 >
-> **Règle** : utiliser `setJsonBody` dès que la réponse est un objet ou un tableau JSON.
+> **Règle** : utiliser `setJsonBody` dès que la réponse est un objet ou un tableau JSON ; sinon, choisir explicitement `setStringBody`/`setBytesBody`/`setObjectBody`/`setValueBody` selon le type réel de la valeur.
 
 Exemple :
 
@@ -600,7 +600,7 @@ execute(request, controlData) {
   } catch (e) {
     $Logger.error("Failed to save payment: {}", e.message);
     $Response.setStatusCode(500);
-    $Response.setBody("Internal error");
+    $Response.setStringBody("Internal error");
   }
 
   return $Response;
@@ -792,7 +792,7 @@ où
 **NB**: ***L'accès aux attributs des objets Java se fait via les getters et setters et pas comme attribut Json***
 
 ```Javascript
-var body = $Response.getBody(); // correct
+var body = $Response.getBytesBody(); // correct
 var falseBody = $Response.body // incorrect
 ```
 

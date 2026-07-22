@@ -159,7 +159,7 @@ Both apps have `hooks/on-error.js`. The client's hook runs; the publisher's is s
 $Logger.error('Custom error handler: {}', $Error.getMessage());
 $WebHooks.emit('api.error', { error: $Error.getMessage(), tenant: $Tenant });
 $Response.setStatusCode(500);
-$Response.setBody(JSON.stringify({ error: 'Service error' }));
+$Response.setStringBody(JSON.stringify({ error: 'Service error' }));
 // No $HookChain.proceed() → base-app/hooks/on-error.js is skipped
 ```
 
@@ -330,7 +330,7 @@ The same bindings available in API scripts are injected into hook scripts. Addit
 var token = $Request.getHeaders().get('X-Custom-Token');
 if (token === null || token === undefined) {
   $Response.setStatusCode(400);
-  $Response.setBody(JSON.stringify({ error: 'Missing X-Custom-Token header' }));
+  $Response.setStringBody(JSON.stringify({ error: 'Missing X-Custom-Token header' }));
   $HookChain.stop();  // ← abort: API script will not run
 }
 ```
@@ -354,7 +354,7 @@ $WebHooks.emit('api.error', {
 });
 
 $Response.setStatusCode(500);
-$Response.setBody(JSON.stringify({ error: 'Internal processing error' }));
+$Response.setStringBody(JSON.stringify({ error: 'Internal processing error' }));
 ```
 
 ---

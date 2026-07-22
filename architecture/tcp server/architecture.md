@@ -108,7 +108,7 @@ new Request(Request.METHOD_POST, IResource.API_RESOURCE, null, null, "/", body)
 
 ### Default encoder
 
-- writes `response.getBody()` when present
+- writes `response.getBytesBody()` when present
 - otherwise writes `response.getMessage()` as UTF-8 text
 - writes nothing when `response` is `null`
 

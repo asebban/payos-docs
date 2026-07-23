@@ -35,9 +35,7 @@ function execute(request, controlData) {
 | `publish(message)` | Publish a raw string message to the connector's default configured topic (set at `connect(host, port, topic)` time). |
 | `publish(message, replyTopic)` | Same as above, but requests a reply on `replyTopic` (or the default topic if `replyTopic` is null/blank). **`replyTopic` is a reply-to topic, not a destination.** |
 | `publish(destination, QueueMessage)` | Broker-agnostic publish to an explicit `destination` — no implicit default topic. Returns a `MessageHandle`. This is the overload to use when you need to target a specific destination from a script. |
-| `subscribe(listener)` | Subscribe to the default topic (legacy `MessageListener`, no ack/nack). |
-| `subscribe(destination, AckMessageListener)` | Subscribe to an explicit destination with per-message acknowledge/reject control. Returns a `SubscriptionHandle`. |
-| `subscribe(List<String> destinations, AckMessageListener)` | Subscribe the same listener to multiple destinations at once; `QueueMessage.getDestination()` tells the listener which one a given delivery came from. |
+| `subscribe(listener)` / `subscribe(destination, AckMessageListener)` / `subscribe(List<String>, AckMessageListener)` | **Never call these from a script.** `$Queue` is the raw `IQueueClient`, so these methods are technically reachable, but a subscription's lifetime must match the *process*, not a single script execution — see the warning below. |
 | `isConnected()` | Whether the client is connected. |
 | `connect(...)` / `disconnect()` | Lifecycle (managed by the kernel; rarely called from scripts). |
 
@@ -46,6 +44,20 @@ authoritative signatures.
 
 > Message delivery through a MoM client is **asynchronous**. Do not assume a synchronous
 > callback after `publish`.
+
+> ⚠️ **Do not call `$Queue.subscribe(...)` from a script.** The JS callback you'd pass in gets
+> captured by the underlying NATS JetStream `Dispatcher` and invoked later, asynchronously, on a
+> broker client thread — indefinitely pinning the whole per-request GraalVM `Context` in memory
+> (it is never explicitly closed), and the underlying JetStream subscription is durable, so a
+> second invocation of the same script will likely fail outright (duplicate durable-consumer
+> name). Consuming a queue — including receiving a reply on a `replyTo` destination — always
+> means a dedicated `payos-server-queue` instance (a `protocol: "queue"` entry in `servers[]`,
+> subscribed exactly once at boot, in Java, for the life of the process), never an inline
+> `subscribe(...)` call from request-scoped script code. See
+> [Queue setup guide §4](queue-setup-guide.md#4-configurer-et-utiliser-le-côté-consumer) for the
+> consumer-side setup, and
+> [§4.4](queue-setup-guide.md#44-réponse-et-pattern-requêteréponse-optionnel) for the correct
+> reply pattern.
 
 ## Registration
 

@@ -75,7 +75,7 @@ Deux familles d'API coexistent sur `$Queue` (voir [queue-messaging.md](queue-mes
 ```javascript
 function execute(request, controlData) {
     var event = {
-        type: "order.created",
+        type: "order-created",
         orderId: controlData.orderId,
         tenant: $Tenant,
         correlationId: $Request.getContextData().get("correlationId")
@@ -84,8 +84,8 @@ function execute(request, controlData) {
     // API broker-agnostique par destination — celle à privilégier : cible une destination
     // explicite, indépendante du sujet fixé à la connexion, et retourne un MessageHandle.
     var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
-        controlData.orderId, JSON.stringify(event), {}, "orders.created");
-    $Queue.publish("orders.created", message);
+        controlData.orderId, JSON.stringify(event), {}, "orders-created");
+    $Queue.publish("orders-created", message);
 
     return { orderId: controlData.orderId, status: "queued" };
 }
@@ -101,6 +101,44 @@ function emitInsight(request, response, payload) { return null; }
 - `publish(destination, QueueMessage)` est **asynchrone du point de vue métier** (aucune réponse du consommateur n'est attendue) mais l'appel lui-même bloque jusqu'à l'acquittement de la publication par le broker.
 - Toujours propager `tenantId`/`correlationId` dans le payload publié — un consommateur asynchrone n'a aucun autre moyen de les retrouver (voir [operations/observability.md](../operations/observability.md)).
 - `publish(message)` (un seul argument, sujet legacy) reste disponible pour des usages plus simples, mais ne permet pas de cibler une destination arbitraire — préférez la forme par destination pour tout nouveau code.
+
+### 3.3 Publier un message consommé par un `payos-server-queue` (QueueServer)
+
+L'exemple du §3.2 publie un événement métier arbitraire (`{type, orderId, tenant, correlationId}`) — un payload dont la forme est entièrement libre, **à condition que le consommateur sache le désérialiser lui-même** (un autre `IQueueClient.subscribe(...)` côté Java, un système tiers, etc.).
+
+Si en revanche la destination que vous ciblez est consommée par un `payos-server-queue` (une entrée `protocol: "queue"` dans `servers[]`, §4), le payload **doit** être l'enveloppe JSON décrite en [§4.2](#42-ce-qui-arrive-quand-un-message-est-reçu) — `method`/`type`/`path`/`appId`/`body`/`headers`/`parameters`/`tenantId`/`correlationId` — et rien d'autre : `QueueServer.parseRequest(...)` désérialise strictement cette forme pour reconstruire un `Request` canonique et router le message vers un handler d'API, exactement comme pour une requête HTTP entrante. Un payload métier brut (comme celui du §3.2) ferait échouer ce parsing (`IllegalArgumentException: Invalid queue request payload`, voir §6).
+
+Exemple : publier vers la destination `orders.created`, consommée par le handler `/orders/on-created` du §4.3 :
+
+```javascript
+function loadControlData(request) {
+    var body = request.getJsonBody();
+    return { orderId: body.orderId, amount: body.amount };
+}
+
+function execute(request, controlData) {
+    var envelope = {
+        method: "POST",
+        type: "api",
+        path: "/orders/on-created",         // doit correspondre à un chemin mappé côté consumer
+        appId: "orders",                     // préférez le fournir explicitement (voir §4.2)
+        body: JSON.stringify({ orderId: controlData.orderId, amount: controlData.amount }),
+        headers: { "Content-Type": "application/json" },
+        tenantId: $Tenant,
+        correlationId: $Request.getContextData().get("correlationId")
+    };
+
+    var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
+        controlData.orderId, JSON.stringify(envelope), {}, "orders.created");
+    $Queue.publish("orders.created", message);
+
+    return { orderId: controlData.orderId, status: "queued" };
+}
+
+function emitInsight(request, response, payload) { return null; }
+```
+
+Notez que c'est le **payload JSON** (`envelope`) qui porte `method`/`path`/`appId`/etc. — pas les métadonnées du `QueueMessage` (4ᵉ position du constructeur, réservées à des clés techniques comme `replyTo`, voir §4.4).
 
 ## 4. Configurer et utiliser le côté consumer
 
@@ -194,18 +232,65 @@ Si le message entrant porte une métadonnée `replyTo` non vide, `QueueServer` p
 
 ```javascript
 var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
-    controlData.orderId, JSON.stringify(event),
+    controlData.orderId, JSON.stringify(envelope),
     { "replyTo": "orders.created.replies" }, "orders.created");
 $Queue.publish("orders.created", message);
-
-// Côté émetteur, s'abonner séparément pour récupérer la réponse :
-$Queue.subscribe("orders.created.replies", function(msg, ack) {
-    $Logger.info("reply received: " + msg.getPayload());
-    ack.ack();
-});
 ```
 
-La plupart des usages restent en « fire-and-forget » (pas de `replyTo`) — n'introduisez ce pattern que si un accusé de traitement métier est réellement nécessaire.
+> ⚠️ **N'appelez jamais `$Queue.subscribe(...)` depuis un script API pour récupérer cette réponse.** Une version antérieure de ce guide montrait exactement ça — c'était incorrect, pas juste déconseillé :
+>
+> - `$Queue` est le `IQueueClient` brut, et `subscribe(...)` en fait partie techniquement — mais rien ne garantit que la fonction JS passée en callback reste utilisable après la fin de l'exécution du script qui l'a créée (aucune borne claire n'existe dans le runtime aujourd'hui : le `Context` GraalVM par requête n'est jamais explicitement fermé, donc plutôt qu'une erreur immédiate à l'appel suivant, ce qui se produit réellement est une **fuite** — `NatsQueueClient` conserve le callback indéfiniment dans son `Dispatcher` JetStream pour l'invoquer plus tard, de manière asynchrone, sur un thread NATS, ce qui épingle en mémoire tout le `Context` de la requête d'origine pour le reste de la vie du process).
+> - L'abonnement JetStream sous-jacent est **durable**, nommé `destination + "-durable"` — un deuxième appel au même endpoint (donc au même script, donc un deuxième `subscribe(...)` sur la même destination) échouera très probablement côté client NATS, puisqu'on ne peut pas avoir deux push-subscriptions concurrentes sur le même nom durable.
+> - Rien dans le code ne détecte ni ne protège contre ce cas — pas d'erreur explicite, pas de garde.
+>
+> `subscribe(...)` n'a de sens que pour un abonnement **dont la durée de vie est celle du process**, jamais celle d'une seule exécution de script — exactement ce que fait `QueueServer` (§4.1), en Java, une seule fois au démarrage.
+
+**Comment recevoir la réponse correctement : un deuxième `payos-server-queue`.** Recevoir une réponse n'est pas différent de consommer n'importe quel autre message de queue (§4) : il faut qu'un `payos-server-queue` **déjà démarré** soit abonné à la destination de réponse, avec son propre handler d'API normal — pas un abonnement improvisé dans le script émetteur.
+
+```json
+{
+  "servers": [
+    { "protocol": "queue", "host": "localhost", "port": 4222,
+      "type": "nats", "consumer-topic": "orders.created" },
+    { "protocol": "queue", "host": "localhost", "port": 4222,
+      "type": "nats", "consumer-topic": "orders.created.replies" }
+  ]
+}
+```
+
+```json
+// apps/orders/config/mappings.json (ajout)
+{
+  "mappings": {
+    "api": {
+      "/orders/on-created-reply": {
+        "POST": { "handler": "orders/on-created-reply" }
+      }
+    }
+  }
+}
+```
+
+```javascript
+// apps/orders/api/orders/on-created-reply.js
+function loadControlData(request) {
+    return { body: request.getJsonBody() };
+}
+
+function execute(request, controlData) {
+    $Logger.info("order-created reply: statusCode=" + controlData.body.statusCode
+        + " correlationId=" + controlData.body.correlationId);
+    // ... traitement métier (rapprochement par correlationId, mise à jour d'un statut, etc.) ...
+    $Response.setStatusCode(200);
+    return { received: true };
+}
+
+function emitInsight(request, response, payload) { return null; }
+```
+
+Cela suppose bien sûr que le payload de la réponse route, lui aussi, vers un chemin mappé (`QueueServer.buildResponseMessage` sérialise `statusCode`/`message`/`body`/`headers`/`tenantId`/`correlationId`, mais pas de champ `path` — le handler ci-dessus doit donc être mappé explicitement sur la destination de réponse, pas déduit du contenu du message).
+
+Ce pattern reste **asynchrone de bout en bout** : le script émetteur ne bloque jamais en attendant la réponse — celle-ci est traitée plus tard, indépendamment, par son propre handler. La plupart des usages restent en « fire-and-forget » (pas de `replyTo`) — n'introduisez ce pattern que si un accusé de traitement métier est réellement nécessaire.
 
 ## 5. Démarrage complet en local — récapitulatif
 
@@ -225,6 +310,7 @@ La plupart des usages restent en « fire-and-forget » (pas de `replyTo`) — n'
 | `IllegalArgumentException: Invalid queue request payload` côté consumer | Le message reçu n'est pas un JSON valide, ou ne respecte pas l'enveloppe attendue (§4.2) | Vérifier que l'émetteur publie bien l'enveloppe complète (`method`/`type`/`path`/`body`/...), pas un payload métier brut. |
 | Le handler renvoie systématiquement un échec d'authentification | Le mapping ciblé déclare `roles` | Retirer `roles` du mapping utilisé par la queue — voir l'avertissement du §4.3. |
 | `destinations must not be null or empty` | `consumer-topic` configuré comme liste vide, ou `subscribe(List, ...)` appelé directement avec une liste vide côté script Java | Fournir au moins une destination. |
+| Consommation mémoire qui augmente indéfiniment sur l'instance qui publie ; erreur `subscribe` sur un rappel du même endpoint | `$Queue.subscribe(...)` appelé depuis un script API (request-scoped) au lieu d'un `payos-server-queue` dédié | Ne jamais appeler `subscribe(...)` sur `$Queue` — voir l'avertissement du §4.4. Déployer un deuxième `payos-server-queue` abonné à la destination concernée. |
 
 ## 7. Références
 

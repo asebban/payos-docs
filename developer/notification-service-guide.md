@@ -182,7 +182,7 @@ Un champ `fallbackChannels` existe dans l'API (`NotificationRequest`) mais n'est
 
 ## 9. Recevoir le statut de livraison
 
-Il n'existe **aucun binding dédié** pour recevoir le callback de statut — ni sur `$Notification`, ni ailleurs. Un développeur qui veut réagir à la livraison (mise à jour d'un statut métier, notification secondaire, etc.) doit **s'abonner lui-même** à la destination `notifications.status` via `$Queue`, et filtrer côté application par `tenantId`/`messageId` (voir [queue-messaging.md](queue-messaging.md) pour l'API `$Queue.subscribe(...)`).
+Il n'existe **aucun binding dédié** pour recevoir le callback de statut — ni sur `$Notification`, ni ailleurs. Un développeur qui veut réagir à la livraison (mise à jour d'un statut métier, notification secondaire, etc.) doit consommer la destination `notifications.status` de la même façon que n'importe quelle autre queue : en déployant un `payos-server-queue` dédié (une entrée `protocol: "queue"` dans `servers[]`, `consumer-topic: "notifications.status"`) avec un handler d'API normal, et en filtrant côté application par `tenantId`/`messageId`. **N'appelez pas `$Queue.subscribe(...)` depuis un script** pour ça — voir [queue-setup-guide.md §4](queue-setup-guide.md#4-configurer-et-utiliser-le-côté-consumer) pour la mise en place, et l'avertissement de [queue-messaging.md](queue-messaging.md) pour la raison précise (fuite de `Context` GraalVM, collision de consumer durable NATS).
 
 Forme du message reçu :
 
@@ -220,4 +220,5 @@ Cette destination est unique et partagée par tous les publishers/tenants — il
 - [configuration/notification-service.md](../configuration/notification-service.md) — référence complète de la configuration côté connecteur (`bootstrap.json`).
 - [operations/notification-service.md](../operations/notification-service.md) — référence complète de la configuration et de l'exploitation du démon.
 - [scripting-bindings.md](scripting-bindings.md) — index de tous les bindings `$`, y compris `$Notification` et `$Queue`.
-- [queue-messaging.md](queue-messaging.md) — utilisation de `$Queue`, nécessaire pour s'abonner au callback de statut (§9).
+- [queue-messaging.md](queue-messaging.md) — utilisation de `$Queue` côté publisher.
+- [queue-setup-guide.md](queue-setup-guide.md) — mise en place d'un `payos-server-queue` dédié pour consommer le callback de statut (§9).

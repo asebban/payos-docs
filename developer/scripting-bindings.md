@@ -150,6 +150,33 @@ A `SecretsBinding` wrapping the tenant's configured `ISecretProvider`, backed by
 var apiKey = $Secrets.get("psp-api-key");
 ```
 
+### `$Cache`
+
+A `CacheBinding` wrapping the resolved `ICacheStore` (`memory` or `redis`), backed by the
+[cache service](../configuration/cache-service.md). Exposes `put`/`get`/`remove`/`exists`/
+`increment` for data shared across every instance of a bundle, or across bundles on the same
+cluster with the `redis` backend. Like `$Secrets`, it automatically namespaces every key by the
+current tenant — a script never passes a tenant explicitly, and never collides with another
+tenant reusing the same key name. See [cache usage](cache-usage.md).
+
+```javascript
+$Cache.put("quote:" + quoteId, JSON.stringify(quote), 60);
+var raw = $Cache.get("quote:" + quoteId); // null if missing/expired
+```
+
+### `$SlidingWindow`
+
+A `SlidingWindowBinding` wrapping the resolved `ISlidingWindowCounter` (`memory` or `redis`),
+backed by the [sliding window counter service](../configuration/sliding-window-service.md). Unlike
+`$Cache.increment`'s fixed/tumbling window, this counts events in an exact trailing window ending
+"now". **Read-only**: only `count(key, windowMillis)` is exposed — a script can check the current
+usage for a quota decision but cannot record a new event or reset the counter. Namespaces every
+key by the current tenant, like `$Cache`. See [sliding window counter usage](sliding-window-usage.md).
+
+```javascript
+var callsThisHour = $SlidingWindow.count("api-calls", 3600000); // windowMillis, not seconds
+```
+
 ### `$I18n`
 
 The internationalization accessor, resolving messages for the request's locale (see
@@ -223,5 +250,5 @@ sandbox blocks a denylist such as `java.lang.System`). See
 
 Bindings are injected by `ApiResourceHandler` immediately before script execution, after the
 tenant scope is opened and security has run. Optional bindings (`$DB`, `$Queue`, `$Secrets`,
-`$I18n`, `$WebHooks`, `$Connector`, `$Notification`) are injected only when their service is
-present. The full pipeline is in [architecture/request-processing.md](../architecture/request-processing.md).
+`$Cache`, `$SlidingWindow`, `$I18n`, `$WebHooks`, `$Connector`, `$Notification`) are injected only
+when their service is present. The full pipeline is in [architecture/request-processing.md](../architecture/request-processing.md).

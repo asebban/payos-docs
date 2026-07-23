@@ -11,16 +11,19 @@ For developers **building applications on PayOS**. Applications are written prim
 4. [Scripting bindings reference](scripting-bindings.md) — every `$` binding and its use.
 5. [Data access](data-access.md) — using `$DB`.
 6. [Secrets usage](secrets-usage.md) — using `$Secrets`.
-7. [Queue messaging](queue-messaging.md) — using `$Queue`.
-8. [Queue setup guide (de A à Z)](queue-setup-guide.md) — configuring and using both the publisher (`$Queue`) and consumer (`queue` transport) sides end to end.
-9. [Notification service guide (A à Z)](notification-service-guide.md) — configuring, starting, and using `$Notification` end to end.
-10. [Connector framework usage](connector-framework-usage.md) — calling `$Connector` from a script (business/payment connectors); not yet reachable in a running deployment, see the doc's caveat.
-11. [Internationalization](internationalization.md) — using `$I18n` and the i18n config.
-12. [Webhooks & hooks](webhooks-and-hooks.md) — subscribing to events, `$WebHooks`.
-13. [Java extensions](java-extensions.md) — calling Java libraries via `Java.type()`.
-14. [API documentation](api-documentation.md) — `@payos.openapi` annotations and `pdoc`. For the full reference, see [PayOS OpenAPI documentation guide](./openapi-docs/openapi-documentation-guide.md).
-15. [Debugging](debugging.md) — debugging server-side JavaScript.
-16. [Event category payload contracts (v5, 2026-07-15)](./event-category-payload-contracts-v5-2026-07-15.md) - one abstraction per event category (audit, analytics, event-sourcing, metrics, integration, diagnostics); supersedes the older [single-envelope observability proposal](./observability-event-contract-proposal.md)
+7. [Cache usage](cache-usage.md) — using `$Cache` (distributed `memory`/`redis` cache, shared across instances/bundles).
+8. [Sliding window counter usage](sliding-window-usage.md) — using `$SlidingWindow` (read-only exact sliding-window quota/rate-limit counter).
+9. [Tenant quota enforcement](tenant-quota-enforcement.md) — how the platform's own per-tenant `requestsPerMinute` quota is counted, and why it's a different counter from `$SlidingWindow`.
+10. [Queue messaging](queue-messaging.md) — using `$Queue`.
+11. [Queue setup guide (de A à Z)](queue-setup-guide.md) — configuring and using both the publisher (`$Queue`) and consumer (`queue` transport) sides end to end.
+12. [Notification service guide (A à Z)](notification-service-guide.md) — configuring, starting, and using `$Notification` end to end.
+13. [Connector framework usage](connector-framework-usage.md) — calling `$Connector` from a script (business/payment connectors); not yet reachable in a running deployment, see the doc's caveat.
+14. [Internationalization](internationalization.md) — using `$I18n` and the i18n config.
+15. [Webhooks & hooks](webhooks-and-hooks.md) — subscribing to events, `$WebHooks`.
+16. [Java extensions](java-extensions.md) — calling Java libraries via `Java.type()`.
+17. [API documentation](api-documentation.md) — `@payos.openapi` annotations and `pdoc`. For the full reference, see [PayOS OpenAPI documentation guide](./openapi-docs/openapi-documentation-guide.md).
+18. [Debugging](debugging.md) — debugging server-side JavaScript.
+19. [Event category payload contracts (v5, 2026-07-15)](./event-category-payload-contracts-v5-2026-07-15.md) - one abstraction per event category (audit, analytics, event-sourcing, metrics, integration, diagnostics); supersedes the older [single-envelope observability proposal](./observability-event-contract-proposal.md)
 
 ## Related references
 

@@ -345,7 +345,7 @@ These headers are added by `enrichResponse()`, which is called only on the succe
 | `403 Forbidden` | `STATUS_FORBIDDEN` | CORS origin not allowed; `/stop` called from non-loopback; tenant policy violation. |
 | `404 Not Found` | `STATUS_NOT_FOUND` | URI pattern not recognised; application not registered; resource not found within application. |
 | `405 Method Not Allowed` | — | HTTP method other than GET/POST/PUT/DELETE used on an application endpoint. |
-| `429 Too Many Requests` | `STATUS_TOO_MANY_REQUESTS` | Rate limit enforced by tenant policy or security service. |
+| `429 Too Many Requests` | `STATUS_TOO_MANY_REQUESTS` | Rate limit enforced by tenant policy or security service — see [tenant quota enforcement](tenant-quota-enforcement.md) for how the count is computed. |
 | `500 Internal Server Error` | `STATUS_INTERNAL_ERROR` | Unhandled exception during request processing. |
 
 ---

@@ -1,7 +1,7 @@
 # PayOS — Référence complète de la configuration JSON
 
 > Source canonique : `IConfigSpec.java` + fichiers de configuration du runtime  
-> Dernière mise à jour : 2026-06-03
+> Dernière mise à jour : 2026-07-23
 
 ---
 
@@ -39,6 +39,8 @@
     - [3.13 `extensions-dir` (bootstrap.json)](#313-extensions-dir-bootstrapjson)
     - [3.14 `notification-service` (bootstrap.json)](#314-notification-service-bootstrapjson)
     - [3.15 `idempotency` (bootstrap.json)](#315-idempotency-bootstrapjson)
+    - [3.16 `cache-service` (bootstrap.json)](#316-cache-service-bootstrapjson)
+    - [3.17 `sliding-window-service` (bootstrap.json)](#317-sliding-window-service-bootstrapjson)
   - [4. manifest.json — Déclaration de capability](#4-manifestjson--déclaration-de-capability)
   - [5. Résolution hiérarchique des valeurs](#5-résolution-hiérarchique-des-valeurs)
   - [6. Constantes et valeurs par défaut](#6-constantes-et-valeurs-par-défaut)
@@ -1067,6 +1069,100 @@ Lues via `IConfigSpec.Idempotency.Redis` par `RedisIdempotencyStoreFactory.java`
 | `keyPrefix` | string | `"payos:idempotency:"` | Préfixe de clé pour les réponses en cache — namespacé pour cohabiter sur le même Redis que `session-service-redis` (`payos:session:`) sans collision |
 
 > Un troisième type, `storeType: "database"` (`DatabaseIdempotencyStore`), a existé brièvement puis a été retiré du code — voir la note dans [configuration/idempotency.md](idempotency.md#store-backends) pour le détail (mapping Hibernate requis + incompatibilité avec le multi-tenant telle que câblée).
+
+---
+
+### 3.16 `cache-service` (bootstrap.json)
+
+Configuration de l'abstraction de cache distribué (`ICacheStore`, `payos-kernel`, package `ma.s2m.payos.cache`), utilisée pour stocker des données partagées par toutes les instances d'un bundle, voire par des bundles différents tournant sur le même cluster. Contrairement à [`idempotency`](#315-idempotency-bootstrapjson) et au store de session, ce service est **désactivé par défaut** : bloc absent ou `enabled` différent de `true` → `PayOSConfig.getCacheStore()` reste `null`, sans repli automatique sur la mémoire. Documentation détaillée (rationale, sémantique de `increment`, exemples complets) : [configuration/cache-service.md](cache-service.md).
+
+```json
+"cache-service": {
+  "enabled": true,
+  "storeType": "memory",
+  "storeRedis": {
+    "host": "127.0.0.1",
+    "port": 6379,
+    "password": "...",
+    "database": 0,
+    "tls": false,
+    "keyPrefix": "payos:cache:"
+  }
+}
+```
+
+| Clé | Type | Défaut | Description |
+|-----|------|--------|-------------|
+| `enabled` | boolean | `false` | Active le service de cache. Si absent ou `false`, le bloc entier est ignoré et `PayOSConfig.getCacheStore()` retourne `null` — pas de repli mémoire automatique (contrairement à `idempotency`). |
+| `storeType` | string | `"memory"` | Backend de stockage : `"memory"` (module `cache-service-memory`) ou `"redis"` (distribué, module `cache-service-redis` requis). Lu seulement si `enabled` vaut `true`. |
+| `storeRedis` | object | — | Bloc de connexion Redis, lu seulement quand `storeType` vaut `"redis"` (voir sous-clés ci-dessous) |
+
+##### `storeRedis` — sous-clés
+
+Lues via `IConfigSpec.CacheService.Redis` par `RedisCacheStoreFactory.java` dans `cache-service-redis` :
+
+| Clé | Type | Défaut | Description |
+|-----|------|--------|-------------|
+| `host` | string | `"localhost"` | Hôte Redis |
+| `port` | int | `6379` | Port Redis |
+| `password` | string | — | Mot de passe d'authentification Redis (optionnel) |
+| `database` | int | `0` | Index de base logique Redis |
+| `tls` | boolean | `false` | Active TLS pour la connexion Redis |
+| `keyPrefix` | string | `"payos:cache:"` | Préfixe de clé pour les entrées en cache — namespacé pour cohabiter sur le même Redis que `session-service-redis` (`payos:session:`) et `idempotency-service-redis` (`payos:idempotency:`) sans collision |
+
+> Contrairement à `idempotency`/session, **aucun des deux backends n'est intégré à `payos-kernel`** : `memory` (`InMemoryCacheStore`) et `redis` (`RedisCacheStore`) sont tous deux des modules séparés, découverts uniquement via `ServiceLoader.load(ICacheStoreFactory.class)`. Un `storeType` inconnu, ou un module backend absent du classpath, lève `CacheStoreException` au démarrage — volontairement pas de repli silencieux.
+
+> `increment(key, delta, ttlSeconds)` applique le TTL uniquement à la création de la clé — un increment sur un compteur existant ne réinitialise jamais son TTL, pour permettre des compteurs à fenêtre fixe (quotas horaires, etc.) sans glissement de fenêtre. Les deux backends garantissent l'atomicité : `InMemoryCacheStore` via `ConcurrentHashMap.compute` (atomique dans la JVM), `RedisCacheStore` via un script Lua unique exécuté côté serveur (atomique entre tous les processus partageant ce Redis).
+
+> Binding `$Cache` disponible dans les scripts API/hooks quand un store est configuré (`CacheBinding`, repo `payos`, injecté par `ApiResourceHandler` juste après `$Secrets`) — voir [configuration/cache-service.md](cache-service.md#cache-binding-in-scripts) pour les méthodes exposées et un exemple.
+
+---
+
+### 3.17 `sliding-window-service` (bootstrap.json)
+
+Configuration du compteur d'événements à fenêtre glissante exacte (`ISlidingWindowCounter`, `payos-kernel`, package `ma.s2m.payos.ratelimit`), utilisé pour des vérifications de quota/rate-limit qui ne doivent pas laisser une rafale chevaucher deux fenêtres — contrairement à `ICacheStore#increment` (fenêtre fixe/tumbling, TTL posé une seule fois à la création puis jamais réinitialisé), cette fenêtre glisse en continu jusqu'à "maintenant". Comme [`cache-service`](#316-cache-service-bootstrapjson), ce service est **désactivé par défaut** : bloc absent ou `enabled` différent de `true` → `PayOSConfig.getSlidingWindowCounter()` reste `null`, sans repli automatique sur la mémoire. Documentation détaillée (rationale, sémantique `recordAndCount`/`count`, exemples complets) : [configuration/sliding-window-service.md](sliding-window-service.md).
+
+```json
+"sliding-window-service": {
+  "enabled": true,
+  "storeType": "redis", // or "memory"
+  "storeRedis": {
+    "host": "127.0.0.1",
+    "port": 6379,
+    "password": "...",
+    "database": 0,
+    "tls": false,
+    "keyPrefix": "payos:slidingwindow:"
+  }
+}
+```
+
+| Clé | Type | Défaut | Description |
+|-----|------|--------|-------------|
+| `enabled` | boolean | `false` | Active le service de compteur à fenêtre glissante. Si absent ou `false`, le bloc entier est ignoré et `PayOSConfig.getSlidingWindowCounter()` retourne `null` — pas de repli mémoire automatique. |
+| `storeType` | string | `"memory"` | Backend de stockage : `"memory"` (module `sliding-window-counter-memory`) ou `"redis"` (distribué, module `sliding-window-counter-redis` requis). Lu seulement si `enabled` vaut `true`. |
+| `storeRedis` | object | — | Bloc de connexion Redis, lu seulement quand `storeType` vaut `"redis"` (voir sous-clés ci-dessous) |
+
+##### `storeRedis` — sous-clés
+
+Lues via `IConfigSpec.SlidingWindowService.Redis` par `RedisSlidingWindowCounterFactory.java` dans `sliding-window-counter-redis` :
+
+| Clé | Type | Défaut | Description |
+|-----|------|--------|-------------|
+| `host` | string | `"localhost"` | Hôte Redis |
+| `port` | int | `6379` | Port Redis |
+| `password` | string | — | Mot de passe d'authentification Redis (optionnel) |
+| `database` | int | `0` | Index de base logique Redis |
+| `tls` | boolean | `false` | Active TLS pour la connexion Redis |
+| `keyPrefix` | string | `"payos:slidingwindow:"` | Préfixe de clé pour les ensembles triés (sorted sets) de fenêtre glissante — namespacé pour cohabiter sur le même Redis que `session-service-redis` (`payos:session:`), `idempotency-service-redis` (`payos:idempotency:`) et `cache-service-redis` (`payos:cache:`) sans collision |
+
+> Aucun des deux backends n'est intégré à `payos-kernel` — `memory` (`InMemorySlidingWindowCounter`) et `redis` (`RedisSlidingWindowCounter`) sont tous deux des modules séparés, découverts via `ServiceLoader.load(ISlidingWindowCounterFactory.class)`. Un `storeType` inconnu, ou un module backend absent du classpath, lève `SlidingWindowCounterException` au démarrage.
+
+> Le backend `redis` est le seul qui applique réellement un quota global unique dans un déploiement multi-instances : chaque clé est un `ZSET` Redis scoré par timestamp d'événement, et l'élagage (`ZREMRANGEBYSCORE`) + enregistrement (`ZADD`) + rafraîchissement d'expiration (`PEXPIRE`) + comptage (`ZCARD`) s'exécutent comme un seul script Lua atomique, partagé par tous les processus connectés à ce Redis. Le backend `memory` fait foi uniquement pour sa propre JVM : dans un déploiement à N instances, chacune applique son propre quota indépendamment.
+
+> Binding `$SlidingWindow` disponible dans les scripts API/hooks quand un compteur est configuré (`SlidingWindowBinding`, repo `payos`, injecté par `ApiResourceHandler` juste après `$Cache`) — **lecture seule** : seule la méthode `count(key, windowMillis)` est exposée, ni `recordAndCount` ni `reset` — voir [configuration/sliding-window-service.md](sliding-window-service.md#slidingwindow-binding-in-scripts) pour le détail et un exemple.
+
+> Consommateur intégré : `TenantPolicyService` (`payos-kernel`) utilise ce compteur pour appliquer le quota `multitenancy.tenants[].quotas.requestsPerMinute` — voir [configuration/multi-tenancy.md](multi-tenancy.md#how-quotas-are-enforced-backend-selection) pour la logique de repli à trois niveaux (`sliding-window-service` configuré → résolution SPI de `"memory"` → ancien compteur `RateWindow`).
 
 ---
 

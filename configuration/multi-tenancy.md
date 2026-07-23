@@ -134,6 +134,16 @@ Accepts all keys from the global `database-service` block (see
 }
 ```
 
+## How quotas are enforced (backend selection)
+
+`quotas.requestsPerMinute`/`enabled` are read by `TenantPolicyService.validateQuota` (`payos-kernel`), which counts requests for the current tenant within a one-minute window and rejects with `429 Too Many Requests` once the limit is exceeded. The counting mechanism itself is selected automatically at runtime, in this order — you don't configure which one is used directly, it follows from whether [`sliding-window-service`](sliding-window-service.md) is set up:
+
+1. **`sliding-window-service` configured** (`PayOSConfig.getSlidingWindowCounter()` non-null) — quota requests are counted via `ISlidingWindowCounter.recordAndCount(tenantId, 60000)`: an exact sliding window (no burst can straddle two windows the way a fixed/tumbling window can), and with `storeType: "redis"` a quota that's actually enforced globally across every instance in a multi-instance deployment, not per-instance.
+2. **Not configured, but `sliding-window-counter-memory` is on the classpath** (it is, by default, via `payos-runtime`'s dependencies) — the same exact-sliding-window algorithm is still used, resolved once via SPI (`SlidingWindowCounters.resolve("memory", ...)`), just without the cross-instance guarantee: each instance counts its own traffic independently.
+3. **Neither available** (e.g. a custom runtime build that strips the memory module) — falls back to the original per-minute bucket counter (`RateWindow`), which resets abruptly at each minute boundary rather than sliding continuously.
+
+In practice, tier 1 or 2 apply to essentially every deployment today — tier 3 exists so quota enforcement never hard-fails if the sliding-window modules are absent. Enabling `sliding-window-service` with `storeType: "redis"` is the only way to get a quota that is actually correct across multiple instances; see [sliding-window-service.md](sliding-window-service.md) for how to configure it, and [developer/tenant-quota-enforcement.md](../developer/tenant-quota-enforcement.md) for what this means for an application developer.
+
 ## Relationship to other blocks
 
 - **Database:** `default-database-schema` and `default-isolation-mode` drive how `$DB`
@@ -145,3 +155,5 @@ Accepts all keys from the global `database-service` block (see
 
 - [Architecture: multi-tenancy](../architecture/multi-tenancy.md)
 - [database-service.md](database-service.md)
+- [sliding-window-service.md](sliding-window-service.md) — the backend that makes quota enforcement exact and, with `redis`, multi-instance-safe.
+- [developer/tenant-quota-enforcement.md](../developer/tenant-quota-enforcement.md) — what quota enforcement looks like from an application developer's perspective.

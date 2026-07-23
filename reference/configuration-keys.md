@@ -190,6 +190,38 @@ Each key also resolves from a system property (`payos.idempotency.<key>`) and en
 variable (`PAYOS_IDEMPOTENCY_<KEY>`) if not set in `bootstrap.json` — see
 [idempotency.md](../configuration/idempotency.md#resolution-order).
 
+## `cache-service` — [cache-service.md](../configuration/cache-service.md)
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `enabled` | `false` | Enable the distributed cache service. Absent or `false` means `PayOSConfig.getCacheStore()` stays `null` — no automatic memory fallback. |
+| `storeType` | `memory` | Store backend: `memory` (module `cache-service-memory`) or `redis` (module `cache-service-redis`). |
+| `storeRedis.host` | `localhost` | Redis host (read only when `storeType` is `redis`). |
+| `storeRedis.port` | `6379` | Redis port. |
+| `storeRedis.password` | — | Redis auth password (optional). |
+| `storeRedis.database` | `0` | Redis logical database index. |
+| `storeRedis.tls` | `false` | Enable TLS for the Redis connection. |
+| `storeRedis.keyPrefix` | `payos:cache:` | Key prefix for cached entries. |
+
+No system property / environment variable fallback for this block — see
+[cache-service.md](../configuration/cache-service.md#resolution-order).
+
+## `sliding-window-service` — [sliding-window-service.md](../configuration/sliding-window-service.md)
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `enabled` | `false` | Enable the sliding window counter service. Absent or `false` means `PayOSConfig.getSlidingWindowCounter()` stays `null` — no automatic memory fallback. |
+| `storeType` | `memory` | Store backend: `memory` (module `sliding-window-counter-memory`) or `redis` (module `sliding-window-counter-redis`). |
+| `storeRedis.host` | `localhost` | Redis host (read only when `storeType` is `redis`). |
+| `storeRedis.port` | `6379` | Redis port. |
+| `storeRedis.password` | — | Redis auth password (optional). |
+| `storeRedis.database` | `0` | Redis logical database index. |
+| `storeRedis.tls` | `false` | Enable TLS for the Redis connection. |
+| `storeRedis.keyPrefix` | `payos:slidingwindow:` | Key prefix for sliding-window sorted sets. |
+
+No system property / environment variable fallback for this block — see
+[sliding-window-service.md](../configuration/sliding-window-service.md#resolution-order).
+
 ## Plugin discovery env vars / system props — [extensions-connectors.md](../configuration/extensions-connectors.md)
 
 | Bootstrap key | Env var |

@@ -237,11 +237,10 @@ var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
 $Queue.publish("orders.created", message);
 ```
 
-> ⚠️ **N'appelez jamais `$Queue.subscribe(...)` depuis un script API pour récupérer cette réponse.** Une version antérieure de ce guide montrait exactement ça — c'était incorrect, pas juste déconseillé :
+> ⚠️ **`$Queue.subscribe(...)` n'existe plus — ce n'est pas qu'une question de style, c'est structurel.** Une version antérieure de ce guide montrait un script s'abonnant lui-même via `$Queue.subscribe(...)` pour récupérer la réponse ; c'était incorrect, pas juste déconseillé, donc `$Queue` (`QueueBinding`, repo `payos`) n'expose plus que `publish(...)`/`isConnected()` — `subscribe(...)`/`connect(...)`/`disconnect()` ne sont plus accessibles depuis un script du tout :
 >
-> - `$Queue` est le `IQueueClient` brut, et `subscribe(...)` en fait partie techniquement — mais rien ne garantit que la fonction JS passée en callback reste utilisable après la fin de l'exécution du script qui l'a créée (aucune borne claire n'existe dans le runtime aujourd'hui : le `Context` GraalVM par requête n'est jamais explicitement fermé, donc plutôt qu'une erreur immédiate à l'appel suivant, ce qui se produit réellement est une **fuite** — `NatsQueueClient` conserve le callback indéfiniment dans son `Dispatcher` JetStream pour l'invoquer plus tard, de manière asynchrone, sur un thread NATS, ce qui épingle en mémoire tout le `Context` de la requête d'origine pour le reste de la vie du process).
-> - L'abonnement JetStream sous-jacent est **durable**, nommé `destination + "-durable"` — un deuxième appel au même endpoint (donc au même script, donc un deuxième `subscribe(...)` sur la même destination) échouera très probablement côté client NATS, puisqu'on ne peut pas avoir deux push-subscriptions concurrentes sur le même nom durable.
-> - Rien dans le code ne détecte ni ne protège contre ce cas — pas d'erreur explicite, pas de garde.
+> - Rien ne garantit que la fonction JS passée en callback reste utilisable après la fin de l'exécution du script qui l'a créée (aucune borne claire n'existe dans le runtime aujourd'hui : le `Context` GraalVM par requête n'est jamais explicitement fermé, donc plutôt qu'une erreur immédiate à l'appel suivant, ce qui se produirait réellement est une **fuite** — `NatsQueueClient` conserverait le callback indéfiniment dans son `Dispatcher` JetStream pour l'invoquer plus tard, de manière asynchrone, sur un thread NATS, ce qui épinglerait en mémoire tout le `Context` de la requête d'origine pour le reste de la vie du process).
+> - L'abonnement JetStream sous-jacent est **durable**, nommé `destination + "-durable"` — un deuxième appel au même endpoint (donc au même script, donc un deuxième `subscribe(...)` sur la même destination) échouerait très probablement côté client NATS, puisqu'on ne peut pas avoir deux push-subscriptions concurrentes sur le même nom durable.
 >
 > `subscribe(...)` n'a de sens que pour un abonnement **dont la durée de vie est celle du process**, jamais celle d'une seule exécution de script — exactement ce que fait `QueueServer` (§4.1), en Java, une seule fois au démarrage.
 
@@ -310,12 +309,12 @@ Ce pattern reste **asynchrone de bout en bout** : le script émetteur ne bloque 
 | `IllegalArgumentException: Invalid queue request payload` côté consumer | Le message reçu n'est pas un JSON valide, ou ne respecte pas l'enveloppe attendue (§4.2) | Vérifier que l'émetteur publie bien l'enveloppe complète (`method`/`type`/`path`/`body`/...), pas un payload métier brut. |
 | Le handler renvoie systématiquement un échec d'authentification | Le mapping ciblé déclare `roles` | Retirer `roles` du mapping utilisé par la queue — voir l'avertissement du §4.3. |
 | `destinations must not be null or empty` | `consumer-topic` configuré comme liste vide, ou `subscribe(List, ...)` appelé directement avec une liste vide côté script Java | Fournir au moins une destination. |
-| Consommation mémoire qui augmente indéfiniment sur l'instance qui publie ; erreur `subscribe` sur un rappel du même endpoint | `$Queue.subscribe(...)` appelé depuis un script API (request-scoped) au lieu d'un `payos-server-queue` dédié | Ne jamais appeler `subscribe(...)` sur `$Queue` — voir l'avertissement du §4.4. Déployer un deuxième `payos-server-queue` abonné à la destination concernée. |
+| `TypeError: $Queue.subscribe is not a function` (ou équivalent) dans un script | `$Queue` (`QueueBinding`) n'expose que `publish(...)`/`isConnected()` — `subscribe(...)` n'est plus accessible depuis un script, volontairement (voir l'avertissement du §4.4) | Déployer un deuxième `payos-server-queue` abonné à la destination concernée, au lieu de tenter un abonnement inline dans le script. |
 
 ## 7. Références
 
 - [architecture/queue-architecture.md](../architecture/queue-architecture.md) — architecture interne complète (deux instances `NatsQueueClient`, mécanisme `ServiceLoader`, traces de séquence publish/subscribe, divergences doc/code connues).
-- [queue-messaging.md](queue-messaging.md) — référence complète de l'API `$Queue` (toutes les surcharges `publish`/`subscribe`).
+- [queue-messaging.md](queue-messaging.md) — référence complète de l'API `$Queue` (`QueueBinding`, publish-only — toutes les surcharges `publish`).
 - [configuration/queue-service.md](../configuration/queue-service.md) — référence de configuration du côté publisher.
 - [configuration/servers.md](../configuration/servers.md) — référence de configuration du transport `queue` (côté consumer), et des autres transports (`http`, `https`, `tcp`).
 - [notification-service-guide.md](notification-service-guide.md) — exemple complet déjà en production combinant les deux côtés (connecteur publisher intégré à `payos-runtime` + démon consumer séparé).

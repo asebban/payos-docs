@@ -22,7 +22,7 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 | Binding | Service | Type | Doc |
 | --- | --- | --- | --- |
 | `$DB` | database-service | `IDatabaseService` | [data-access.md](../developer/data-access.md) |
-| `$Queue` | queue-service | `IQueueClient` | [queue-messaging.md](../developer/queue-messaging.md) |
+| `$Queue` | queue-service | `QueueBinding` (wraps `IQueueClient`; exposes `publish`/`isConnected` only, no `subscribe`) | [queue-messaging.md](../developer/queue-messaging.md) |
 | `$Secrets` | secret-service | `SecretsBinding` (wraps `ISecretProvider`; exposes `get`/`list`/`tokenize`/`detokenize` only) | [secrets-usage.md](../developer/secrets-usage.md) |
 | `$Cache` | cache-service | `CacheBinding` (wraps `ICacheStore`; exposes `put`/`get`/`remove`/`exists`/`increment`, auto-scoped by tenant) | [cache-usage.md](../developer/cache-usage.md), [cache-service.md](../configuration/cache-service.md) |
 | `$SlidingWindow` | sliding-window-service | `SlidingWindowBinding` (wraps `ISlidingWindowCounter`; exposes `count` only — read-only, auto-scoped by tenant) | [sliding-window-usage.md](../developer/sliding-window-usage.md), [sliding-window-service.md](../configuration/sliding-window-service.md) |

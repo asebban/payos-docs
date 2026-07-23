@@ -178,7 +178,7 @@ corresponding service is configured:
 | `$I18n` | yes | `I18nProxy` |
 | `$Errors` | yes | `ErrorsProxy` |
 | `$DB` | only if a database service is configured | `IDatabaseService` |
-| `$Queue` | only if a queue client is configured | `IQueueClient` |
+| `$Queue` | only if a queue client is configured | `QueueBinding(queueClient)` — publish-only, no `subscribe` |
 | `$Secrets` | only if a secret provider is configured | `SecretsBinding(provider, tenant)` |
 | `$WebHooks` | only if a dispatcher is configured | `WebhookHooksProxy` |
 | `$Connector` | only if `PayOSConfig.getConnectorRegistry()` is set (never true today — `BootServer` doesn't wire it) | `ConnectorBinding` |

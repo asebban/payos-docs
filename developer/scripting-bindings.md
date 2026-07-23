@@ -127,14 +127,18 @@ var rows = $DB.find("SELECT * FROM accounts WHERE tenant = ?", [$Tenant]);
 
 ### `$Queue`
 
-The message-queue client (`IQueueClient`), registered via `PayOSConfig.setQueueClient`.
-Backed by a [queue connector](../configuration/queue-service.md) such as NATS. See
-[queue messaging](queue-messaging.md).
+A `QueueBinding` wrapping the message-queue client (`IQueueClient`), registered via
+`PayOSConfig.setQueueClient`. Backed by a [queue connector](../configuration/queue-service.md)
+such as NATS. Publish-only: exposes `publish(...)` and `isConnected()` only — `subscribe(...)` is
+not reachable from scripts at all (a subscription's lifetime must match the process, not a single
+script execution; see [queue messaging](queue-messaging.md) for why). Consuming a queue always
+means a dedicated `payos-server-queue` instance instead — see
+[queue setup guide §4](queue-setup-guide.md#4-configurer-et-utiliser-le-côté-consumer).
 
 ```javascript
 // publish(destination, QueueMessage) — the overload for targeting an explicit destination.
 // There is no publish(topic, message) two-string overload; see queue-messaging.md for the
-// full set of publish/subscribe overloads.
+// full set of publish overloads.
 var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
     orderId, JSON.stringify({ id: 42 }), {}, "payments.events");
 $Queue.publish("payments.events", message);

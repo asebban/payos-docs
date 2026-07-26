@@ -146,10 +146,23 @@ classDiagram
         +watch(tenantId, name, listener)
         +unwatch(tenantId, name)
     }
+    class IAsymmetricCryptoSecretProvider {
+        <<interface>>
+        +generateKeyPair(tenantId, keyName, algorithm) byte[]
+        +getPublicKey(tenantId, keyName) byte[]
+        +keyPairExists(tenantId, keyName) boolean
+        +signWithKeyPair(tenantId, keyName, data) byte[]
+        +verifyWithKeyPair(tenantId, keyName, data, signature) boolean
+        +verifyWithPublicKey(publicKey, data, signature) boolean
+    }
     class ICertificateSecretProvider {
         <<interface>>
+        +getCACertificate(tenantId) X509Certificate
+        +issueCertificateFromCsr(tenantId, subjectName, csrPem) X509Certificate
+        +issueCertificateForKey(tenantId, subjectName, keyName) X509Certificate
         +getCertificate(tenantId, name) X509Certificate
         +listCertificates(tenantId) List~String~
+        +revokeCertificate(tenantId, serialNumber)
     }
     class AbstractSecretProvider {
         <<abstract>>
@@ -173,6 +186,8 @@ classDiagram
     class VaultSecretProvider {
         -VaultClient client
         -VaultTokenProvider tokenProvider
+        -VaultTransitClient transitClient
+        -VaultPkiClient pkiClient
     }
 
     ISecretProvider <|-- IVersionedSecretProvider
@@ -182,17 +197,22 @@ classDiagram
     ITokenProvider <|.. FileSystemSecretProvider
     ITokenProvider <|.. VaultSecretProvider
     IVersionedSecretProvider <|.. FileSystemSecretProvider
+    ICryptoSecretProvider <|.. FileSystemSecretProvider
+    ICryptoSecretProvider <|.. VaultSecretProvider
+    IAsymmetricCryptoSecretProvider <|.. VaultSecretProvider
+    ICertificateSecretProvider <|.. VaultSecretProvider
 ```
 
 | Interface | Méthodes | Usage | Implémentée par |
 |-----------|----------|-------|-----------------|
 | `ITokenProvider` | `tokenize`, `detokenize`, `tokenExists`, `revokeToken`, `listTokens` | Tokenisation opaque (PCI scope reduction) : remplace une valeur sensible par un token UUID v4 non réversible sans le provider | `FileSystemSecretProvider` (fichiers chiffrés sous `tokens/`), `VaultSecretProvider` (entrées KV v2 sous `tokens/`) |
 | `IVersionedSecretProvider` | `getSecretVersion`, `listVersions`, `restoreVersion`, `destroyVersion` | Historique de versions, rollback, conformité PCI Req 3.5 | `FileSystemSecretProvider` (archive l'enveloppe précédente à chaque `setSecret`) |
-| `ICryptoSecretProvider` | `encrypt`, `decrypt`, `sign`, `verify` | Chiffrement de données applicatives et signature HMAC via une clé nommée stockée dans le provider | Aucun provider livré |
+| `ICryptoSecretProvider` | `encrypt`, `decrypt`, `sign`, `verify` | Chiffrement de données applicatives et signature HMAC via une clé **symétrique** nommée stockée dans le provider | `FileSystemSecretProvider`, `VaultSecretProvider` |
+| `IAsymmetricCryptoSecretProvider` | `generateKeyPair`, `getPublicKey`, `keyPairExists`, `signWithKeyPair`, `verifyWithKeyPair`, `verifyWithPublicKey` | Génération d'une **paire de clés** nommée (RSA/EC), signature/vérification asymétrique par nom, ou vérification contre une clé publique externe fournie par l'appelant. `signWithKeyPair`/`verifyWithKeyPair` (et non `sign`/`verify`) pour éviter une collision de signature avec `ICryptoSecretProvider` sur un provider qui implémenterait les deux | `VaultSecretProvider` (Transit, types de clé `rsa-2048`/`rsa-3072`/`rsa-4096`/`ecdsa-p256`) — voir [secret-service-vault/README.md §6](../../secret-service-vault/README.md#6-asymmetric-key-pairs--signatures-transit). Filesystem (Bouncy Castle) prévu en phase 3 |
 | `IWatchableSecretProvider` | `watch`, `unwatch` | Notification sur changement de secret (ex. rotation automatique) | Aucun provider livré |
-| `ICertificateSecretProvider` | `getCertificate`, `listCertificates` | Accès à des certificats X.509 stockés dans le provider | Aucun provider livré |
+| `ICertificateSecretProvider` | `getCACertificate`, `issueCertificateFromCsr`, `issueCertificateForKey`, `getCertificate`, `listCertificates`, `revokeCertificate` | Autorité de certification par tenant : émission de certificats X.509 (depuis une CSR, ou pour une paire de clés déjà détenue par le provider), récupération du certificat CA, révocation | `VaultSecretProvider` (moteur PKI ; une seule CA partagée par tous les tenants, isolation par rôle Vault PKI nommé `<tenantId>_<pki-role>` — voir [secret-service-vault/README.md §7](../../secret-service-vault/README.md#7-certificate-issuance-pki) pour la justification). Filesystem prévu en phase 3 |
 
-`ICryptoSecretProvider`, `IWatchableSecretProvider` et `ICertificateSecretProvider` ne sont implémentées par aucun des deux connecteurs livrés (`filesystem`, `vault`) ; elles sont destinées aux providers HSM, KMS cloud (AWS Secrets Manager, Azure Key Vault) ou PKCS#11.
+`ICryptoSecretProvider` est implémentée par les deux connecteurs livrés. `IAsymmetricCryptoSecretProvider` et `ICertificateSecretProvider` sont désormais implémentées par `VaultSecretProvider` (Transit pour la première, moteur PKI pour la seconde) ; `IWatchableSecretProvider` n'est implémentée par aucun connecteur livré à ce jour. Une implémentation filesystem (Bouncy Castle, CA embarquée) des deux nouvelles interfaces est prévue en phase 3.
 
 `VaultSecretProvider` déclare la capacité `VERSION` dans `capabilities()` mais s'appuie uniquement sur le `current_version` renvoyé par Vault KV v2 via `describeSecret` — il n'implémente pas (encore) `IVersionedSecretProvider` ; seul `FileSystemSecretProvider` le fait aujourd'hui.
 

@@ -512,6 +512,11 @@ One changelog per tenant schema (if using `dedicated-schema`) — parameterize v
 
 ## 10. Generating a delivery encryption key
 
+> For the full lifecycle this section and §12 are part of — key generation, custody decision,
+> what to encrypt vs. exclude, the actual `edc` commands, rotation, and where today's mechanism
+> still has gaps — see
+> [tenant-bundle-encryption-key-lifecycle-v1-2026-07-24.md](tenant-bundle-encryption-key-lifecycle-v1-2026-07-24.md).
+
 ### 10.1 Key ownership decision
 
 Following the same model the editor manages the Vault instance that stores your delivery encryption key, whether it is located on the customer / integrator data center or a central editor's vault :

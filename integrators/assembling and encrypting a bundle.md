@@ -88,6 +88,19 @@ echo "=== Pre-encryption validation passed ==="
 
 ### 11.3 Encrypting the delivery bundle
 
+> **Correction (2026-07-24):** two separate issues with §11.3-11.4 below.
+> 1. **Actor:** these commands show the *integrator* running `edc pack` on the fully-assembled
+>    bundle (editor files + your overlay). Only the **editor** ever encrypts — once, on their own
+>    code, before it's ever handed to an integrator. An integrator combines the editor's
+>    already-encrypted files (untouched) with their own plaintext overlay and never re-packs.
+> 2. **Command shape:** the commands also show a single `atlas-prod-bundle.enc` artifact and an
+>    `--outputdir` unpack flag. Neither exists in the actual `edc`/`payosv2-packer` code today —
+>    `edc pack`/`unpack` mutate every regular file **in place**, recursively, inside `--inputdir`;
+>    there is no single combined archive output and no `--outputdir` flag.
+>
+> See [tenant-bundle-encryption-key-lifecycle-v1-2026-07-24.md §4-5](tenant-bundle-encryption-key-lifecycle-v1-2026-07-24.md#4-editor-encrypts-its-own-bundle)
+> for the corrected actor model and command shape.
+
 ```bash
 # Using a key stored in the filesystem secret provider
 edc --encryption pack \

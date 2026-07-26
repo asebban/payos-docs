@@ -54,6 +54,9 @@ HashiCorp Vault KV v2 over HTTP. Provider: `VaultSecretProvider` (factory type `
       "type": "vault",
       "address": "https://vault.internal:8200",
       "kv-mount": "secret",
+      "transit-mount": "transit",
+      "pki-mount": "pki",
+      "pki-role": "delivery-cert",
       "namespace": "payos",
       "approle-mount": "approle",
       "role-id": "${VAULT_ROLE_ID}",
@@ -73,14 +76,22 @@ HashiCorp Vault KV v2 over HTTP. Provider: `VaultSecretProvider` (factory type `
 | `secret-id` | — | AppRole secret id. |
 | `approle-mount` | `approle` | AppRole auth mount path. |
 | `kv-mount` | `secret` | KV v2 mount path. |
+| `transit-mount` | `transit` | Transit mount path — symmetric crypto and asymmetric key pairs. Only needed for `CRYPTO`/`ASYMMETRIC_CRYPTO` operations. |
+| `pki-mount` | `pki` | PKI mount path — certificate issuance. Only needed for `CERTIFICATE_AUTHORITY` operations. |
+| `pki-role` | — | Base Vault PKI role name; the role actually used per call is `<tenantId>_<pki-role>` (one Vault CA is shared by all tenants — see [secret-service-vault/README.md §7](../../secret-service-vault/README.md#7-certificate-issuance-pki)). Required only for `CERTIFICATE_AUTHORITY` operations. |
 | `namespace` | — | Vault namespace (Enterprise). |
 | `tls-skip-verify` | `false` | Skip TLS verification (non-production only). |
 | `timeout` | `10` | HTTP timeout in seconds. |
 
 **Auth precedence:** if `role-id`/`secret-id` are present, **AppRole** is used; otherwise the
-static `token`. Capabilities: GET/SET/DELETE/LIST/DESCRIBE/VERSION and **TOKENIZE** (tokens are
+static `token`. Capabilities: GET/SET/DELETE/LIST/DESCRIBE/VERSION, **TOKENIZE** (tokens are
 stored as ordinary KV v2 entries under a `tokens/` sub-path of the tenant's namespace, and are
-excluded from ordinary secret listings).
+excluded from ordinary secret listings), **CRYPTO** (named symmetric keys via Transit —
+encrypt/decrypt/sign/verify), **ASYMMETRIC_CRYPTO** (named key pairs via Transit —
+generate/sign/verify with RSA or EC keys, plus verifying against an arbitrary externally-supplied
+public key), and **CERTIFICATE_AUTHORITY** (X.509 certificate issuance/revocation via the PKI
+engine). See [secret-service-vault/README.md](../../secret-service-vault/README.md) for the full
+detail on each — key naming, wire formats, and the shared-CA-per-tenant-role design.
 
 > Each secret is one KV v2 entry (`<kv-mount>/data/<tenantId>/<name>`), stored under the
 > secret's own `name` as the JSON field key (not a fixed field name) and Base64-encoded (with a

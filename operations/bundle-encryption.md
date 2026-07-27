@@ -83,4 +83,4 @@ Vault or filesystem store can hold the bundle key.
 
 - [cli-tools/edc.md](../cli-tools/edc.md)
 - [secrets-management.md](secrets-management.md)
-- [integrators/tenant-bundle-encryption-key-lifecycle-v1-2026-07-24.md](../integrators/tenant-bundle-encryption-key-lifecycle-v1-2026-07-24.md) — the full key lifecycle this page's CLI reference fits into: generating the key, deciding custody, delivering to a client, and rotating it.
+- [integrators/tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md](../integrators/tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md) — the full key lifecycle this page's CLI reference fits into: generating the key, deciding custody, delivering to a client, and rotating it.

@@ -34,6 +34,7 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | `queue-service` | [queue-service.md](queue-service.md) | MoM connector (e.g. NATS). |
 | `notification-service` | [notification-service.md](notification-service.md) | Publisher-side `$Notification` connector — independent from `queue-service`. |
 | `secret-service` | [secret-service.md](secret-service.md) | Secret provider (`filesystem`/`vault`). |
+| `editor-secret-service` | [editor-secret-service.md](editor-secret-service.md) | Separate secret provider backing the bundle-wide `encryptionKey` (`CryptoService`/`IEditorProvider`) — deliberately distinct from `secret-service`. |
 | `webhooks` / `http-webhook-service` | [webhook-service.md](webhook-service.md) | Webhook dispatcher. |
 | `i18n` | [i18n.md](i18n.md) | Locale resolution. |
 | `idempotency` | [idempotency.md](idempotency.md) | Idempotent-response cache for mutating API requests. |

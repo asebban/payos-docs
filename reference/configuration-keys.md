@@ -155,6 +155,15 @@ Keys below live under `secret-service.configuration.*`.
 | **vault** `tls-skip-verify` | `false` | Skip TLS verify. |
 | **vault** `timeout` | `10` | HTTP timeout (s). |
 
+## `editor-secret-service` — [editor-secret-service.md](../configuration/editor-secret-service.md)
+
+Keys below live under `editor-secret-service.configuration.*` — same shape as `secret-service.configuration.*` above (filesystem/vault keys included), just a separate top-level block backing the bundle-wide `encryptionKey` (`CryptoService`/`IEditorProvider`) instead of `$Secrets`.
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `enabled` | — | Enable the editor secret provider. |
+| `type` | `vault` | `filesystem` / `vault`. Defaults to `vault`, unlike `secret-service` (defaults to `filesystem`). |
+
 ## `webhooks` / `http-webhook-service` — [webhook-service.md](../configuration/webhook-service.md)
 
 | Key | Default | Purpose |

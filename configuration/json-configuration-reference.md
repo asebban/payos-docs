@@ -41,6 +41,7 @@
     - [3.15 `idempotency` (bootstrap.json)](#315-idempotency-bootstrapjson)
     - [3.16 `cache-service` (bootstrap.json)](#316-cache-service-bootstrapjson)
     - [3.17 `sliding-window-service` (bootstrap.json)](#317-sliding-window-service-bootstrapjson)
+    - [3.18 `editor-secret-service` (bootstrap.json)](#318-editor-secret-service-bootstrapjson)
   - [4. manifest.json — Déclaration de capability](#4-manifestjson--déclaration-de-capability)
   - [5. Résolution hiérarchique des valeurs](#5-résolution-hiérarchique-des-valeurs)
   - [6. Constantes et valeurs par défaut](#6-constantes-et-valeurs-par-défaut)
@@ -1163,6 +1164,33 @@ Lues via `IConfigSpec.SlidingWindowService.Redis` par `RedisSlidingWindowCounter
 > Binding `$SlidingWindow` disponible dans les scripts API/hooks quand un compteur est configuré (`SlidingWindowBinding`, repo `payos`, injecté par `ApiResourceHandler` juste après `$Cache`) — **lecture seule** : seule la méthode `count(key, windowMillis)` est exposée, ni `recordAndCount` ni `reset` — voir [configuration/sliding-window-service.md](sliding-window-service.md#slidingwindow-binding-in-scripts) pour le détail et un exemple.
 
 > Consommateur intégré : `TenantPolicyService` (`payos-kernel`) utilise ce compteur pour appliquer le quota `multitenancy.tenants[].quotas.requestsPerMinute` — voir [configuration/multi-tenancy.md](multi-tenancy.md#how-quotas-are-enforced-backend-selection) pour la logique de repli à trois niveaux (`sliding-window-service` configuré → résolution SPI de `"memory"` → ancien compteur `RateWindow`).
+
+---
+
+### 3.18 `editor-secret-service` (bootstrap.json)
+
+Configuration du provider de secrets qui alimente `ma.s2m.payos.editor.IEditorProvider` — concrètement, `CryptoService.loadKey()` y résout la clé `encryptionKey` unique au bundle, utilisée pour déchiffrer les payloads `P8G2`/`P8OS` produits par `edc` (module `payosv2-packer`). Ce bloc est **volontairement distinct de [3.12 `secret-service`](#312-secret-service-bootstrapjson)** : `secret-service` alimente le binding `$Secrets` et contient les secrets applicatifs ordinaires, par tenant, tandis que `editor-secret-service` contient l'unique clé de chiffrement du bundle, que seul l'éditeur (l'équipe cœur PayOS produisant l'application de base) génère jamais — voir [integrators/tenant-bundle-encryption-key-lifecycle](../integrators/tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md) pour le cycle de vie complet et la justification de cette séparation.
+
+```json
+"editor-secret-service": {
+  "configuration": {
+    "enabled": true,
+    "type": "vault",
+    "address": "https://editor-vault.s2m.internal:8200",
+    "token": "s.XXXXXXXXXXXX",
+    "kv-mount": "secret"
+  }
+}
+```
+
+| Clé | Type | Requis | Défaut | Description |
+|-----|------|--------|--------|-------------|
+| `enabled` | boolean | Non | `false` | Active le provider de secrets de l'éditeur. Si `false` (ou le bloc/`configuration` absent), tout code qui en dépend (aujourd'hui `CryptoService.loadKey()`) lève une `ResourceException`. |
+| `type` | string | Non | `"vault"` | Type de provider : `"filesystem"` ou `"vault"`, ou tout provider SPI disponible dans `connectors-dir`. **Défaut différent de `secret-service`** (qui défaut à `"filesystem"`) — ce bloc défaut à `"vault"`. |
+
+Les clés spécifiques à chaque `type` (`root`/`keyfile` pour `filesystem` ; `address`/`token`/`role-id`/`secret-id`/`approle-mount`/`kv-mount`/`namespace`/`tls-skip-verify`/`timeout` pour `vault`) sont exactement les mêmes que celles documentées en [3.12 `secret-service`](#312-secret-service-bootstrapjson) — même forme de configuration, seul le bloc racine change de nom, ce qui permet de pointer `secret-service` et `editor-secret-service` vers deux backends/identifiants entièrement indépendants. La factory est résolue via le même mécanisme `ServiceLoader`/`ISecretProviderFactory` (`ma.s2m.payos.secret.SecretProviders`) que `secret-service` ; le JAR provider doit donc être présent dans `connectors-dir`, typiquement le même JAR `secret-service-vault`/`secret-service-filesystem` que `secret-service`, instancié une seconde fois avec sa propre configuration.
+
+> **Pourquoi un bloc séparé plutôt qu'un alias de `secret-service`** : `encryptionKey` protège le code propriétaire de l'éditeur, n'est pas résolue par tenant de requête (`CryptoService.resolveSecretTenantId()` retourne toujours le slot fixe `"default"`), et son modèle d'accès est fondamentalement différent — seul l'éditeur l'écrit jamais, et chaque partie en aval (intégrateur, client) ne reçoit qu'un accès en lecture seule, scopé, au déchiffrement à la volée — jamais via le même identifiant qu'un tenant utiliserait pour `$Secrets`. Documenter ce bloc séparément permet à un opérateur de pointer `secret-service` et `editor-secret-service` vers deux instances Vault/politiques/tokens entièrement distincts, afin que la révocation ou la rotation de l'un ne touche jamais l'autre.
 
 ---
 

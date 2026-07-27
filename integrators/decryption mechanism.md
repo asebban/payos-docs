@@ -22,7 +22,7 @@
    - **`P8G2`** — `AES/GCM/NoPadding` (12-byte IV, 128-bit authentication tag). The PCI-DSS-compliant
      format `CryptoService` is ready to decode — but as of this writing, `edc`/`payosv2-packer`'s
      `pack` command does not actually produce it yet; see
-     [tenant-bundle-encryption-key-lifecycle-v1-2026-07-24.md](tenant-bundle-encryption-key-lifecycle-v1-2026-07-24.md#gaps-to-close-before-this-is-production-ready).
+     [tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md](tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md#gaps-to-close-before-this-is-production-ready).
    - **`P8OS`** — `AES/ECB/PKCS5Padding`. What `edc` actually produces today. Unauthenticated
      (no integrity/tamper detection) — treat as the current, not the target, format.
 4. The decrypted `SecretKeySpec`/key bytes are held only as long as the `SecretValue` /
@@ -51,4 +51,4 @@ AES key directly.
 - `payos-secret-api/src/main/java/ma/s2m/payos/secret/model/SecretValue.java` — the zero-on-close behavior.
 - [integrators/assembling and encrypting a bundle.md](assembling%20and%20encrypting%20a%20bundle.md) — the encryption side (`edc`).
 - [operations/bundle-encryption.md](../operations/bundle-encryption.md) — operational guidance.
-- [tenant-bundle-encryption-key-lifecycle-v1-2026-07-24.md](tenant-bundle-encryption-key-lifecycle-v1-2026-07-24.md) — the full key lifecycle this page's decrypt step fits into (generation, custody, delivery, rotation).
+- [tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md](tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md) — the full key lifecycle this page's decrypt step fits into (generation, custody, delivery, rotation).

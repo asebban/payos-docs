@@ -1,7 +1,7 @@
 # Connector Framework — Configuration Parameters
 
 > **Created:** 2026-07-10
-> **Last updated:** 2026-07-12
+> **Last updated:** 2026-07-27
 > **Version:** v2
 
 ## Scope
@@ -15,12 +15,12 @@ mechanisms share the word "connector" but are otherwise independent. See
 [Naming clash with the legacy `connectors-dir` loader](#naming-clash-with-the-legacy-connectors-dir-loader)
 below.
 
-> **Status note:** every parameter below is implemented and covered by tests in `payos` /
-> `payos-connector-sdk`. As of this writing, `BootServer` does not yet call
-> `ConnectorConfigurationLoader`, `ConnectorJarScanner`, or `ConnectorRuntimeInitializer` — the
-> framework is fully built and testable in isolation, but not yet wired into the production
-> bootstrap sequence. Treat the parameters below as the stable contract that future wiring will
-> honor, not as something you can drop into a running deployment today.
+> **Status note (updated 2026-07-27):** every parameter below is implemented and covered by
+> tests in `payos` / `payos-connector-sdk`, and — as of 2026-07-27 — wired into production:
+> `BootServer` calls `ConnectorFrameworkInitializer.initialize(...)` (which composes
+> `ConnectorConfigurationLoader`, `ConnectorJarScanner`, and `ConnectorRuntimeInitializer`) at
+> boot and on every hot reload. See §5 below for the tenant-scoping decision this wiring
+> implements.
 
 ## Two configuration surfaces
 
@@ -161,13 +161,17 @@ instance.
 ## 5. Tenant scoping
 
 `TenantConnectorRegistry` binds `ConnectorLifecycleEntry` lists to tenant IDs
-(`TenantConnectorRegistry.builder().tenant(tenantId, entries).build()`). There is currently
-**no dedicated JSON configuration** for which tenants see which connectors — this is a
-programmatic API surface only; a future story would need to define how `connectors.json`
-entries map to tenants (e.g. a per-tenant connector list, or a shared list visible to every
-tenant). Only lifecycle entries in `ConnectorLifecycleState.READY` are visible to scripts
-(`scriptVisible()`); duplicate `type::name` registrations for the same tenant raise
-`IllegalArgumentException` at registry-build time.
+(`TenantConnectorRegistry.builder().tenant(tenantId, entries).build()`). There is **no
+dedicated JSON configuration** for which tenants see which connectors — `connectors.json` has
+no tenant field. `ConnectorFrameworkInitializer` (`payos`, package `ma.s2m.payos.config.connector`)
+resolves this by giving **every** tenant declared in `multitenancy.tenants` the exact same
+shared list of ready connectors; when `multitenancy.tenants` is absent or empty, a single
+`"default"` tenant is registered instead. There is no mechanism today to restrict a connector
+to a subset of tenants — that would require extending the `connectors.json` schema, which
+hasn't been done. Only lifecycle entries in `ConnectorLifecycleState.READY` are visible to
+scripts (`scriptVisible()`); duplicate `type::name` registrations for the same tenant raise
+`IllegalArgumentException` at registry-build time (`ConnectorFrameworkInitializer` catches this
+and logs an error rather than aborting boot).
 
 ## 6. Idempotency and platform-owned deduplication (Epic 5.1–5.2)
 
@@ -363,12 +367,13 @@ format, no `connectors.json`, no idempotency/audit/dedup semantics, and **is** w
 | | Legacy SPI loader | Connector framework (this page) |
 | --- | --- | --- |
 | Config key | `connectors-dir` (bootstrap) | `connectors.json` + `META-INF/connector.properties` |
-| Wired into `BootServer`? | Yes | Not yet |
+| Wired into `BootServer`? | Yes | Yes (since 2026-07-27) |
 | Purpose | Load database/queue/secret backend plugins | Business/payment connectors callable from scripts via `$Connector(...)` |
 | Descriptor format | None | `ConnectorDescriptor` (this page, §1) |
 
 ## References
 
+- `payos/src/main/java/ma/s2m/payos/config/connector/ConnectorFrameworkInitializer.java` — the `BootServer` wiring: `connectors.json` → scan → initialize → `TenantConnectorRegistry` → `PayOSConfig.setConnectorRegistry(...)`.
 - `payos-connector-sdk/src/main/java/ma/s2m/payos/connector/descriptor/` — `ConnectorDescriptor`, `ConnectorDescriptorKeys`, `ConnectorDescriptorParser`.
 - `payos-connector-sdk/src/main/java/ma/s2m/payos/connector/compatibility/ConnectorCompatibilityPolicy.java`.
 - `payos-connector-sdk/src/main/java/ma/s2m/payos/connector/model/ConnectorExecutionContext.java`, `IdempotencyContext.java`, `ConnectorErrorCategory.java`.

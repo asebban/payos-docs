@@ -28,6 +28,12 @@ It is structured by audience so that each reader can go straight to what they ne
 | [Developer guide](developer/README.md) | Getting started, the application model, writing API scripts, the script binding reference, data access, secrets, messaging, i18n, hooks, Java extensions, debugging, and API documentation. |
 | [Configuration reference](configuration/README.md) | Exhaustive reference of every configuration key (`payos.json` / `bootstrap.json`). |
 
+### Connector developers (writing business/payment connectors)
+
+| Document | Purpose |
+| --- | --- |
+| [Connector developer guide](connector-developer/README.md) | Writing an `IConnector` implementation (`connector-sdk`) — the contract, model types, error handling, idempotency ownership, packaging, deployment, and testing with `ConnectorTestHarness`. |
+
 ### Integrators (customizing delivered applications for a client)
 
 | Document | Purpose |
@@ -69,6 +75,7 @@ payos-docs/
 ├── architecture/        Internal design (architects)
 │   └── adr/             Architecture Decision Records
 ├── developer/           Building applications (developers)
+├── connector-developer/ Writing business/payment connectors (connector developers)
 ├── integrators/         Customizing delivered applications for a client (integrators)
 ├── configuration/       Configuration key reference (developers + operators)
 ├── operations/          Running PayOS in production (operators)

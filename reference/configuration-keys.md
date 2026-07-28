@@ -244,12 +244,12 @@ Resolution order for each: system property → env var → bootstrap/server key.
 
 ## Connector framework — [connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
 
-Not `IConfigSpec` constants (parsed by `ConnectorConfigurationLoader` / `ConnectorDescriptorParser` instead), so not covered by the tables above — listed here so this index stays complete.
+`connectors.json`'s structural keys are `IConfigSpec.ConnectorFramework` constants (used by `ConnectorConfigurationLoader`), so — unlike the rest of this section — they belong in the tables above too; repeated here for discoverability next to the descriptor keys. `META-INF/connector.properties` keys are still not `IConfigSpec` constants — they're parsed by `ConnectorDescriptorParser` in the standalone `connector-sdk` module, not the kernel.
 
 | Surface | Keys |
 | --- | --- |
-| `META-INF/connector.properties` (descriptor) | `connector.type`, `connector.name`, `connector.api.version`, `connector.required.params`, `connector.requires.idempotency` |
-| `connectors.json` (config) | `connectors[].type`, `connectors[].name`, `connectors[].jar`, `connectors[].parameters` |
+| `META-INF/connector.properties` (descriptor, not `IConfigSpec`) | `connector.type`, `connector.name`, `connector.api.version`, `connector.required.params`, `connector.requires.idempotency` |
+| `connectors.json` (config, `IConfigSpec.ConnectorFramework`) | `connectors[].type`, `connectors[].name`, `connectors[].jar`, `connectors[].parameters` |
 
-Not yet wired into `BootServer`. Do not confuse with the `connectors-dir` legacy SPI loader
-above — see the linked doc's "Naming clash" section.
+Wired into `BootServer` since 2026-07-27 (`ConnectorFrameworkInitializer`). Do not confuse with the
+`connectors-dir` legacy SPI loader above — see the linked doc's "Naming clash" section.

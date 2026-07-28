@@ -211,9 +211,10 @@ guide (resolution rules, idempotency behavior, error handling) and
 for the full configuration and behavioral contract (idempotency, deduplication, retry, DLQ
 routing, diagnostics).
 
-> **Not yet reachable in a running deployment.** `PayOSConfig.setConnectorRegistry(...)` is
-> defined but `BootServer` never calls it — so `$Connector` is always absent today unless
-> something else in your bundle wires a registry in explicitly.
+> **Reachable in a running deployment since 2026-07-27.** `BootServer` calls
+> `ConnectorFrameworkInitializer.initialize(...)`, which sets the registry from
+> `connectors.json` + `<runtimeBaseDir>/connectors/`. `$Connector` is absent only when no
+> connectors are configured/found — a normal, fully-supported state, not a wiring gap.
 
 ```javascript
 var handle = $Connector('CardNetwork', 'visa'); // or $Connector('CardNetwork') for the first match

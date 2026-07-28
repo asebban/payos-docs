@@ -35,12 +35,8 @@ BootServer.main(args)
   │     ├─ SecretServiceInitializer    → setSecretProvider(...)
   │     ├─ WebhookServiceInitializer   → setWebhookDispatcher(...)
   │     ├─ NotificationServiceInitializer → setNotificationServiceFactory(...)
+  │     ├─ ConnectorFrameworkInitializer → setConnectorRegistry(...)
   │     └─ (idempotency, activation store, …)
-  │
-  │  NOTE: the business/payment connector framework (setConnectorRegistry, $Connector) is
-  │  NOT initialized here — ConnectorConfigurationLoader/ConnectorJarScanner/
-  │  ConnectorRuntimeInitializer exist and are fully tested but BootServer never calls them.
-  │  See connector-framework-parameters-v2-2026-07-12.md.
   │
   ├─ for each entry in settings["servers"]:
   │     Servers.start(host, port, protocol, serverConfig)   ← ServiceLoader<ServerProvider>
@@ -79,7 +75,7 @@ the singleton services that the request pipeline and scripts depend on.
 | `setActivationStore` / `getActivationStore` | `IActivationStore` | Capability activation state. |
 | `setIdempotencyService` / `getIdempotencyService` | `IdempotencyService` | Idempotent response cache. |
 | `setNotificationServiceFactory` / `getNotificationServiceFactory` | `INotificationServiceFactory` | The `$Notification` provider. |
-| `setConnectorRegistry` / `getConnectorRegistry` | `TenantConnectorRegistry` | The `$Connector` provider — defined, but never set by `BootServer` today; always `null` in a running deployment. |
+| `setConnectorRegistry` / `getConnectorRegistry` | `TenantConnectorRegistry` | The `$Connector` provider — set by `ConnectorFrameworkInitializer` at boot and on hot reload; `null` only when `connectors.json` is absent/empty or no valid connector JARs are found. |
 | `setConnectorClassLoader` / `getConnectorClassLoader` | `ClassLoader` | Loads connector SPI JARs. |
 | `setExtensionClassLoader` / `getExtensionClassLoader` | `ClassLoader` | Loads extension JARs for `Java.type()`. |
 | `setRuntimeBaseDirectory` / `getRuntimeBaseDirectory` | `String` | Effective bundle base path for relative resolution. |

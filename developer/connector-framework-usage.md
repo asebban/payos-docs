@@ -1,8 +1,8 @@
 # Guide développeur — Framework de connecteurs (`$Connector`)
 
-Ce guide couvre l'utilisation du binding `$Connector` **depuis un script applicatif** — c'est-à-dire le point de vue du développeur qui appelle un connecteur métier/paiement déjà déployé (`CardNetwork`/`visa`, `Switch`/`cmi`, etc.), pas celui de la personne qui écrit le connecteur lui-même. Pour écrire un connecteur (implémenter `IConnector`, empaqueter le JAR, le descripteur SPI), voir [`payos-connector-sdk/README.md`](../../payos-connector-sdk/README.md) — ce document, déjà complet et vérifié contre le code, ne sera pas dupliqué ici. Pour la configuration opérateur complète (`connectors.json`, versions d'API, politiques de retry/DLQ), voir [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md).
+Ce guide couvre l'utilisation du binding `$Connector` **depuis un script applicatif** — c'est-à-dire le point de vue du développeur qui appelle un connecteur métier/paiement déjà déployé (`CardNetwork`/`visa`, `Switch`/`cmi`, etc.), pas celui de la personne qui écrit le connecteur lui-même. Pour écrire un connecteur (implémenter `IConnector`, empaqueter le JAR, le descripteur SPI), voir [connector-developer/README.md](../connector-developer/README.md) — ce guide, déjà complet et vérifié contre le code, ne sera pas dupliqué ici. Pour la configuration opérateur complète (`connectors.json`, versions d'API, politiques de retry/DLQ), voir [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md).
 
-> **⚠️ Non utilisable dans un déploiement réel aujourd'hui.** Le framework (scan de JAR, validation de descripteur, compatibilité de version d'API, instanciation isolée, cycle de vie, registre par tenant, déduplication, retry, routage terminal) est **entièrement construit et testé**, mais `BootServer` n'appelle jamais `PayOSConfig.setConnectorRegistry(...)` au démarrage — donc `$Connector` est toujours absent dans un déploiement réel, à moins qu'un code applicatif tiers n'appelle explicitement cette méthode lui-même. Ce guide documente le contrat stable que le câblage futur honorera, pas quelque chose d'immédiatement exploitable en production. Voir §6 pour le détail exact de ce qui manque.
+> **Câblé dans `BootServer` depuis le 2026-07-27.** `ConnectorFrameworkInitializer.initialize(...)` scanne `<runtimeBaseDir>/connectors/`, valide les JARs contre `connectors.json`, initialise les connecteurs, puis appelle `PayOSConfig.setConnectorRegistry(...)` — au démarrage et à chaque hot-reload. Chaque tenant déclaré dans `multitenancy.tenants` voit la **même** liste de connecteurs partagée (repli sur un tenant unique `"default"` si la multi-tenancy n'est pas configurée — voir §6 pour le détail exact du modèle de tenant-scoping). Un `connectors.json` absent ou vide reste une configuration normale et pleinement supportée : le framework reste simplement inactif.
 
 ## 1. Résolution — comment `$Connector(...)` trouve un connecteur
 
@@ -96,11 +96,13 @@ Si l'implémentation du connecteur lève une exception pendant `execute(...)`, l
 
 Ne construisez jamais de logique métier qui dépend du texte exact d'un message d'erreur venant d'un connecteur tiers — seule la paire `errorCategory()`/`errorCode()` est un contrat stable.
 
-## 6. Pourquoi `$Connector` est absent aujourd'hui, et comment le vérifier
+## 6. Comment `$Connector` devient disponible, et son modèle de tenant-scoping
 
-`ApiResourceHandler` injecte `$Connector` uniquement si `PayOSConfig.getConnectorRegistry()` est non-null. La chaîne de câblage qui alimenterait ce registre existe et est testée de bout en bout (scan de `connectors.json`, validation des JARs, instanciation isolée, suivi de cycle de vie) — mais **rien dans `BootServer` n'appelle `PayOSConfig.setConnectorRegistry(...)`**, donc le registre reste toujours `null` en production. C'est une lacune de câblage au démarrage, pas un framework à moitié construit.
+`ApiResourceHandler` (et `HookEngine`) injectent `$Connector` uniquement si `PayOSConfig.getConnectorRegistry()` est non-null. Ce registre est peuplé par `ConnectorFrameworkInitializer.initialize(...)` (`ma.s2m.payos.config.connector`), appelé depuis `BootServer` au démarrage et à chaque hot-reload : chargement de `connectors.json`, résolution des références `${ENV_VAR}` dans les paramètres, scan de `<runtimeBaseDir>/connectors/`, validation des JARs, instanciation isolée (un `URLClassLoader` par connecteur), puis construction du `TenantConnectorRegistry`.
 
-Conséquence pratique : si vous écrivez un script qui utilise `$Connector`, il ne fonctionnera dans aucun déploiement `payos-runtime` standard aujourd'hui. Vérifiez toujours sa présence si le code doit rester compatible avec des bundles plus anciens ou avec le comportement actuel du runtime :
+**Modèle de tenant-scoping** (décision documentée en [configuration/connector-framework-parameters-v2-2026-07-12.md §5](../configuration/connector-framework-parameters-v2-2026-07-12.md#5-tenant-scoping)) : `connectors.json` n'a aucun champ tenant — chaque connecteur `READY` configuré globalement est visible par **tous** les tenants déclarés dans `multitenancy.tenants` (même liste d'entrées partagée). Si `multitenancy.tenants` est absent ou vide, un unique tenant `"default"` est enregistré. Il n'existe aujourd'hui aucun mécanisme pour restreindre un connecteur à un sous-ensemble de tenants.
+
+Si `connectors.json` est absent, vide, ou si aucun JAR valide n'est trouvé dans `connectors/`, le framework reste inactif sans faire échouer le démarrage — `$Connector` est alors simplement absent des scripts, exactement comme n'importe quel autre binding optionnel (`$Cache`, `$SlidingWindow`, ...). Vérifiez toujours sa présence si votre code doit rester compatible avec un déploiement où aucun connecteur n'est configuré :
 
 ```javascript
 if (typeof $Connector !== "undefined") {
@@ -109,15 +111,13 @@ if (typeof $Connector !== "undefined") {
 }
 ```
 
-Pour l'état exact de ce qui reste à faire pour rendre `$Connector` réellement utilisable (orchestration de démarrage manquante, décision de portée par tenant non encore définie), voir la note de statut en tête de [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md).
-
 ## 7. Tester un connecteur sans passer par un script
 
 Si vous développez ou intégrez un connecteur et voulez vérifier son comportement sans dépendre du câblage `BootServer` (actuellement absent, §6), `ConnectorTestHarness` (module `payos-connector-sdk`, package `test`) permet d'appeler `init`/`execute`/`close` directement en Java, sans runtime PayOS complet — voir [`payos-connector-sdk/README.md` §7](../../payos-connector-sdk/README.md#7-exemple-minimal-complet) pour un exemple.
 
 ## 8. Références
 
-- [`payos-connector-sdk/README.md`](../../payos-connector-sdk/README.md) — guide complet pour **écrire** un connecteur (contrat `IConnector`, descripteur, SPI, empaquetage, versionnement).
+- [connector-developer/README.md](../connector-developer/README.md) *(anglais)* / [`payos-connector-sdk/README.md`](../../payos-connector-sdk/README.md) *(français)* — guide complet pour **écrire** un connecteur (contrat `IConnector`, descripteur, SPI, empaquetage, versionnement) ; les deux documents couvrent exactement le même contenu vérifié contre le code, dans deux langues.
 - [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md) — référence de configuration complète (`connectors.json`, compatibilité de version d'API, politiques de retry/DLQ, diagnostics).
 - [scripting-bindings.md](scripting-bindings.md) — index de tous les bindings `$`, y compris `$Connector` et `$Errors`.
 - [configuration/idempotency.md](../configuration/idempotency.md) — le service d'idempotence HTTP général, distinct du mécanisme décrit en §3.

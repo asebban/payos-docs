@@ -74,13 +74,16 @@ This avoids tearing connections out from under active requests. See
   classpath — those classloaders are built at startup.
 - Changing the set of **server listeners** in ways that require rebinding ports.
 
-**Exception: business/payment connector JARs (the `$Connector` framework) support hot
-in-place replacement**, reusing this same `config-hot-reload-enabled` flag —
-`ConnectorRuntimeReloader` validates the replacement JAR reaches `READY`, drains in-flight
-calls against the current connector, then switches. See
+**Business/payment connector JARs (the `$Connector` framework)** are re-scanned and
+re-initialized from scratch on every config-file change, via the same watcher/
+`config-hot-reload-enabled` flag — `ConnectorFrameworkInitializer` closes every currently
+active connector and isolated classloader, then rebuilds the registry from
+`connectors.json` + `<runtimeBaseDir>/connectors/`. This is a full rebuild, not the graceful,
+single-connector, drain-then-swap replacement `ConnectorRuntimeReloader` implements (validate
+the replacement JAR reaches `READY`, drain in-flight calls against the *current* connector
+only, then switch) — that finer-grained mechanism exists and is tested (see
 [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
-§4. (This framework is not yet wired into `BootServer`, so this only applies to whatever wires
-`ConnectorRuntimeReloader` in directly today.)
+§4) but is not yet called from the config-watcher path described here.
 
 For everything else, perform a controlled restart (e.g. `/stop` then relaunch, or your
 service manager). See [deployment.md](deployment.md).

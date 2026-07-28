@@ -1523,9 +1523,10 @@ top of this page most likely means this, not an SPI backend.
 
 It covers idempotency, platform-owned deduplication, a deterministic retry policy,
 execution-state persistence, and DLQ/terminal-state routing — none of which the SPI mechanism
-in §13.2 has any concept of. **It is fully implemented and tested but not yet wired into
-`BootServer`** — treat it as the stable contract for upcoming connector work, not something
-you can deploy today. Full reference:
+in §13.2 has any concept of. **Wired into `BootServer` since 2026-07-27** (every tenant
+declared in `multitenancy.tenants` shares the same connector list scanned from
+`<runtimeBaseDir>/connectors/`) — deployable today. To write one: [connector-developer/README.md](../connector-developer/README.md).
+Operator-facing configuration reference:
 [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md).
 
 ### 13.3 TCP plugins / new protocols

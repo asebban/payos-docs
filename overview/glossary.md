@@ -69,7 +69,8 @@ HTTP, TCP, and Queue transports.
 `META-INF/connector.properties` descriptor, callable from scripts via
 `$Connector(type[, name]).execute(payload)`. Covers idempotency, platform-owned
 deduplication, retry policy, execution-state persistence, and DLQ/terminal-state routing —
-none of which the SPI connector above has any concept of. **Not yet wired into `BootServer`.**
+none of which the SPI connector above has any concept of. Wired into `BootServer` since
+2026-07-27 via `ConnectorFrameworkInitializer`.
 See [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md).
 
 **Extension**

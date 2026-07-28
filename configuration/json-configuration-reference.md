@@ -1,7 +1,7 @@
 # PayOS — Référence complète de la configuration JSON
 
 > Source canonique : `IConfigSpec.java` + fichiers de configuration du runtime  
-> Dernière mise à jour : 2026-07-23
+> Dernière mise à jour : 2026-07-27
 
 ---
 
@@ -42,6 +42,7 @@
     - [3.16 `cache-service` (bootstrap.json)](#316-cache-service-bootstrapjson)
     - [3.17 `sliding-window-service` (bootstrap.json)](#317-sliding-window-service-bootstrapjson)
     - [3.18 `editor-secret-service` (bootstrap.json)](#318-editor-secret-service-bootstrapjson)
+    - [3.19 `connectors.json` (fichier séparé, racine runtime)](#319-connectorsjson-fichier-séparé-racine-runtime)
   - [4. manifest.json — Déclaration de capability](#4-manifestjson--déclaration-de-capability)
   - [5. Résolution hiérarchique des valeurs](#5-résolution-hiérarchique-des-valeurs)
   - [6. Constantes et valeurs par défaut](#6-constantes-et-valeurs-par-défaut)
@@ -1191,6 +1192,43 @@ Configuration du provider de secrets qui alimente `ma.s2m.payos.editor.IEditorPr
 Les clés spécifiques à chaque `type` (`root`/`keyfile` pour `filesystem` ; `address`/`token`/`role-id`/`secret-id`/`approle-mount`/`kv-mount`/`namespace`/`tls-skip-verify`/`timeout` pour `vault`) sont exactement les mêmes que celles documentées en [3.12 `secret-service`](#312-secret-service-bootstrapjson) — même forme de configuration, seul le bloc racine change de nom, ce qui permet de pointer `secret-service` et `editor-secret-service` vers deux backends/identifiants entièrement indépendants. La factory est résolue via le même mécanisme `ServiceLoader`/`ISecretProviderFactory` (`ma.s2m.payos.secret.SecretProviders`) que `secret-service` ; le JAR provider doit donc être présent dans `connectors-dir`, typiquement le même JAR `secret-service-vault`/`secret-service-filesystem` que `secret-service`, instancié une seconde fois avec sa propre configuration.
 
 > **Pourquoi un bloc séparé plutôt qu'un alias de `secret-service`** : `encryptionKey` protège le code propriétaire de l'éditeur, n'est pas résolue par tenant de requête (`CryptoService.resolveSecretTenantId()` retourne toujours le slot fixe `"default"`), et son modèle d'accès est fondamentalement différent — seul l'éditeur l'écrit jamais, et chaque partie en aval (intégrateur, client) ne reçoit qu'un accès en lecture seule, scopé, au déchiffrement à la volée — jamais via le même identifiant qu'un tenant utiliserait pour `$Secrets`. Documenter ce bloc séparément permet à un opérateur de pointer `secret-service` et `editor-secret-service` vers deux instances Vault/politiques/tokens entièrement distincts, afin que la révocation ou la rotation de l'un ne touche jamais l'autre.
+
+---
+
+### 3.19 `connectors.json` (fichier séparé, racine runtime)
+
+Configuration du **framework connecteur métier/paiement** (`IConnector`, module `payos-connector-sdk`) — à ne pas confondre avec [3.13 `extensions-dir`](#313-extensions-dir-bootstrapjson) qui est le chargeur SPI legacy (`connectors-dir`), un mécanisme totalement distinct malgré le nom similaire ; voir la section "Naming clash" du document détaillé ci-dessous. `connectors.json` n'est **pas** une clé de `bootstrap.json` : c'est un fichier séparé, à la racine du runtime base directory (même racine que `bootstrap.json`), chargé par `ma.s2m.payos.config.connector.ConnectorConfigurationLoader`. Un fichier absent équivaut à une configuration vide (PayOS démarre sans aucun connecteur). Câblé dans `BootServer` depuis le 2026-07-27 via `ConnectorFrameworkInitializer`, qui alimente `PayOSConfig.getConnectorRegistry()` au boot et à chaque rechargement de configuration.
+
+```json
+{
+  "connectors": [
+    {
+      "type": "CardNetwork",
+      "name": "visa",
+      "jar": "connectors/visa.jar",
+      "parameters": {
+        "baseUrl": "https://visa.example.internal",
+        "clientId": "${VISA_CLIENT_ID}",
+        "clientSecret": "${VISA_CLIENT_SECRET}"
+      }
+    }
+  ]
+}
+```
+
+| Clé | Type | Requis | Défaut | Description |
+|-----|------|--------|--------|-------------|
+| `connectors` | array d'objets | Non | `[]` | Tableau racine ; chaque élément configure une instance de connecteur. |
+| `connectors[].type` | string | Oui | — | Doit correspondre à `connector.type` du descripteur du JAR (voir plus bas). |
+| `connectors[].name` | string | Oui | — | Doit correspondre à `connector.name` du descripteur du JAR. |
+| `connectors[].jar` | string | Oui | — | Chemin du JAR connecteur, relatif au runtime base directory (ex. `connectors/visa.jar`). |
+| `connectors[].parameters` | object | Non | `{}` | Paramètres libres passés à `IConnector.init(ConnectorConfig)`. Les valeurs peuvent contenir des tokens `${...}` résolus depuis les variables d'environnement, au même titre que le reste de PayOS. Jamais loggées en clair. |
+
+Ces quatre clés (`connectors`, `connectors[].type/name/jar/parameters`) sont des constantes `IConfigSpec.ConnectorFramework` (et `IConfigSpec.ConnectorFramework.Entry`), utilisées par `ConnectorConfigurationLoader` — contrairement aux clés du descripteur `META-INF/connector.properties` packagé dans chaque JAR connecteur (`connector.type`, `connector.name`, `connector.api.version`, `connector.required.params`, `connector.requires.idempotency`), qui elles ne sont pas des constantes `IConfigSpec` (parsées côté SDK par `ConnectorDescriptorParser`, module `payos-connector-sdk`).
+
+Les JARs eux-mêmes sont scannés dans `<runtimeBaseDir>/connectors/`. Chaque tenant déclaré dans [3.4 `multitenancy`](#34-multitenancy) voit la même liste de connecteurs partagée (pas de `connectors.json` par tenant aujourd'hui) ; en l'absence de multitenancy, un tenant `"default"` unique est utilisé.
+
+Pour la couverture complète (résolution des credentials `${...}`, hot-reload, idempotence/déduplication plateforme, politique de retry, persistance de l'état d'exécution, routage DLQ, diagnostics), voir le document dédié : [connector-framework-parameters-v2-2026-07-12.md](connector-framework-parameters-v2-2026-07-12.md).
 
 ---
 

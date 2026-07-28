@@ -21,7 +21,7 @@ and the **tooling / build coordination** modules.
 | `session-service-redis` | `ma.s2m.payos:session-service-redis` | Service | Redis `ISessionStore` implementation — distributed OIDC session storage (type `redis`). |
 | `payos-notification-api` | `ma.s2m.payos:payos-notification-api` | Service (API) | The notification-service SPI and model types (`INotificationServiceFactory`). |
 | `payos-service-notification` | `ma.s2m.payos:payos-service-notification` | Service | Default `INotificationServiceFactory` implementation (`$Notification`). |
-| `payos-connector-sdk` | `ma.s2m.payos:connector-sdk` | Service (API) | Business/payment connector SDK contract — `IConnector`, `AbstractConnector`. Not yet wired into `BootServer`. |
+| `payos-connector-sdk` | `ma.s2m.payos:connector-sdk` | Service (API) | Business/payment connector SDK contract — `IConnector`, `AbstractConnector`. Wired into `BootServer` since 2026-07-27. |
 | `payos-runtime` | `ma.s2m.payos:payos-runtime` | Distribution | The runnable, all-in-one server JAR (`BootServer`). |
 | `payosv2-packer` | `ma.s2m:payosv2-packer` | Tooling | `edc` — bundle encryption/decryption CLI. |
 | `payos-pm` | `ma.s2m.payos:payos-pm` | Tooling | `apm` / `cpm` / `ppm` — application, capability, and product package managers. |
@@ -71,7 +71,7 @@ PayOS extends without modifying the core through nine distinct mechanisms. Knowi
 | **Internal hooks** | application `hook/` directory | Registered in `hooks` configuration | JavaScript scripts that intercept lifecycle events (API_BEFORE_EXECUTE, API_AFTER_EXECUTE, API_ON_ERROR, etc.) in the request processing pipeline; observe and modify request/response context. |
 | **Service connectors** | `connectors-dir` | Java `ServiceLoader` (SPI) | Database, queue, secret, and (some) webhook providers. |
 | **Notification service** | `connectors-dir` | Java `ServiceLoader` (SPI) | `$Notification`; wired into `BootServer`. |
-| **Business/payment connector framework** | `connectors.json` + connector JARs | `ConnectorJarScanner` + descriptor | `$Connector(type[, name]).execute(payload)`. **Not yet wired into `BootServer`.** |
+| **Business/payment connector framework** | `connectors.json` + connector JARs | `ConnectorJarScanner` + descriptor | `$Connector(type[, name]).execute(payload)`. Wired into `BootServer` since 2026-07-27. |
 | **Java extensions** | `extensions-dir` | `Java.type('…')` from scripts | Arbitrary Java libraries callable from JavaScript (e.g. jPOS). |
 | **Transport providers** | bundled / classpath | `ServiceLoader<ServerProvider>` | New protocols (`http`, `tcp`, `queue`, …). |
 | **TCP codec/handler plugins** | `tcp-handlers-dir` | JAR scanning for concrete `TcpMessageDecoder/Encoder/Handler` | Custom wire-format parsing for the TCP transport; decodes bytes to `Request`, encodes `Response` to bytes, and provides message-specific processing logic. |

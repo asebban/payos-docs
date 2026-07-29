@@ -16,6 +16,12 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 | `$Library` | loader | Load shared JS from `lib/`. |
 | `$Logger` | SLF4J logger | Plain log line, message + level only. |
 | `$Errors` | `ErrorsProxy` | Typed business errors (`badRequest`, `notFound`, `conflict`, ...). |
+| `$Analytics` | `AnalyticsBinding` (wraps the `AnalyticsRecorder` static facade; `logEvent`; best-effort — errors logged, never thrown) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v7-2026-07-28.md](../developer/event-category-payload-contracts-v7-2026-07-28.md) |
+| `$Metrics` | `MetricsBinding` (wraps `MetricsRecorder`; `record`; best-effort) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v7-2026-07-28.md](../developer/event-category-payload-contracts-v7-2026-07-28.md) |
+| `$Integration` | `IntegrationEventBinding` (wraps `IntegrationEventPublisher`; `publish`; best-effort) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v7-2026-07-28.md](../developer/event-category-payload-contracts-v7-2026-07-28.md) |
+| `$EventStore` | `EventStoreBinding` (wraps `EventStore`; `append`/`replay`; **propagates errors**, does not swallow them — unlike the other three) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v7-2026-07-28.md](../developer/event-category-payload-contracts-v7-2026-07-28.md) |
+| `$Audit` | `AuditBinding` (wraps `AuditLogger`; **only** the free-form `logEvent(eventType, result, extra)` — no typed lifecycle methods; **propagates errors**) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v7-2026-07-28.md](../developer/event-category-payload-contracts-v7-2026-07-28.md) |
+| `$Diagnostics` | `DiagnosticsBinding` (wraps `Diagnostics`; generic `logEvent(nature, stage, ...)`; best-effort) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v7-2026-07-28.md](../developer/event-category-payload-contracts-v7-2026-07-28.md) |
 
 ## Available when the service is configured
 

@@ -310,7 +310,7 @@ The **Diagnostics** event category — distinct from the PCI-DSS audit trail
 every retry and terminal-routing decision for incident triage, without requiring debug logging.
 Every diagnostic event carries a mandatory `nature` field; connector retry/DLQ diagnostics use
 `nature="connector"` (the only nature implemented so far — see
-[event-category-payload-contracts-v5-2026-07-15.md](../developer/event-category-payload-contracts-v5-2026-07-15.md)
+[event-category-payload-contracts-v7-2026-07-28.md](../developer/event-category-payload-contracts-v7-2026-07-28.md)
 §6 for the full category contract).
 
 `ma.s2m.payos.diagnostics.Slf4jDiagnosticsRecorder` (the default and only

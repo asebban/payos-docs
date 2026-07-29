@@ -23,7 +23,7 @@ For developers **building applications on PayOS**. Applications are written prim
 16. [Java extensions](java-extensions.md) — calling Java libraries via `Java.type()`.
 17. [API documentation](api-documentation.md) — `@payos.openapi` annotations and `pdoc`. For the full reference, see [PayOS OpenAPI documentation guide](./openapi-docs/openapi-documentation-guide.md).
 18. [Debugging](debugging.md) — debugging server-side JavaScript.
-19. [Event category payload contracts (v5, 2026-07-15)](./event-category-payload-contracts-v5-2026-07-15.md) - one abstraction per event category (audit, analytics, event-sourcing, metrics, integration, diagnostics); supersedes the older [single-envelope observability proposal](./observability-event-contract-proposal.md)
+19. [Event category payload contracts (v7, 2026-07-28)](./event-category-payload-contracts-v7-2026-07-28.md) - one abstraction per event category (audit, analytics, event-sourcing, metrics, integration, diagnostics), all six implemented and all six SPI-resolved; supersedes the older [single-envelope observability proposal](./observability-event-contract-proposal.md)
 
 ## Related references
 

@@ -111,6 +111,81 @@ if (amount <= 0) {
 }
 ```
 
+### `$Analytics`, `$Metrics`, `$Integration`, `$EventStore`
+
+Four bindings over the event-category facades built in
+[event-category-payload-contracts-v7-2026-07-28.md](event-category-payload-contracts-v7-2026-07-28.md)
+— business/usage tracking, numeric time series, external choreography, and durable replay,
+respectively. Unlike every other binding in this section, they wrap a **static facade**
+(`AnalyticsRecorder`/`MetricsRecorder`/`IntegrationEventPublisher`/`EventStore`, all in
+`payos-kernel`), not a per-request service instance — the facade always resolves to at least an
+SLF4J default via SPI, so all four are injected unconditionally, exactly like `$Logger`/`$Errors`.
+Each pre-fills `tenantId`/`correlationId` from the current request so a script never passes
+either explicitly, the same ergonomic pattern `$Cache`/`$SlidingWindow` use for tenant
+namespacing.
+
+```javascript
+$Analytics.logEvent("checkout_started", { plan: "pro" });
+$Analytics.logEvent("checkout_started", { plan: "pro" }, $Principal.get("id")); // explicit actorId
+
+$Metrics.record("connector.execution.duration", "histogram", 42.0, "ms",
+        { connectorType: "CardNetwork", outcome: "SUCCESS" });
+
+$Integration.publish("ma.s2m.payos.payment.completed.v1", { paymentId: paymentId, amount: 1500 });
+
+$EventStore.append("payment-" + paymentId, "Payment", "PaymentAuthorized",
+        1 /* sequenceNumber */, 1 /* schemaVersion */, { amount: 1500, authCode: "00" });
+var history = $EventStore.replay("payment-" + paymentId); // array of plain objects, oldest first
+```
+
+**Error semantics differ per binding, matching each category's own delivery guarantee:**
+`$Analytics`, `$Metrics`, and `$Integration` are **best-effort** — any failure (a bad call from
+the script included) is logged at `warn` and never thrown, so a broken analytics/metrics/
+integration call can never break the surrounding script. `$EventStore` is the one exception: it
+**propagates errors** (e.g. `sequenceNumber` out of order raises `IllegalStateException`), because
+event-sourcing correctness depends on every fact actually landing — silently swallowing a bad
+append would corrupt replay with no visible error. Wrap `$EventStore.append(...)` in `try/catch`
+if the script needs to handle that itself.
+
+`$EventStore.append(...)` has a second overload taking an explicit `occurredAtEpochMilli` as its
+last argument, for backfill scenarios where the fact happened before "now" — the default overload
+uses the current instant, which is correct for the common case of a script emitting an event live.
+
+### `$Audit`, `$Diagnostics`
+
+The remaining two of the six event categories, both pre-existing "reference shape" categories
+(§1 and §6 of the contract doc) rather than newly built — but only now, alongside the four
+above, exposed to scripts.
+
+`$Audit` wraps `AuditLogger` but exposes **only** its free-form `logEvent(eventType, result,
+extra)` entry point — deliberately none of `IAuditLogger`'s typed lifecycle methods
+(`logAuthSuccess`, `logSessionCreated`, `logApiExecution`, `logStartup`, ...). Those are system
+events the kernel already emits itself at the right moment; letting a script call them too would
+be redundant at best and, at worst, let it fabricate a fake `AUTH_SUCCESS` record in a trail
+that's supposed to be immutable/WORM. `tenantId`/`correlationId`/`appId`/`path`/`userId` are all
+pre-filled from the current request/principal — the script only supplies what's actually
+event-specific.
+
+```javascript
+$Audit.logEvent("CARD_TOKENISED", "SUCCESS", { maskedPan: "************1234", tokenId: "tok_xyz" });
+```
+
+`$Diagnostics` wraps `Diagnostics` with a single generic `logEvent(nature, stage, errorCode,
+rootCauseCategory, attemptCount, reason, details)` — `DiagnosticEvent` is already nature-agnostic
+(see [connector-framework-usage.md](connector-framework-usage.md) for the `nature="connector"`
+precedent), so a script can emit its own `nature` (e.g. `"script"`) without needing a dedicated
+method.
+
+```javascript
+$Diagnostics.logEvent("script", "VALIDATION_FAILED", "BAD_INPUT", null, 1,
+        "missing required field 'amount'", { field: "amount" });
+```
+
+**Error semantics**: `$Audit` **propagates errors** (like `$EventStore`) — the audit trail "must
+never lose an event," so a blank `eventType` must surface immediately, not be silently dropped.
+`$Diagnostics` is **best-effort** (like `$Analytics`/`$Metrics`/`$Integration`) — the category
+tolerates loss entirely by design (short retention, WARN-level logs).
+
 ## Available when configured
 
 These bindings are injected only when the corresponding service is configured at bootstrap.
@@ -254,6 +329,10 @@ sandbox blocks a denylist such as `java.lang.System`). See
 ## Injection order
 
 Bindings are injected by `ApiResourceHandler` immediately before script execution, after the
-tenant scope is opened and security has run. Optional bindings (`$DB`, `$Queue`, `$Secrets`,
-`$Cache`, `$SlidingWindow`, `$I18n`, `$WebHooks`, `$Connector`, `$Notification`) are injected only
-when their service is present. The full pipeline is in [architecture/request-processing.md](../architecture/request-processing.md).
+tenant scope is opened and security has run. `HookEngine.injectCommonBindings(...)` duplicates
+the same wiring for the standalone hook-execution path — the two must be kept in sync when adding
+a binding. Optional bindings (`$DB`, `$Queue`, `$Secrets`, `$Cache`, `$SlidingWindow`, `$I18n`,
+`$WebHooks`, `$Connector`, `$Notification`) are injected only when their service is present.
+`$Analytics`, `$Metrics`, `$Integration`, `$EventStore`, `$Audit`, and `$Diagnostics` are always
+injected, like `$Logger`/`$Errors` — see their entries above for why. The full pipeline is in
+[architecture/request-processing.md](../architecture/request-processing.md).

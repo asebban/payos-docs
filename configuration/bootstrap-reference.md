@@ -40,7 +40,8 @@ A typical `bootstrap.json` contains the actual runtime blocks:
   "webhooks":       { /* see webhook-service.md */ },
   "http-webhook-service": { /* see webhook-service.md */ },
   "i18n":           { /* see i18n.md */ },
-  "swaggerUI":      { /* see servers.md */ }
+  "swaggerUI":      { /* see servers.md */ },
+  "runtimeCompatibility": { /* see below */ }
 }
 ```
 
@@ -79,6 +80,8 @@ from `IConfigSpec.Applications.Application`.
       "name": "Payments",
       "base.path": "../apps/payments",
       "version": "1.0.0",
+      "minRuntimeVersion": "1.10.0",
+      "maxRuntimeVersion": "2.0.0",
       "category": "application",
       "extends": ["audit-capability"],
       "authorized-tenants": ["acme", "globex"],
@@ -97,6 +100,8 @@ from `IConfigSpec.Applications.Application`.
 | `name` | | — | Display name. |
 | `base.path` | | `.apps/{id}` | Application directory, resolved relative to `configDir`. |
 | `version` | | — | Semantic version. |
+| `minRuntimeVersion` | | — | Lower bound (inclusive) of the compatible payos-runtime version. See [runtime compatibility checks](../developer/runtime-compatibility-checks-v1-2026-08-06.md). |
+| `maxRuntimeVersion` | | — | Upper bound (inclusive) of the compatible payos-runtime version. Same reference as above. |
 | `category` | | `application` | `application` or `capability`. |
 | `extends` | | — | Parent app/capability id(s) for resource inheritance. |
 | `authorized-tenants` / `authorized.tenants` | | — | Tenant allowlist. |
@@ -117,6 +122,24 @@ Resolve applications from a catalog rather than local paths:
 | source type | `local` or `git`. |
 | `baseUrl` | Git base URL (for `git`). |
 | `path` | Local repo path (for `local`). |
+
+## `runtimeCompatibility` (optional)
+
+Controls what `BootServer` does when an installed application/capability's `minRuntimeVersion`/`maxRuntimeVersion` (above) rules out the running payos-runtime version:
+
+```json
+{
+  "runtimeCompatibility": {
+    "warnOnly": true
+  }
+}
+```
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `warnOnly` | `false` | `false`: log every incompatibility at `ERROR` and abort boot. `true`: log at `WARN` and keep starting (dev/sandbox use). |
+
+Full reference: [developer/runtime-compatibility-checks-v1-2026-08-06.md](../developer/runtime-compatibility-checks-v1-2026-08-06.md).
 
 ## Environment placeholders & encryption
 

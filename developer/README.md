@@ -31,6 +31,7 @@ For developers **building applications on PayOS**. Applications are written prim
 - [Reference: script bindings index](../reference/script-bindings-index.md) — quick lookup.
 - [Architecture: request processing](../architecture/request-processing.md) — what runs your script.
 - [Create an application guide](./create-application-guide.md) — Comprehensive guide for creating PayOS applications step by step
+- [Runtime compatibility checks](./runtime-compatibility-checks-v1-2026-08-06.md) — `minRuntimeVersion`/`maxRuntimeVersion` declaration, `apm`/`cpm`/`ppm` install-time enforcement, and `BootServer`'s boot-time audit.
 
 ## The shortest possible application
 

@@ -18,6 +18,7 @@ block heading.
 | `applicationCatalog` | — | Optional app catalog (`local`/`git`, `baseUrl`/`path`). |
 | `capabilityCatalog` | — | Optional capability catalog (`local`/`git`, `baseUrl`/`path`). |
 | `productCatalog` | — | Optional product catalog (`local`/`git`, `baseUrl`/`path`). |
+| `runtimeCompatibility.warnOnly` | `false` | `false` aborts boot on a `minRuntimeVersion`/`maxRuntimeVersion` mismatch; `true` only logs a warning. See [runtime compatibility checks](../developer/runtime-compatibility-checks-v1-2026-08-06.md). |
 
 Internal/effective: `RUNTIME_CONFIG_FILE = payos.json`, `RUNTIME_BASE_DIRECTORY = runtimeBaseDir`, `CAPABILITIES_DIR = .capabilities`.
 
@@ -29,6 +30,7 @@ Internal/effective: `RUNTIME_CONFIG_FILE = payos.json`, `RUNTIME_BASE_DIRECTORY 
 | `name` | — | Display name. |
 | `base.path` | `.apps/{id}` | Application directory, resolved relative to `configDir`. |
 | `version` | — | Semantic version. |
+| `minRuntimeVersion` / `maxRuntimeVersion` | — | Compatible payos-runtime version bounds (inclusive). See [runtime compatibility checks](../developer/runtime-compatibility-checks-v1-2026-08-06.md). |
 | `category` | `application` | `application` / `capability`. |
 | `extends` | — | Parent app/capability id(s). |
 | `authorized-tenants` / `authorized.tenants` | — | Tenant allowlist. |

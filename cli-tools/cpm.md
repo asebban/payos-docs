@@ -36,6 +36,9 @@ cpm [global-options] <action> [options]
 | `--tenant <tenantId>` | Scope activation/deactivation to a tenant. |
 | `--cascade` | Cascade the operation (e.g. dependent capabilities). |
 | `--drop-schema` | On uninstall, drop the capability's database schema. |
+| `--runtime-version <version>` | Target payos-runtime version to check the manifest's `minRuntimeVersion`/`maxRuntimeVersion` bounds against (`--install` only). Omitted: no compatibility check. Given and incompatible: `--install` aborts before any side-effect. See [runtime compatibility checks](../developer/runtime-compatibility-checks-v1-2026-08-06.md). |
+| `--allow-incompatible-runtime` | Downgrades an incompatible `--runtime-version` check from an install-aborting error to a warning, and proceeds anyway. No effect without `--runtime-version`. |
+| `--compat` | With `--status`: also prints `compat-range` (declared bounds) and, when `--runtime-version` is given, a `compat-check: OK`/`INCOMPATIBLE` verdict. |
 
 > `--install` resolves the capability through the configured **catalog** (`capabilityCatalog`
 > in `payos.json` or `*.json` found in `configDir`) — there is no longer a plain `--path` flag for installing from an arbitrary (replaced by `--from-local`)
@@ -86,6 +89,12 @@ cpm --deactivate --id audit-capability --app payments --tenant acme \
 cpm --status --id audit-capability --bundle-path /opt/payos/bundle
 cpm --status --bundle-path /opt/payos/bundle
 
+# install, checking compatibility with a target runtime version first
+cpm --install --id audit-capability --runtime-version 1.11.0 --bundle-path /opt/payos/bundle
+
+# audit every installed capability against a runtime version before upgrading it
+cpm --status --compat --runtime-version 2.0.0 --bundle-path /opt/payos/bundle
+
 # uninstall and drop its schema
 cpm --uninstall --id audit-capability --drop-schema --bundle-path /opt/payos/bundle
 
@@ -101,3 +110,4 @@ cpm --uninstall --all --bundle-path /opt/payos/bundle
 
 - [apm.md](apm.md) · [ppm.md](ppm.md)
 - [architecture/extensibility.md](../architecture/extensibility.md)
+- [developer/runtime-compatibility-checks-v1-2026-08-06.md](../developer/runtime-compatibility-checks-v1-2026-08-06.md) — `--runtime-version`/`--allow-incompatible-runtime`/`--compat` in full context.

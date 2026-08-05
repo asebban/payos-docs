@@ -32,6 +32,9 @@ apm [global-options] <action> [options]
 | `--app <id[@version] \| path>` | The application to act on — by id (optionally `@version`) or a path. |
 | `--from-git[=<baseUrl>]` | Use a git application catalog for this install, optionally overriding its configured `baseUrl`. |
 | `--from-local[=<dir>]` | Use a local application catalog for this install, optionally overriding its configured `path`. `<dir>` is the **root** of the catalog — it must contain one subdirectory per application id (`<dir>/<id>/manifest.json`, optionally versioned as `<dir>/<id>/<version>/manifest.json`) — not the directory of the single application being installed. |
+| `--runtime-version <version>` | Target payos-runtime version to check the manifest's `minRuntimeVersion`/`maxRuntimeVersion` bounds against (`--install` only). Omitted: no compatibility check. Given and incompatible: `--install` aborts before any side-effect. See [runtime compatibility checks](../developer/runtime-compatibility-checks-v1-2026-08-06.md). |
+| `--allow-incompatible-runtime` | Downgrades an incompatible `--runtime-version` check from an install-aborting error to a warning, and proceeds anyway. No effect without `--runtime-version`. |
+| `--compat` | With `--status`: also prints `compat-range` (declared bounds) and, when `--runtime-version` is given, a `compat-check: OK`/`INCOMPATIBLE` verdict. |
 
 ### Global options (shared by `apm`/`cpm`/`ppm`)
 
@@ -57,6 +60,12 @@ apm --install --app payments --from-local=./build/applications --bundle-path /op
 # show what is installed
 apm --status --bundle-path /opt/payos/bundle
 
+# install, checking compatibility with a target runtime version first
+apm --install --app payments@1.0.0 --runtime-version 1.11.0 --bundle-path /opt/payos/bundle
+
+# check one app's compatibility range against a runtime version
+apm --status --app payments --compat --runtime-version 2.0.0 --bundle-path /opt/payos/bundle
+
 # uninstall
 apm --uninstall --app payments --bundle-path /opt/payos/bundle
 ```
@@ -80,3 +89,4 @@ The runtime picks up registry changes via [hot reload](../operations/hot-reload.
 - [cpm.md](cpm.md) — capabilities.
 - [ppm.md](ppm.md) — products.
 - [developer/application-model.md](../developer/application-model.md)
+- [developer/runtime-compatibility-checks-v1-2026-08-06.md](../developer/runtime-compatibility-checks-v1-2026-08-06.md) — `--runtime-version`/`--allow-incompatible-runtime`/`--compat` in full context.

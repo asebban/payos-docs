@@ -109,6 +109,29 @@ catalog/
     1.2.0.json
 ```
 
+## Per-application `manifest.json` (constituent applications)
+
+A product manifest's `applications[]` entries (`ApplicationRef`) only declare `id`, `basePath`,
+and an optional `version` — enough to locate and pull an application, but not the richer fields
+a standalone `apm install` picks up from that application's own `manifest.json` (`name`,
+`category`, `extends`, `authorizedTenants`, `mappingFiles`, `security`,
+`minRuntimeVersion`/`maxRuntimeVersion`).
+
+To keep an application's `bootstrap.json` entry the same regardless of whether it was installed
+via `apm install` directly or pulled in as part of a product, `ppm install` also checks for
+`<appDir>/manifest.json` after the application directory is present (whether it was already
+there or just pulled from the `applicationCatalog`):
+
+- **Present** — its optional fields are merged into the `bootstrap.json` entry, on top of the
+  `id`/`basePath`/`version` the product manifest's `ApplicationRef` already resolved (those three
+  stay authoritative from the product side — a per-application `manifest.json`'s own `id`/
+  `version` fields, if present, are ignored here).
+- **Absent** — no-op; the entry is built solely from the `ApplicationRef` as before.
+
+This means an application repo that already ships a `manifest.json` for standalone `apm install`
+use doesn't need a separate variant to also declare, say, `minRuntimeVersion` when installed as
+part of a product.
+
 ## Exit codes
 
 `0` success · `1` error · `2` usage error.
@@ -123,3 +146,4 @@ with [`cpm`](cpm.md).
 
 - [apm.md](apm.md) · [cpm.md](cpm.md)
 - [developer/application-model.md](../developer/application-model.md)
+- [developer/runtime-compatibility-checks-v1-2026-08-06.md](../developer/runtime-compatibility-checks-v1-2026-08-06.md) — how the per-application `manifest.json` merge above fits into the wider runtime-version compatibility feature.

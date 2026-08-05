@@ -67,6 +67,8 @@ From `IConfigSpec.Applications.Application` (full reference in
 | `name` | Display name. |
 | `base.path` | Filesystem path to the application directory (default `.apps/{id}`), resolved relative to `configDir`. |
 | `version` | Semantic version. |
+| `minRuntimeVersion` | Lower bound (inclusive) of the compatible payos-runtime version. Optional, no constraint when absent. Checked by `apm --install --runtime-version <v>` (payos-pm; `--allow-incompatible-runtime` downgrades a mismatch to a warning), and re-checked at every `BootServer` startup — see [runtime compatibility](#runtime-compatibility-policy) below. |
+| `maxRuntimeVersion` | Upper bound (inclusive) of the compatible payos-runtime version. Same checks as `minRuntimeVersion` above. |
 | `category` | `"application"` or `"capability"`. |
 | `extends` | String or array of parent app/capability IDs (resource inheritance). |
 | `authorized-tenants` / `authorized.tenants` | Allowlist of tenants permitted to use the app. |
@@ -74,6 +76,20 @@ From `IConfigSpec.Applications.Application` (full reference in
 | `mapping-files` | Array of data-model mapping file paths (see [data access](data-access.md)). |
 | `security` | Per-app security/OIDC overrides (see [security config](../configuration/security-oidc.md)). |
 | `database-service` | Per-app database configuration (see [database config](../configuration/database-service.md)). |
+
+## Runtime compatibility policy
+
+`BootServer` audits every entry in `bootstrap.json`'s `applications` array at startup (this covers installed capabilities too — both are written to the same array) and compares any declared `minRuntimeVersion`/`maxRuntimeVersion` against the running payos-runtime version. By default an incompatibility aborts boot (`System.exit(1)`, after logging every issue found). Set `runtimeCompatibility.warnOnly: true` in the runtime configuration (`bootstrap.json`, or any file merged from `configDir`) to only log a warning and keep starting instead — intended for dev/sandbox use, not production:
+
+```json
+{
+  "runtimeCompatibility": {
+    "warnOnly": true
+  }
+}
+```
+
+This is a defense-in-depth check on top of the install-time one (`apm`/`cpm --install --runtime-version <v>`): it also catches a capability dropped into the bundle by hand, or a runtime upgraded after the fact without revalidating what's already installed. Full reference, including the manifest schema and the `--compat` reporting flag: [developer/runtime-compatibility-checks-v1-2026-08-06.md](runtime-compatibility-checks-v1-2026-08-06.md).
 
 ## How resources are resolved: the `extends` chain
 

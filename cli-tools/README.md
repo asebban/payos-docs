@@ -40,3 +40,4 @@ between applications, capabilities, and products.
 - [Operations: bundle encryption](../operations/bundle-encryption.md)
 - [Operations: secrets management](../operations/secrets-management.md)
 - [Developer: API documentation](../developer/api-documentation.md)
+- [Developer: runtime compatibility checks](../developer/runtime-compatibility-checks-v1-2026-08-06.md) — `apm`/`cpm`/`ppm --runtime-version`, `--allow-incompatible-runtime`, `--compat`.

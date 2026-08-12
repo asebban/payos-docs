@@ -26,7 +26,7 @@ BootServer.main(args)
   │
   ├─ store result in PayOSConfig.settings (volatile Map<String,Object>)
   │
-  ├─ ConnectorLoader.initialize(settings)             ← connectors-dir → connector classloader
+  ├─ ServiceAdapterLoader.initialize(settings)             ← service-adapters-dir → service-adapter classloader
   ├─ ExtensionLoader.initialize(settings)             ← extensions-dir → extension classloader
   │
   ├─ initialize services (registered into PayOSConfig):
@@ -76,7 +76,7 @@ the singleton services that the request pipeline and scripts depend on.
 | `setIdempotencyService` / `getIdempotencyService` | `IdempotencyService` | Idempotent response cache. |
 | `setNotificationServiceFactory` / `getNotificationServiceFactory` | `INotificationServiceFactory` | The `$Notification` provider. |
 | `setConnectorRegistry` / `getConnectorRegistry` | `TenantConnectorRegistry` | The `$Connector` provider — set by `ConnectorFrameworkInitializer` at boot and on hot reload; `null` only when `connectors.json` is absent/empty or no valid connector JARs are found. |
-| `setConnectorClassLoader` / `getConnectorClassLoader` | `ClassLoader` | Loads connector SPI JARs. |
+| `setServiceAdapterClassLoader` / `getServiceAdapterClassLoader` | `ClassLoader` | Loads connector SPI JARs. |
 | `setExtensionClassLoader` / `getExtensionClassLoader` | `ClassLoader` | Loads extension JARs for `Java.type()`. |
 | `setRuntimeBaseDirectory` / `getRuntimeBaseDirectory` | `String` | Effective bundle base path for relative resolution. |
 
@@ -116,18 +116,18 @@ application classloader
         ▲ parent
 extension classloader   (extensions-dir, used by Java.type())
         ▲ parent
-connector classloader   (connectors-dir, used by ServiceLoader SPI)
+service-adapter classloader   (service-adapters-dir, used by ServiceLoader SPI)
         ▲ parent
 runtime/app classloader (the shaded payos-runtime JAR)
 ```
 
-`ConnectorLoader` and `ExtensionLoader` each build a `URLClassLoader` over the JARs in their
+`ServiceAdapterLoader` and `ExtensionLoader` each build a `URLClassLoader` over the JARs in their
 directory and register it in `PayOSConfig`. The directories are resolved in this precedence
 order:
 
-1. JVM system property (`-Dconnectors-dir=…` / `-Dextensions-dir=…`),
-2. environment variable (`PAYOS_CONNECTORS_DIR` / `PAYOS_EXTENSIONS_DIR`),
-3. the bootstrap settings key (`connectors-dir` / `extensions-dir`).
+1. JVM system property (`-Dservice-adapters-dir=…` / `-Dextensions-dir=…`),
+2. environment variable (`PAYOS_SERVICE_ADAPTERS_DIR` / `PAYOS_EXTENSIONS_DIR`),
+3. the bootstrap settings key (`service-adapters-dir` / `extensions-dir`).
 
 See [extensibility.md](extensibility.md) for what each loader enables.
 

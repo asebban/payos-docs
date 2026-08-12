@@ -59,8 +59,8 @@ These are documented in
 `$DB` is injected only when a database service is configured. If your script references it
 without a configured connector, the binding will be absent. Configure the
 [database service](../configuration/database-service.md) and ensure the
-`dynamic-database-service` connector JAR (and its JDBC driver) are on the
-[connectors path](../configuration/extensions-connectors.md).
+`dynamic-database-service` service-adapter JAR (and its JDBC driver) are on the
+[service-adapters path](../configuration/extensions-connectors.md).
 
 ## Next
 

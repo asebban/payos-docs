@@ -593,7 +593,7 @@ les scripts, via `$Connector(type[, name]).execute(payload)`. Construit sur 5 é
 **Statut :** entièrement implémenté et testé (`payos`, `payos-connector-sdk`), mais **pas encore
 câblé dans `BootServer`** — `$Connector` n'est donc pas disponible dans un déploiement en
 production aujourd'hui. Détails complets :
-[connector-framework-parameters-v2-2026-07-12.md](configuration/connector-framework-parameters-v2-2026-07-12.md).
+[connector-framework-parameters-v3-2026-08-11.md](configuration/connector-framework-parameters-v3-2026-08-11.md).
 
 ---
 
@@ -601,7 +601,7 @@ production aujourd'hui. Détails complets :
 
 PayOS intègre un service de gestion des secrets accessible aux scripts via le binding `$Secrets`.
 
-Le service est désactivé par défaut et s'active via la clé `secret-service.configuration.enabled: true` dans `bootstrap.json`. L'implémentation concrète est un connecteur chargé depuis `connectors-dir` via SPI Java (`ISecretProviderFactory`).
+Le service est désactivé par défaut et s'active via la clé `secret-service.configuration.enabled: true` dans `bootstrap.json`. L'implémentation concrète est un connecteur chargé depuis `service-adapters-dir` via SPI Java (`ISecretProviderFactory`).
 
 Deux connecteurs sont livrés avec PayOS : `secret-service-filesystem` (référence, stockage chiffré AES-256-GCM sur disque local) et `secret-service-vault` (HashiCorp Vault KV v2, pour la production).
 

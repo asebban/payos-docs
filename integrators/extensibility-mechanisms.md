@@ -1297,7 +1297,7 @@ function execute(request, controlData) {
 }
 ```
 
-`$Secrets` only exposes `get`, `list`, `tokenize`, and `detokenize` to scripts — no write/delete/describe (see [developer/secrets-usage.md](../developer/secrets-usage.md)). It is injected only if `secret-service.configuration.enabled = true` in configuration and a connector (`filesystem` or `vault`) is present in `connectors-dir` — check these two points before delivering.
+`$Secrets` only exposes `get`, `list`, `tokenize`, and `detokenize` to scripts — no write/delete/describe (see [developer/secrets-usage.md](../developer/secrets-usage.md)). It is injected only if `secret-service.configuration.enabled = true` in configuration and a connector (`filesystem` or `vault`) is present in `service-adapters-dir` — check these two points before delivering.
 
 ### 11.2 Provisioning a secret for the client tenant (`spm`) with the filesystem secret provider
 
@@ -1307,7 +1307,7 @@ For filesystem secret provider, you should perform the following to create and m
 
 ```bash
 #Provider filesystem
-spm set --root /opt/payos/secrets --tenant atlas --connectors-dir /opt/payos/connectors \
+spm set --root /opt/payos/secrets --tenant atlas --service-adapters-dir /opt/payos/connectors \
         --name atlas-psp-api-key --value "sk_live_xxx"
 
 # Check
@@ -1333,13 +1333,13 @@ Create the following configuration in the root folder of the bundle (you could e
 
 The `root` key is the folder where the filesystem secret provider stores the secrets, and the keyfile is the file where the secret provider master key resides. Filesystem secret provider is usually used in development, but if you want to use it in production, you should protect the `keyfile` with the usual OS access rights (linux / windows), so that only the super user or payos user (the user under which the runtime will execute) have the right to read it, since the master key inside the file is not encrypted (only base64 encoded).
 
-#### Deploy the secret provider Jar in the connectors directory
+#### Deploy the secret provider Jar in the service-adapters directory
 
-Since the secret provider is a connector / adapter just as all other adapters (database-service, queue service, ...), the byte code (JAR) of the provider should be deployed in the configured connectors directory. The connectors directory should be configured as follows:
+Since the secret provider is a service adapter just as all other service adapters (database-service, queue service, ...), the byte code (JAR) of the provider should be deployed in the configured service-adapters directory. The service-adapters directory should be configured as follows:
 
 ```json
 {
-  "connectors-dir": "/opt/payos/connectors"
+  "service-adapters-dir": "/opt/payos/connectors"
 }
 ```
 
@@ -1482,7 +1482,7 @@ function execute(request, controlData) {
 
 Reference: [developer/java-extensions.md](../developer/java-extensions.md), [configuration/json-configuration-reference.md §3.13](../configuration/json-configuration-reference.md#313-extensions-dir-bootstrapjson).
 
-### 13.2 SPI connectors (`connectors-dir`)
+### 13.2 SPI connectors (`service-adapters-dir`)
 
 If the client imposes a **backend** not covered by the reference connectors (e.g. a proprietary secrets provider, a new `IQueueClientFactory` implementation), ... a connector can be developed. The already implemented services this way are servers (http, tcp and queue), the secret providers, the database service and the webhook dispatchers. The interfaces for these services reside in the payos kernel. Let's take an example from the secret provider interface :
 
@@ -1504,12 +1504,12 @@ and the content of the `ma.s2m.payos.secret.api.ISecretProviderFactory` file wil
 com.acme.payos.secret.AcmeSecretProviderFactory
 ```
 
-3. Build the JAR and drop it into `connectors-dir` (always as a fat Jar).
+3. Build the JAR and drop it into `service-adapters-dir` (always as a fat Jar).
 4. Reference its `type` and its other meta-data in the configuration (`secret-service.configuration.type: "my-provider"`, etc.).
 
 > - This adds an **artifact to maintain and evolve** with each kernel version, but the kernel does not depend on it
 > - involve the publisher from the design stage.
-> - If these services are not declared, or have not been deployed to `connectors-dir` the kernel starts anyway without the corresponding service
+> - If these services are not declared, or have not been deployed to `service-adapters-dir` the kernel starts anyway without the corresponding service
 
 ### 13.2bis Business/payment connector framework (`$Connector`) — not to be confused with SPI connectors above
 
@@ -1527,7 +1527,7 @@ in §13.2 has any concept of. **Wired into `BootServer` since 2026-07-27** (ever
 declared in `multitenancy.tenants` shares the same connector list scanned from
 `<runtimeBaseDir>/connectors/`) — deployable today. To write one: [connector-developer/README.md](../connector-developer/README.md).
 Operator-facing configuration reference:
-[configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md).
+[configuration/connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md).
 
 ### 13.3 TCP plugins / new protocols
 
@@ -1917,7 +1917,7 @@ apm --status --app atlas-payment-gateway
 | Your overlay files (`api/`, `page/`, `lib/`, `hook/`, `i18n/`, `menu/`, `webhooks.json`) | ✅ Yes (`ConfigWatcher` + hook cache invalidation) |
 | `bootstrap.json` (application declaration, `multitenancy`, `security`, …) | ✅ Yes (atomic swap of configuration) |
 | Enabling/disabling capability via `cpm` | ✅ Yes |
-| New JAR in `connectors-dir` / `extensions-dir` | ❌ Reboot required |
+| New JAR in `service-adapters-dir` / `extensions-dir` | ❌ Reboot required |
 | New listening port / new server | ❌ Reboot required |
 
 See [operations/hot-reload.md](../operations/hot-reload.md).

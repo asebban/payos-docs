@@ -1,7 +1,6 @@
 # Build & release
 
-How the PayOS multi-module Maven project is built, versioned, and assembled into runnable
-artifacts. This section is for engineers maintaining the platform itself.
+How the PayOS multi-module Maven project is built, versioned, and assembled into runnable artifacts. This section is for engineers maintaining the platform itself.
 
 ## Contents
 
@@ -18,8 +17,7 @@ artifacts. This section is for engineers maintaining the platform itself.
 - A **parent POM** (`payos-parent`) centralizes the Java version and dependency versions.
 - A **BOM** (`payos-bom`, artifact `payos-core-bom`) pins the kernel/platform versions for
   consumers.
-- The **runtime** (`payos-runtime`) shades the kernel, transports, and standard connectors
-  into one executable JAR (`ma.s2m.payos.BootServer`).
+- The **runtime** (`payos-runtime`) shades the kernel, transports, and standard connectors into one executable JAR (`ma.s2m.payos.BootServer`).
 - Service/transport backends are separate modules producing **connector JARs**.
 
 ## Next

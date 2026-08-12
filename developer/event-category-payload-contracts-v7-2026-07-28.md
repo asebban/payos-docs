@@ -191,7 +191,7 @@ nor `Diagnostics` imports anything connector-specific.
 
 The connector-sourced diagnostics (`nature = "connector"`) were built for Epic 5.7 of the
 connector framework — see
-[configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
+[configuration/connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md)
 §11 for the full behavioral context. They are produced by a separate helper,
 `ma.s2m.payos.connector.diagnostics.ConnectorDiagnosticsHelper` — the only class in the
 codebase that imports both the diagnostics category and `ConnectorTerminalDestination`. It

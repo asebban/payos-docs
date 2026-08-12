@@ -72,9 +72,10 @@ The shipped implementation is `webhook-service-http` (`type = "http"`,
 `WebhookDispatchers.create(type, config)` and stored with
 `PayOSConfig.setWebhookDispatcher(...)`.
 
-> Unlike the queue/secret connectors, the webhook factory is discovered with a **standard**
-> `ServiceLoader` (not the connector classloader). The dispatcher is selected by the
-> bootstrap key `webhooks.dispatcher` (default `"http"`).
+> Like the queue/secret service adapters, the webhook factory is discovered with `ServiceLoader`
+> against the service-adapter classloader (`PayOSConfig.getServiceAdapterClassLoader()`) — a JAR
+> providing `IWebhookDispatcherFactory` belongs in `service-adapters-dir` alongside the others.
+> The dispatcher is selected by the bootstrap key `webhooks.dispatcher` (default `"http"`).
 
 ## Webhook subscriptions
 

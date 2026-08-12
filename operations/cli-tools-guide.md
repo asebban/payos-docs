@@ -943,7 +943,7 @@ edc --help
 |---|---|---|
 | `--secret-tenant <id>` | `default` | Tenant du secret contenant la clé |
 | `--secret-name <name>` | `encryptionKey` | Nom du secret contenant la clé |
-| `--connectors-dir <dir>` | — | Répertoire contenant les JARs de connecteurs pour découverte SPI (vault and filesystem secret providers) |
+| `--service-adapters-dir <dir>` | — | Répertoire contenant les JARs de connecteurs pour découverte SPI (vault and filesystem secret providers) |
 | `--secret-config <config>` | — | Configuration générique au format `key=value,key2=value2` pour configurations avancées |
 
 #### Options spécifiques `filesystem`
@@ -989,7 +989,7 @@ Toutes les options peuvent être passées via variables d'environnement :
 | `PAYOS_VAULT_TIMEOUT` | Timeout HTTP Vault |
 | `PAYOS_SECRET_CONFIG` | Configuration générique (format `key=value,key2=value2`) |
 | `PAYOS_SECRET_CFG_*` | Configuration par clé individuelle (ex: `PAYOS_SECRET_CFG_CUSTOM_KEY` → `custom-key`) |
-| `PAYOS_CONNECTORS_DIR` | Répertoire des connecteurs |
+| `PAYOS_SERVICE_ADAPTERS_DIR` | Répertoire des connecteurs |
 
 ### Modes d'opération
 

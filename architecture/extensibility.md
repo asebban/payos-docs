@@ -9,9 +9,9 @@ PayOS adds behavior **without modifying the rigid core**. There are nine distinc
 | **Capabilities** | application `base.path` | Installed via `cpm`, declared with `"category": "capability"` | Reusable, self-contained extensions (APIs, pages, menus, libraries, hooks) that applications can inherit from; activatable without redeploying the runtime; enables composable application architectures |
 | **Application resource inheritance** | application `base.path` | `extends` field in application config | Applications can inherit APIs, pages, menus, libraries, and hooks from capabilities or from other applications. They can override behavior of inherited application without any impact on it |
 | **Internal hooks** | application `hook/` directory | Registered in `hooks` configuration | JavaScript scripts that intercept lifecycle events (API_BEFORE_EXECUTE, API_AFTER_EXECUTE, API_ON_ERROR, etc.) in the request processing pipeline; observe and modify request/response context. |
-| **Service connectors** | `connectors-dir` | Java `ServiceLoader` (SPI) | Database, queue, secret, and webhook providers. |
-| **Notification service** | `connectors-dir` | Java `ServiceLoader` (SPI), `INotificationServiceFactory` | Publisher-side `$Notification` binding; wired into `BootServer` (`NotificationServiceInitializer`). |
-| **Business/payment connector framework** | `connectors.json` + connector JARs | `ConnectorJarScanner` + descriptor (`META-INF/connector.properties`) | `$Connector(type[, name]).execute(payload)` — card networks, switches, PSPs. Wired into `BootServer` since 2026-07-27. See [connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md). |
+| **Service connectors** | `service-adapters-dir` | Java `ServiceLoader` (SPI) | Database, queue, secret, and webhook providers. |
+| **Notification service** | `service-adapters-dir` | Java `ServiceLoader` (SPI), `INotificationServiceFactory` | Publisher-side `$Notification` binding; wired into `BootServer` (`NotificationServiceInitializer`). |
+| **Business/payment connector framework** | `connectors.json` + connector JARs | `ConnectorJarScanner` + descriptor (`META-INF/connector.properties`) | `$Connector(type[, name]).execute(payload)` — card networks, switches, PSPs. Wired into `BootServer` since 2026-07-27. See [connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md). |
 | **Java extensions** | `extensions-dir` | `Java.type('…')` from scripts | Arbitrary Java libraries callable from JavaScript (e.g. jPOS). |
 | **Transport providers** | bundled / classpath | `ServiceLoader<ServerProvider>` | New protocols (`http`, `tcp`, `queue`, …). |
 | **TCP codec/handler plugins** | `tcp-handlers-dir` | JAR scanning for concrete `TcpMessageDecoder/Encoder/Handler` | Custom wire-format parsing for the TCP transport; decodes bytes to `Request`, encodes `Response` to bytes, and provides message-specific processing logic. |
@@ -82,9 +82,9 @@ Available lifecycle events include:
 
 Hooks have access to the request/response context and can modify it before the next pipeline stage. See [eventing-webhooks.md](eventing-webhooks.md) for the complete event list.
 
-## 4. Service connectors (SPI)
+## 4. Service adapters (SPI)
 
-A connector is a JAR in `connectors-dir`. `ConnectorLoader` builds a `URLClassLoader` over those JARs at bootstrap and registers it via `PayOSConfig. setConnectorClassLoader(...)`. Each service is then discovered with `ServiceLoader` against that classloader and selected by a `type` string.
+A service adapter is a JAR in `service-adapters-dir`. `ServiceAdapterLoader` builds a `URLClassLoader` over those JARs at bootstrap and registers it via `PayOSConfig.setServiceAdapterClassLoader(...)`. Each service is then discovered with `ServiceLoader` against that classloader and selected by a `type` string.
 
 | Service | SPI factory | `type()` examples | Script binding |
 | --- | --- | --- | --- |
@@ -92,24 +92,24 @@ A connector is a JAR in `connectors-dir`. `ConnectorLoader` builds a `URLClassLo
 | Queue | `IQueueClientFactory` | `nats` | `$Queue` |
 | Secrets | `ISecretProviderFactory` | `filesystem`, `vault` | `$Secrets` |
 | Webhooks | `IWebhookDispatcherFactory` | `http` | `$WebHooks` (dispatch) |
-| Notification | `INotificationServiceFactory` | (connector-defined) | `$Notification` |
+| Notification | `INotificationServiceFactory` | (service-adapter-defined) | `$Notification` |
 
-### How a connector is selected
+### How a service adapter is selected
 
 ```
 QueueServiceInitializer / SecretServiceInitializer / WebhookServiceInitializer
   └─ XxxClients.create(type, config)
-        ├─ ServiceLoader<IXxxFactory>  (over the connector classloader)
+        ├─ ServiceLoader<IXxxFactory>  (over the service-adapter classloader)
         ├─ match factory whose type() equals the configured type (normalized to lowercase)
         └─ factory.create(config) → register in PayOSConfig
 ```
 
-### Writing a connector
+### Writing a service adapter
 
 1. Implement the SPI factory (e.g. `ISecretProviderFactory`) and its product (`ISecretProvider`).
 2. Return a unique `type()` (e.g. `"vault"`).
 3. Register the factory in `META-INF/services/<fully-qualified-SPI-interface>`.
-4. Build a JAR and drop it (with its dependencies) into `connectors-dir`.
+4. Build a JAR and drop it (with its dependencies) into `service-adapters-dir`.
 5. Reference its `type` in the relevant configuration block.
 
 The shipped connectors are the reference implementations: `queue-service-nats`, `webhook-service-http`, `secret-service-filesystem`, `secret-service-vault`, and `database-service`. See [configuration/extensions-connectors.md](../configuration/extensions-connectors.md) for directory resolution and [build-and-release/module-map.md](../build-and-release/module-map.md) for artifacts.
@@ -136,11 +136,11 @@ This is the mechanism for integrating libraries such as **jPOS** for ISO 8583 me
 
 ### Directory resolution (both loaders)
 
-`connectors-dir` and `extensions-dir` are each resolved in this precedence order:
+`service-adapters-dir` and `extensions-dir` are each resolved in this precedence order:
 
-1. JVM system property (`-Dconnectors-dir=…` / `-Dextensions-dir=…`),
-2. environment variable (`PAYOS_CONNECTORS_DIR` / `PAYOS_EXTENSIONS_DIR`),
-3. the bootstrap settings key (`connectors-dir` / `extensions-dir`).
+1. JVM system property (`-Dservice-adapters-dir=…` / `-Dextensions-dir=…`),
+2. environment variable (`PAYOS_SERVICE_ADAPTERS_DIR` / `PAYOS_EXTENSIONS_DIR`),
+3. the bootstrap settings key (`service-adapters-dir` / `extensions-dir`).
 
 ## 6. Transport providers
 
@@ -196,7 +196,7 @@ See [configuration/servers.md](../configuration/servers.md) for the complete TCP
 | Add reusable app behavior without redeploying | a **capability** |
 | Share APIs/pages/menus between applications | **application resource inheritance** (`extends`) |
 | Intercept request lifecycle events | **internal hooks** |
-| Add a database/queue/secret/webhook backend | a **service connector** in `connectors-dir` |
+| Add a database/queue/secret/webhook backend | a **service connector** in `service-adapters-dir` |
 | Call an arbitrary Java library from a script | a **Java extension** in `extensions-dir` |
 | Add a new network protocol | a **transport provider** |
 | Parse custom wire formats for TCP | a **TCP codec/handler plugin** in `tcp-handlers-dir` |

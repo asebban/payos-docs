@@ -69,8 +69,8 @@ PayOS extends without modifying the core through nine distinct mechanisms. Knowi
 | **Capabilities** | application `base.path` | Installed via `cpm`, declared with `"category": "capability"` | Reusable, self-contained extensions (APIs, pages, menus, libraries, hooks) that applications can inherit from; activatable without redeploying the runtime; enables composable application architectures |
 | **Application resource inheritance** | application `base.path` | `extends` field in application config | Applications can inherit APIs, pages, menus, libraries, and hooks from capabilities or from other applications. |
 | **Internal hooks** | application `hook/` directory | Registered in `hooks` configuration | JavaScript scripts that intercept lifecycle events (API_BEFORE_EXECUTE, API_AFTER_EXECUTE, API_ON_ERROR, etc.) in the request processing pipeline; observe and modify request/response context. |
-| **Service connectors** | `connectors-dir` | Java `ServiceLoader` (SPI) | Database, queue, secret, and (some) webhook providers. |
-| **Notification service** | `connectors-dir` | Java `ServiceLoader` (SPI) | `$Notification`; wired into `BootServer`. |
+| **Service connectors** | `service-adapters-dir` | Java `ServiceLoader` (SPI) | Database, queue, secret, and (some) webhook providers. |
+| **Notification service** | `service-adapters-dir` | Java `ServiceLoader` (SPI) | `$Notification`; wired into `BootServer`. |
 | **Business/payment connector framework** | `connectors.json` + connector JARs | `ConnectorJarScanner` + descriptor | `$Connector(type[, name]).execute(payload)`. Wired into `BootServer` since 2026-07-27. |
 | **Java extensions** | `extensions-dir` | `Java.type('…')` from scripts | Arbitrary Java libraries callable from JavaScript (e.g. jPOS). |
 | **Transport providers** | bundled / classpath | `ServiceLoader<ServerProvider>` | New protocols (`http`, `tcp`, `queue`, …). |

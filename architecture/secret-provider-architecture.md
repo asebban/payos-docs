@@ -76,7 +76,7 @@ flowchart TD
 
 - Le kernel ne connaît que `ISecretProvider` et `ISecretProviderFactory` (module `payos-secret-api`).
 - L'implémentation concrète vit dans un module séparé et est découverte via `ServiceLoader<ISecretProviderFactory>`.
-- En pratique, `SecretProviders` interroge `ServiceLoader` avec `PayOSConfig.getConnectorClassLoader()` : si `connectors-dir` est configuré, ce classloader inclut les JARs du répertoire ; sinon la résolution retombe sur le classloader par défaut.
+- En pratique, `SecretProviders` interroge `ServiceLoader` avec `PayOSConfig.getServiceAdapterClassLoader()` : si `service-adapters-dir` est configuré, ce classloader inclut les JARs du répertoire ; sinon la résolution retombe sur le classloader par défaut.
 - La frontière tenant est appliquée à deux niveaux : dans `AbstractSecretProvider` (validation du tenantId) et dans `SecretPath` (résolution des chemins).
 - Le binding `$Secrets` expose une API réduite et sûre pour les scripts : lecture, liste, et tokenisation (`get`, `list`, `tokenize`, `detokenize`) — pas d'écriture, de suppression, de métadonnées ni de gestion de versions (voir [§8](#injection-dans-les-scripts--secretsbinding)).
 - Deux connecteurs sont livrés avec PayOS : `secret-service-filesystem` (stockage local chiffré, référence) et `secret-service-vault` (HashiCorp Vault KV v2, pour la production).
@@ -496,7 +496,7 @@ plutôt que sur un stockage fichier local.
 
 ```mermaid
 flowchart TD
-    BOOT["BootServer.main()"] --> CL["ConnectorLoader.initialize()\ncharge les JARs de connectors-dir\ndont secret-service-filesystem.jar"]
+    BOOT["BootServer.main()"] --> CL["ServiceAdapterLoader.initialize()\ncharge les JARs de service-adapters-dir\ndont secret-service-filesystem.jar"]
     CL --> DB["DatabaseServiceInitializer\n→ $DB disponible"]
     DB --> QU["QueueServiceInitializer\n→ $Queue disponible"]
     QU --> SS["SecretServiceInitializer\n→ $Secrets disponible"]
@@ -523,10 +523,10 @@ L'échec d'initialisation du secret service est **fatal** : le runtime ne démar
 
 ### Chargement SPI des providers
 
-`SecretProviders` est un singleton qui charge les factories via `ServiceLoader<ISecretProviderFactory>` avec le **connector ClassLoader** (pas le classloader système). Ce classloader inclut les JARs déposés dans `connectors-dir`.
+`SecretProviders` est un singleton qui charge les factories via `ServiceLoader<ISecretProviderFactory>` avec le **connector ClassLoader** (pas le classloader système). Ce classloader inclut les JARs déposés dans `service-adapters-dir`.
 
 ```java
-ServiceLoader.load(ISecretProviderFactory.class, PayOSConfig.getConnectorClassLoader())
+ServiceLoader.load(ISecretProviderFactory.class, PayOSConfig.getServiceAdapterClassLoader())
 ```
 
 Les factories chargées sont mises en cache dans une `Map<String, ISecretProviderFactory>` immuable. Le cache est invalidé au hot reload (via `SecretServiceInitializer.initialize` dans `reloadConfiguration`).
@@ -753,7 +753,7 @@ com.example.payos.aws.AwsSecretsManagerProviderFactory
 
 ### 5. Déploiement
 
-Déposer le JAR dans `connectors-dir` (défaut `.connectors/`). Le kernel le découvre au démarrage ou au prochain hot reload.
+Déposer le JAR dans `service-adapters-dir` (défaut `.connectors/`). Le kernel le découvre au démarrage ou au prochain hot reload.
 
 ### 6. Configuration
 

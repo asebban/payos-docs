@@ -40,10 +40,10 @@ From `IConfigSpec.QueueService`:
 | `publisher-topic` | — | Default topic for outbound `$Queue.publish`. |
 | `consumer-topic` | — | Topic consumed by the queue transport (`default-topic` if unset). |
 
-## Connector discovery
+## Service-adapter discovery
 
-The NATS connector JAR (`ma.s2m.payos:queue-service-nats`) must be on the
-[connectors path](extensions-connectors.md). The factory is selected by `type` via
+The NATS service-adapter JAR (`ma.s2m.payos:queue-service-nats`) must be on the
+[service-adapters path](extensions-connectors.md). The factory is selected by `type` via
 `QueueClients.create(type)` / `ServiceLoader`, and the resulting client is registered with
 `PayOSConfig.setQueueClient(...)` so scripts see `$Queue`.
 

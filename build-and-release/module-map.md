@@ -32,9 +32,10 @@ fits together. Versions are in [versioning.md](versioning.md).
 | `payos-secret-api` | (SPI definitions) | — | (`ISecretProvider`, models, exceptions) |
 | `session-service-redis` | `ISessionStoreFactory` | `redis` | `PayOSSessionStore` (OIDC sessions) |
 
-> The webhook and session-store factories are discovered via a standard `ServiceLoader`; the
-> database/queue/secret connectors are loaded from `connectors-dir` via the connector
-> classloader. See [configuration/extensions-connectors.md](../configuration/extensions-connectors.md).
+> The session-store factory is the one exception, discovered via a standard `ServiceLoader`; the
+> database/queue/secret/webhook service adapters are all loaded from `service-adapters-dir` via
+> the service-adapter classloader. See
+> [configuration/extensions-connectors.md](../configuration/extensions-connectors.md).
 > `session-service-redis` is optional — omitting it from `payos-runtime`'s dependencies keeps
 > `security.sessionStoreType` defaulting to the kernel's in-memory `ISessionStore`.
 
@@ -61,10 +62,7 @@ fits together. Versions are in [versioning.md](versioning.md).
 - payos-secret-api 1.0.0-RELEASE, secret-service-filesystem 1.1.0-RELEASE, secret-service-vault 1.1.0-RELEASE
 - payos-notification-api 1.0.0-RELEASE, payos-notification-connector 1.1.0-RELEASE, connector-sdk 1.2.0-RELEASE
 
-`secret-service-vault` is shaded directly into the runtime jar alongside
-`secret-service-filesystem` — it is a direct `payos-runtime` dependency, not an
-additional/alternative connector-jar-only backend. A different queue/DB backend would still
-be deployed as connector JARs in `connectors-dir`.
+`secret-service-vault` is shaded directly into the runtime jar alongside `secret-service-filesystem` — it is a direct payos-runtime` dependency, not an additional/alternative service-adapter-jar-only backend. A different queue/DB backend would still be deployed as service-adapter JARs in `service-adapters-dir`.
 
 ## Dependency direction
 

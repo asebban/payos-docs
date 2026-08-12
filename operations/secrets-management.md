@@ -13,8 +13,8 @@ script usage is in [developer/secrets-usage.md](../developer/secrets-usage.md).
 | Master key | Key file or `PAYOS_SECRET_MASTER_KEY` | Vault auth (AppRole/token) |
 | Tokenization | ✅ | ✅ |
 
-Whichever you pick, ensure the provider connector JAR is on the
-[connectors path](../configuration/extensions-connectors.md).
+Whichever you pick, ensure the provider service-adapter JAR is on the
+[service-adapters path](../configuration/extensions-connectors.md).
 
 ## Filesystem provider operations
 

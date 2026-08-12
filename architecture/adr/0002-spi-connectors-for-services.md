@@ -21,7 +21,7 @@ JARs discovered at runtime through Java's `ServiceLoader`:
 | Secrets | `ISecretProviderFactory` | `type` (e.g. `filesystem`, `vault`) |
 | Webhooks | `IWebhookDispatcherFactory` | `webhooks.dispatcher` (e.g. `http`) |
 
-Connectors are loaded from `connectors-dir` via a dedicated `URLClassLoader`. Only the SPI
+Connectors are loaded from `service-adapters-dir` via a dedicated `URLClassLoader`. Only the SPI
 interface lives in the kernel; implementations live outside it.
 
 ## Consequences
@@ -30,5 +30,5 @@ interface lives in the kernel; implementations live outside it.
   kernel release; JDBC drivers and broker clients stay out of the fat JAR.
 - **Positive:** deployments choose backends through configuration (`type` strings).
 - **Negative:** operators must place the right connector JARs (and their dependencies) in
-  `connectors-dir`; misconfiguration surfaces only at bootstrap.
+  `service-adapters-dir`; misconfiguration surfaces only at bootstrap.
 - See [extensibility.md](../extensibility.md) and [data-architecture.md](../data-architecture.md).

@@ -59,7 +59,7 @@ Sans ce bloc, ou si aucun connecteur `INotificationServiceFactory` n'est présen
 
 ### 3.1 Le connecteur doit être sur le classpath
 
-Si vous lancez le JAR shadé `payos-runtime`, `payos-notification-connector` y est **déjà inclus** (voir [build-and-release/module-map.md](../build-and-release/module-map.md)) : rien à faire de plus. Si vous lancez le noyau `payos` seul (hors du fat-jar `payos-runtime`), placez `payos-notification-connector-<version>.jar` dans le `connectors-dir` configuré — voir [configuration/extensions-connectors.md](../configuration/extensions-connectors.md).
+Si vous lancez le JAR shadé `payos-runtime`, `payos-notification-connector` y est **déjà inclus** (voir [build-and-release/module-map.md](../build-and-release/module-map.md)) : rien à faire de plus. Si vous lancez le noyau `payos` seul (hors du fat-jar `payos-runtime`), placez `payos-notification-connector-<version>.jar` dans le `service-adapters-dir` configuré — voir [configuration/extensions-connectors.md](../configuration/extensions-connectors.md).
 
 ## 4. Configurer et démarrer le démon (`payos-service-notification`)
 

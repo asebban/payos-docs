@@ -41,10 +41,10 @@ From `IConfigSpec.DatabaseService`:
 | `ddl-auto` | Schema management mode (e.g. `validate`, `update`, `none`). |
 | `retired-session-factory-close-delay-seconds` | Delay before closing a retired session factory after a [hot reload](../operations/hot-reload.md). |
 
-## The JDBC driver is a connector dependency
+## The JDBC driver is a service-adapter dependency
 
-The connector JAR (`dynamic-database-service`) and the **JDBC driver** must be available on
-the [connectors path](extensions-connectors.md). The kernel does not bundle drivers — choose
+The service-adapter JAR (`dynamic-database-service`) and the **JDBC driver** must be available on
+the [service-adapters path](extensions-connectors.md). The kernel does not bundle drivers — choose
 the driver matching your `url`/`dialect`.
 
 ## Multi-tenancy interaction

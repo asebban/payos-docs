@@ -282,7 +282,7 @@ A `ConnectorBinding`, injected when a `TenantConnectorRegistry` is set via
 `PayOSConfig.setConnectorRegistry(...)`. This is the business/payment connector framework —
 see [connector-framework-usage.md](connector-framework-usage.md) for the full script-caller
 guide (resolution rules, idempotency behavior, error handling) and
-[configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
+[configuration/connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md)
 for the full configuration and behavioral contract (idempotency, deduplication, retry, DLQ
 routing, diagnostics).
 

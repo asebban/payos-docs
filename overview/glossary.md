@@ -57,7 +57,7 @@ HTTP, TCP, and Queue transports.
 ## Extensibility concepts
 
 **Connector (SPI)**
-: A service-provider JAR placed in `connectors-dir` and discovered through Java's
+: A service-provider JAR placed in `service-adapters-dir` and discovered through Java's
 `ServiceLoader`. Connectors implement an SPI factory (`IDatabaseServiceFactory`,
 `IQueueClientFactory`, `IWebhookDispatcherFactory`, `ISecretProviderFactory`,
 `INotificationServiceFactory`). See
@@ -71,7 +71,7 @@ HTTP, TCP, and Queue transports.
 deduplication, retry policy, execution-state persistence, and DLQ/terminal-state routing —
 none of which the SPI connector above has any concept of. Wired into `BootServer` since
 2026-07-27 via `ConnectorFrameworkInitializer`.
-See [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md).
+See [configuration/connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md).
 
 **Extension**
 : A Java library JAR placed in `extensions-dir` whose classes become callable from

@@ -1,19 +1,19 @@
 # Connector Framework — Configuration Parameters
 
 > **Created:** 2026-07-10
-> **Last updated:** 2026-07-27
-> **Version:** v2
+> **Last updated:** 2026-08-11
+> **Version:** v3
 
 ## Scope
 
 This page documents **every** configuration parameter of the PayOS **connector framework** —
 the business/payment connector plugin system (`IConnector`, `$Connector(...)` script binding,
 `ConnectorDescriptor`, `TenantConnectorRegistry`) built across Epics 1–5. It does **not** cover
-the older, unrelated `connectors-dir` SPI-backend loader (database/queue/secret factory
-plugins) described in [extensions-connectors.md](extensions-connectors.md) — the two
-mechanisms share the word "connector" but are otherwise independent. See
-[Naming clash with the legacy `connectors-dir` loader](#naming-clash-with-the-legacy-connectors-dir-loader)
-below.
+the older, unrelated SPI-backend loader (database/queue/secret factory plugins,
+`ma.s2m.payos.config.ServiceAdapterLoader`, config key `service-adapters-dir`) described in
+[extensions-connectors.md](extensions-connectors.md) — see
+[Distinguishing this from the service-adapter loader](#distinguishing-this-from-the-service-adapter-loader)
+below for why the two used to share the word "connector" and no longer do.
 
 > **Status note (updated 2026-07-27):** every parameter below is implemented and covered by
 > tests in `payos` / `payos-connector-sdk`, and — as of 2026-07-27 — wired into production:
@@ -353,20 +353,24 @@ Audit events (`CONNECTOR_EXECUTION` for `CardNetwork`/`Switch` connector types o
 `CONNECTOR_DUPLICATE_DETECTED` on replay/suppress) are emitted alongside this sequence but are
 a separate mechanism — see [system-events.md](../reference/system-events.md).
 
-## Naming clash with the legacy `connectors-dir` loader
+## Distinguishing this from the service-adapter loader
 
-PayOS has an older, unrelated mechanism also called "connectors": `ma.s2m.payos.config.ConnectorLoader`,
-configured via the `connectors-dir` bootstrap key (see
+PayOS has an older, unrelated mechanism: `ma.s2m.payos.config.ServiceAdapterLoader`, configured
+via the `service-adapters-dir` bootstrap key (see
 [extensions-connectors.md](extensions-connectors.md)). That loader only builds a
 `URLClassLoader` over JARs in a directory so that **SPI factory** plugins (`IDatabaseServiceFactory`,
 `IQueueClientFactory`, `ISecretProviderFactory`) can be discovered — it has no descriptor
 format, no `connectors.json`, no idempotency/audit/dedup semantics, and **is** wired into
-`BootServer` today. Do not confuse the two when reading configuration or code named
-`Connector*`:
+`BootServer` today. Until 2026-08-11 both mechanisms used "connector" in their names
+(`ServiceAdapterLoader`, `service-adapters-dir`, `PAYOS_SERVICE_ADAPTERS_DIR`) despite being otherwise
+independent; the loader was renamed to remove that clash rather than continue documenting
+around it. If you find older material (or an un-upgraded deployment's `payos.json`) still
+referring to `service-adapters-dir`/`ServiceAdapterLoader`/`PAYOS_SERVICE_ADAPTERS_DIR`, it means the legacy
+service-adapter loader, not this page's connector framework:
 
-| | Legacy SPI loader | Connector framework (this page) |
+| | Service-adapter loader | Connector framework (this page) |
 | --- | --- | --- |
-| Config key | `connectors-dir` (bootstrap) | `connectors.json` + `META-INF/connector.properties` |
+| Config key | `service-adapters-dir` (bootstrap), formerly `service-adapters-dir` before 2026-08-11 | `connectors.json` + `META-INF/connector.properties` |
 | Wired into `BootServer`? | Yes | Yes (since 2026-07-27) |
 | Purpose | Load database/queue/secret backend plugins | Business/payment connectors callable from scripts via `$Connector(...)` |
 | Descriptor format | None | `ConnectorDescriptor` (this page, §1) |

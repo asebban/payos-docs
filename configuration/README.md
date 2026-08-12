@@ -40,8 +40,8 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | `idempotency` | [idempotency.md](idempotency.md) | Idempotent-response cache for mutating API requests. |
 | `cache-service` | [cache-service.md](cache-service.md) | Optional distributed cache abstraction (`ICacheStore`), shared across instances/bundles — `memory` or `redis` backend. |
 | `sliding-window-service` | [sliding-window-service.md](sliding-window-service.md) | Optional exact sliding-window event counter (`ISlidingWindowCounter`) for quota/rate-limit checks — `memory` or `redis` backend. |
-| `connectors-dir` / `extensions-dir` | [extensions-connectors.md](extensions-connectors.md) | Plugin discovery paths and classloaders (legacy SPI-backend loader). |
-| Connector framework (`connectors.json`, connector descriptor) | [connector-framework-parameters-v2-2026-07-12.md](connector-framework-parameters-v2-2026-07-12.md) | Business/payment connector plugin system — `connectors.json`, `META-INF/connector.properties`, credential references, hot-reload, tenant scoping, idempotency/dedup, retry policy, execution-state persistence, DLQ/terminal routing, diagnostics. Wired into `BootServer` since 2026-07-27. |
+| `service-adapters-dir` / `extensions-dir` | [extensions-connectors.md](extensions-connectors.md) | Plugin discovery paths and classloaders (legacy SPI-backend loader). |
+| Connector framework (`connectors.json`, connector descriptor) | [connector-framework-parameters-v3-2026-08-11.md](connector-framework-parameters-v3-2026-08-11.md) | Business/payment connector plugin system — `connectors.json`, `META-INF/connector.properties`, credential references, hot-reload, tenant scoping, idempotency/dedup, retry policy, execution-state persistence, DLQ/terminal routing, diagnostics. Wired into `BootServer` since 2026-07-27. |
 | Complete reference guide of configuration | [Json configuration reference](./json-configuration-reference.md) | |
 
 ## A complete index

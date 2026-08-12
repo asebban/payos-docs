@@ -9,10 +9,10 @@ and extension plugins. Configuration keys are in the
 
 | Artifact | Role |
 | --- | --- |
-| `payos-runtime-<version>.jar` | The runnable server. Main class `ma.s2m.payos.BootServer`. Embeds the kernel, HTTP/TCP/queue transports, and the standard connectors (database, NATS queue, HTTP webhooks, filesystem secrets). |
-| Connector JARs | Alternative/additional service backends placed in `connectors-dir`. |
+| `payos-runtime-<version>.jar` | The runnable server. Main class `ma.s2m.payos.BootServer`. Embeds the kernel, HTTP/TCP/queue transports, and the standard service adapters (database, NATS queue, HTTP webhooks, filesystem secrets). |
+| Service-adapter JARs | Alternative/additional service backends placed in `service-adapters-dir`. |
 | Extension JARs | Script-callable Java libraries placed in `extensions-dir`. |
-| JDBC driver | Required by the database connector; placed in `connectors-dir`. |
+| JDBC driver | Required by the database service adapter; placed in `service-adapters-dir`. |
 
 See [build-and-release/module-map.md](../build-and-release/module-map.md) for what each
 module contributes and the embedded versions.
@@ -26,7 +26,7 @@ module contributes and the embedded versions.
     ├── payos.json              # bundle entrypoint (usually only configDir)
     ├── config/                 # merged runtime config files, typically bootstrap.json
     ├── apps/                   # applications
-    ├── connectors/             # connector JARs (+ JDBC driver)
+    ├── connectors/             # service-adapter JARs (+ JDBC driver)
     ├── extensions/             # extension JARs
     └── tcp-handlers/           # TCP codec/handler plugins (if using TCP)
 ```
@@ -53,7 +53,7 @@ After=network.target
 [Service]
 ExecStart=/usr/bin/java -jar /opt/payos/payos-runtime-<version>.jar --bundle-path /opt/payos/bundle
 Restart=on-failure
-Environment=PAYOS_CONNECTORS_DIR=/opt/payos/bundle/connectors
+Environment=PAYOS_SERVICE_ADAPTERS_DIR=/opt/payos/bundle/connectors
 Environment=PAYOS_EXTENSIONS_DIR=/opt/payos/bundle/extensions
 # secrets master key (filesystem provider) — prefer Vault in production
 # Environment=PAYOS_SECRET_MASTER_KEY=...

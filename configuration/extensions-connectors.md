@@ -1,25 +1,26 @@
-# Extensions & connectors
+# Extensions & service adapters
 
 PayOS loads plugin code from the filesystem at runtime through dedicated classloaders. Two
-plugin families exist: **connectors** (SPI service backends — database, queue, secrets) and
+plugin families exist: **service adapters** (SPI service backends — database, queue, secrets) and
 **extensions** (Java libraries callable from scripts via `Java.type()`). A third, transport
 plugins for TCP, is configured per server. This page covers the discovery paths and
 classloader hierarchy; the design rationale is in
 [architecture/extensibility.md](../architecture/extensibility.md).
 
-> **Not to be confused with the connector *framework*.** The "connectors" on this page are SPI
-> backend plugins (database/queue/secret factories) selected by `connectors-dir` and already
-> wired into `BootServer`. PayOS also has a separate, newer **connector framework** for
+> **Not to be confused with the connector *framework*.** The "service adapters" on this page are
+> SPI backend plugins (database/queue/secret factories) selected by `service-adapters-dir` and
+> already wired into `BootServer`. PayOS also has a separate, newer **connector framework** for
 > business/payment connectors invoked from scripts via `$Connector(...)`, configured through
 > `connectors.json` and a `META-INF/connector.properties` descriptor — see
-> [connector-framework-parameters-v2-2026-07-12.md] (connector-framework-parameters-v2-2026-07-12.md).
-> The two mechanisms share the word "connector" but are otherwise independent.
+> [connector-framework-parameters-v3-2026-08-11.md] (connector-framework-parameters-v3-2026-08-11.md).
+> Until 2026-08-11 the two mechanisms shared the word "connector"; the service-adapter loader was
+> renamed to remove that clash rather than continue documenting around it.
 
 ## Discovery paths
 
 | Plugin family | Bootstrap key | Env var | System property |
 | --- | --- | --- | --- |
-| Connectors (SPI backends) | `connectors-dir` | `PAYOS_CONNECTORS_DIR` | (set) |
+| Service adapters (SPI backends) | `service-adapters-dir` | `PAYOS_SERVICE_ADAPTERS_DIR` | (set) |
 | Extensions (script-callable Java) | `extensions-dir` | `PAYOS_EXTENSIONS_DIR` | (set) |
 | TCP codec/handler plugins | `tcp-handlers-dir` (per server) | `TCP_HANDLERS_DIR` | (set) |
 
@@ -28,7 +29,7 @@ key. This lets operators override locations per environment without editing the 
 
 ```json
 {
-  "connectors-dir": "connectors",
+  "service-adapters-dir": "connectors",
   "extensions-dir": "extensions"
 }
 ```
@@ -36,33 +37,35 @@ key. This lets operators override locations per environment without editing the 
 ## Classloader hierarchy
 
 PayOS layers classloaders so that application code can see extensions, which can see
-connectors, which can see the runtime:
+service adapters, which can see the runtime:
 
 ```
-application  →  extension  →  connector  →  runtime
+application  →  extension  →  service-adapter  →  runtime
 ```
 
-- `ConnectorLoader` builds the connector classloader from JARs in `connectors-dir`; the
-  result is set via `PayOSConfig.setConnectorClassLoader(...)`.
+- `ServiceAdapterLoader` builds the service-adapter classloader from JARs in `service-adapters-dir`; the
+  result is set via `PayOSConfig.setServiceAdapterClassLoader(...)`.
 - `ExtensionLoader` builds the extension classloader from JARs in `extensions-dir`; set via
   `PayOSConfig.setExtensionClassLoader(...)`. This classloader is also used as the GraalVM
   context host classloader so `Java.type()` can reach whitelisted extension classes.
 
 ## What goes where
 
-| Put it in connectors when… | Put it in extensions when… |
+| Put it in service adapters when… | Put it in extensions when… |
 | --- | --- |
-| It implements an SPI factory (`IDatabaseServiceFactory`, `IQueueClientFactory`, `ISecretProviderFactory`, `ISessionStoreFactory`). | Scripts need to call its classes via `Java.type()`. |
-| It is selected by a config `type` (e.g. `nats`, `vault`, `redis`). | It is a helper library / protocol stack (e.g. jPOS). |
+| It implements an SPI factory (`IDatabaseServiceFactory`, `IQueueClientFactory`, `ISecretProviderFactory`, `IWebhookDispatcherFactory`, `INotificationServiceFactory`). | Scripts need to call its classes via `Java.type()`. |
+| It is selected by a config `type` (e.g. `nats`, `vault`, `http`). | It is a helper library / protocol stack (e.g. jPOS). |
 | It needs a JDBC driver or broker client. | — |
 
-> The webhook dispatcher and the session store are the exception: both are discovered via a
-> **standard** `ServiceLoader` (not the connector classloader) rather than staged in
-> `connectors-dir`, and selected by their own config key (`webhooks.dispatcher`,
-> `security.sessionStoreType`). See [webhook-service.md](webhook-service.md) and
+> **The session store is the one exception**: `ISessionStoreFactory` is discovered via a
+> **standard** `ServiceLoader` (not the service-adapter classloader) rather than staged in
+> `service-adapters-dir`, and selected by its own config key (`security.sessionStoreType`). See
 > [security-oidc.md#distributed-session-storage](security-oidc.md#distributed-session-storage).
 > In practice `session-service-redis` still only needs to be on the runtime classpath — already
-> the case when it's a `payos-runtime` dependency, same as the standard connectors below.
+> the case when it's a `payos-runtime` dependency, same as the standard service adapters below.
+> (Until 2026-08-11 the webhook dispatcher was a second exception alongside the session store;
+> `WebhookDispatchers` now resolves through the service-adapter classloader like every other
+> factory, so it no longer is.)
 
 ## TCP transport plugins
 
@@ -74,8 +77,8 @@ The first concrete implementation of each interface wins; UTF-8 defaults apply o
 ## Operational placement
 
 Operators stage the right JARs (and their transitive dependencies) into these directories per
-deployment. The fat runtime JAR already embeds the standard connectors; additional or
-alternative backends are dropped into `connectors-dir`. See
+deployment. The fat runtime JAR already embeds the standard service adapters; additional or
+alternative backends are dropped into `service-adapters-dir`. See
 [operations/deployment.md](../operations/deployment.md).
 
 ## Next

@@ -33,7 +33,7 @@ flowchart TD
   resource["Resource layer<br/>ResourceHandler · ResourceLocator<br/>Routes Request to API/Page/Component/Menu resources<br/>Walks the application extends chain, honors capability state"]
   server["Server layer<br/>IServer · Server · Servers · ServerProvider<br/>Transport-specific ingress HTTP/TCP/Queue -> Request/Response<br/>Opens tenant scope, propagates correlation and tenant IDs"]
   bootstrap["Bootstrap layer<br/>BootServer · ConfigLoader · PayOSConfig<br/>Loads payos.json, merges settings, initializes services,<br/>watches changes, holds the global registry"]
-  services["Service providers<br/>SPI, in connectors-dir<br/>IDatabaseService · IQueueClient · ISecretProvider · IWebhook..."]
+  services["Service providers<br/>SPI, in service-adapters-dir<br/>IDatabaseService · IQueueClient · ISecretProvider · IWebhook..."]
 
   guest -->|executed inside| scripting
   scripting -->|invoked by| resource

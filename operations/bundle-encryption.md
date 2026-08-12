@@ -66,7 +66,7 @@ avoid keys on the command line or in scripts:
 | `--root` | — | Filesystem provider root. |
 | `--keyfile` | — | Filesystem provider master key file. |
 | `--secret-config` | — | Path to a secret-provider config. |
-| `--connectors-dir` | — | Where to load the provider connector from. |
+| `--service-adapters-dir` | — | Where to load the provider connector from. |
 
 This mirrors the runtime's [secret service](../configuration/secret-service.md), so the same
 Vault or filesystem store can hold the bundle key.
@@ -83,4 +83,4 @@ Vault or filesystem store can hold the bundle key.
 
 - [cli-tools/edc.md](../cli-tools/edc.md)
 - [secrets-management.md](secrets-management.md)
-- [integrators/tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md](../integrators/tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md) — the full key lifecycle this page's CLI reference fits into: generating the key, deciding custody, delivering to a client, and rotating it.
+- [architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md](../architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md) — the full key lifecycle this page's CLI reference fits into: generating the key, deciding custody, delivering to a client, and rotating it.

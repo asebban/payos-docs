@@ -12,24 +12,37 @@
    [secret provider](../operations/secrets-management.md) (`filesystem` or `vault`) — there is
    **no RSA key pair, no envelope encryption, and no "ask Vault to decrypt with a private key"
    step**. The secret provider is asked for the raw key bytes directly.
-2. At runtime, `CryptoService.loadKey()` calls
-   `secretProvider.getSecret(tenantId, "encryptionKey")` and reads the key bytes straight out
-   of the returned `SecretValue`. Accepted key sizes are 16, 24, or 32 bytes (AES-128/192/256);
-   256-bit is recommended for PCI-DSS Req 3.6.1, but 128/192 are still accepted for backward
-   compatibility.
+2. **Since 2026-08-11, resolution happens exactly once, at bootstrap, not per decrypt call.**
+   `EditorEncryptionKeyInitializer.initialize(...)` is called from
+   `ConfigLoader.loadServerConfig()` immediately after `PayOSConfig.settings` is populated (and
+   before any per-application config — which may itself be encrypted — is loaded). It builds the
+   editor secret provider from `editor-secret-service` configuration, calls
+   `secretProvider.getSecret(tenantId, "encryptionKey")` once, and hands the resulting key bytes
+   to `CryptoService.setKey(byte[])`, which validates the size (16/24/32 bytes — AES-128/192/256;
+   256-bit recommended for PCI-DSS Req 3.6.1, 128/192 accepted for backward compatibility) and
+   wraps it in a `SecretKeySpec` held for the lifetime of the process. `CryptoService` itself
+   never resolves a secret provider or reads bootstrap configuration — it only performs
+   cryptographic operations against whatever key was set. A missing or malformed
+   `editor-secret-service` configuration block is fatal: `EditorEncryptionKeyInitializer` throws,
+   which fails the boot rather than leaving `CryptoService` keyless — see
+   [configuration/editor-secret-service.md](../configuration/editor-secret-service.md).
 3. Whenever a bundle file needs decrypting, `CryptoService.decryptIfEncrypted(data)` detects
-   the format from a 4-byte magic header and decrypts in memory:
+   the format from a 4-byte magic header and decrypts in memory using that already-resolved key:
    - **`P8G2`** — `AES/GCM/NoPadding` (12-byte IV, 128-bit authentication tag). The PCI-DSS-compliant
      format `CryptoService` is ready to decode — but as of this writing, `edc`/`payosv2-packer`'s
      `pack` command does not actually produce it yet; see
-     [tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md](tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md#gaps-to-close-before-this-is-production-ready).
+     [architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md](../architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md#gaps-to-close-before-this-is-production-ready).
    - **`P8OS`** — `AES/ECB/PKCS5Padding`. What `edc` actually produces today. Unauthenticated
      (no integrity/tamper detection) — treat as the current, not the target, format.
-4. The decrypted `SecretKeySpec`/key bytes are held only as long as the `SecretValue` /
-   `Cipher` operation needs them. `SecretValue.close()` (called via try-with-resources) zeroes
-   its internal byte array (`Arrays.fill(bytes, (byte) 0)`) once the caller is done with it —
-   there is no split-key/XOR/non-contiguous-memory scheme; the protection is "hold the key for
-   as short a time as possible and zero it afterward," not memory-layout obfuscation.
+4. **The resolved key now lives for the process lifetime, not just per-operation.** Before
+   2026-08-11, the key bytes were re-fetched from the secret provider on every decrypt call and
+   held only as a short-lived local variable; `SecretValue.close()` (via try-with-resources)
+   zeroed that fetch's byte array once the `Cipher` operation was done. The bootstrap-time
+   resolution above trades that "fetch fresh, hold briefly, zero after each use" property for
+   "fetch once, hold as a `CryptoService` field for as long as the process runs" — fewer
+   round-trips to the secret provider (and resilience if it becomes briefly unavailable
+   mid-run), at the cost of a longer-lived key residency in process memory. There is still no
+   split-key/XOR/non-contiguous-memory scheme in either model.
 
 There is no re-derivation step, no two-random-number XOR reconstruction, and no split storage
 across non-contiguous memory regions. If you need genuinely hardened in-memory key protection
@@ -47,8 +60,10 @@ AES key directly.
 
 ## References
 
-- `payos/src/main/java/ma/s2m/payos/security/CryptoService.java` — `decryptIfEncrypted(...)`, `loadKey()`.
+- `payos/src/main/java/ma/s2m/payos/security/CryptoService.java` — `decryptIfEncrypted(...)`, `setKey(byte[])`.
+- `payos/src/main/java/ma/s2m/payos/security/EditorEncryptionKeyInitializer.java` — resolves the editor secret provider and the key, once, at bootstrap.
+- `payos/src/main/java/ma/s2m/payos/config/ConfigLoader.java` — calls `EditorEncryptionKeyInitializer.initialize(...)`.
 - `payos-secret-api/src/main/java/ma/s2m/payos/secret/model/SecretValue.java` — the zero-on-close behavior.
 - [integrators/assembling and encrypting a bundle.md](assembling%20and%20encrypting%20a%20bundle.md) — the encryption side (`edc`).
 - [operations/bundle-encryption.md](../operations/bundle-encryption.md) — operational guidance.
-- [tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md](tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md) — the full key lifecycle this page's decrypt step fits into (generation, custody, delivery, rotation).
+- [architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md](../architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md) — the full key lifecycle this page's decrypt step fits into (generation, custody, delivery, rotation).

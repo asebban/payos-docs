@@ -706,7 +706,7 @@ Configuration technique du dispatcher HTTP de webhooks (module `webhook-service-
 
 ### 3.12 `secret-service` (bootstrap.json)
 
-Configuration du service de gestion des secrets. Ce service rend disponible le binding `$Secrets` dans les scripts JavaScript. Il est désactivé par défaut. L'implémentation est chargée via SPI depuis le répertoire `connectors-dir`.
+Configuration du service de gestion des secrets. Ce service rend disponible le binding `$Secrets` dans les scripts JavaScript. Il est désactivé par défaut. L'implémentation est chargée via SPI depuis le répertoire `service-adapters-dir`.
 
 ```json
 "secret-service": {
@@ -722,7 +722,7 @@ Configuration du service de gestion des secrets. Ce service rend disponible le b
 | Clé | Type | Requis | Défaut | Description |
 |-----|------|--------|--------|-------------|
 | `enabled` | boolean | Non | `false` | Activer le service de secrets. Si `false`, `$Secrets` n'est pas injecté. |
-| `type` | string | Non | `"filesystem"` | Type de provider : `"filesystem"` (module `secret-service-filesystem`), `"vault"` (module `secret-service-vault`), ou tout provider SPI disponible dans `connectors-dir` |
+| `type` | string | Non | `"filesystem"` | Type de provider : `"filesystem"` (module `secret-service-filesystem`), `"vault"` (module `secret-service-vault`), ou tout provider SPI disponible dans `service-adapters-dir` |
 | `root` | string | Requis si `type=filesystem` | — | Répertoire racine de stockage des secrets |
 | `keyfile` | string | Non (provider `filesystem`) | — | Chemin vers le fichier de clé de chiffrement AES-256. Repli sur la variable d'environnement `PAYOS_SECRET_MASTER_KEY` si absent. |
 
@@ -780,7 +780,7 @@ Le binding est scopé au tenant courant de la requête : `$Secrets.get("key")` r
 
 ##### Étape 1 — Prérequis
 
-S'assurer que le JAR `secret-service-filesystem` est présent dans `connectors-dir` (défaut : `.connectors/`).
+S'assurer que le JAR `secret-service-filesystem` est présent dans `service-adapters-dir` (défaut : `.connectors/`).
 
 ##### Étape 2 — Générer la clé maîtresse
 
@@ -923,7 +923,7 @@ java -jar spm.jar set \
 
 #### Extension par SPI
 
-Pour ajouter un provider personnalisé, implémenter `ISecretProviderFactory` et enregistrer le service via `META-INF/services/ma.s2m.payos.secret.api.ISecretProviderFactory` dans le JAR du connecteur, placé dans `connectors-dir`. La valeur `type` dans la configuration doit correspondre à la valeur retournée par `ISecretProviderFactory.type()`.
+Pour ajouter un provider personnalisé, implémenter `ISecretProviderFactory` et enregistrer le service via `META-INF/services/ma.s2m.payos.secret.api.ISecretProviderFactory` dans le JAR du connecteur, placé dans `service-adapters-dir`. La valeur `type` dans la configuration doit correspondre à la valeur retournée par `ISecretProviderFactory.type()`.
 
 ---
 
@@ -1022,7 +1022,7 @@ Configuration du connecteur de notification (binding `$Notification`). Volontair
 
 > **Correction (2026-07-22) :** cette clé s'appelait autrefois documentée par erreur `topic` avec un défaut `"payos.notifications"` — ni l'un ni l'autre n'existe dans le code. La clé réelle est `destination` (`IConfigSpec.NotificationService.Configuration.DESTINATION`), lue par `NotificationServiceInitializer.java:55` avec le défaut `NotificationServices.DEFAULT_DESTINATION = "notifications.inbound"` (`payos-notification-api`).
 
-> Le bloc `configuration` est transmis tel quel (`Map<String, String>`) à `INotificationServiceFactory#initialize` du connecteur actif au démarrage ; les clés au-delà de `type` sont donc spécifiques au connecteur installé dans `connectors-dir`. Si aucun connecteur de notification n'est présent, ce bloc est ignoré et `$Notification` n'est pas disponible dans les scripts.
+> Le bloc `configuration` est transmis tel quel (`Map<String, String>`) à `INotificationServiceFactory#initialize` du connecteur actif au démarrage ; les clés au-delà de `type` sont donc spécifiques au connecteur installé dans `service-adapters-dir`. Si aucun connecteur de notification n'est présent, ce bloc est ignoré et `$Notification` n'est pas disponible dans les scripts.
 
 ---
 
@@ -1170,7 +1170,9 @@ Lues via `IConfigSpec.SlidingWindowService.Redis` par `RedisSlidingWindowCounter
 
 ### 3.18 `editor-secret-service` (bootstrap.json)
 
-Configuration du provider de secrets qui alimente `ma.s2m.payos.editor.IEditorProvider` — concrètement, `CryptoService.loadKey()` y résout la clé `encryptionKey` unique au bundle, utilisée pour déchiffrer les payloads `P8G2`/`P8OS` produits par `edc` (module `payosv2-packer`). Ce bloc est **volontairement distinct de [3.12 `secret-service`](#312-secret-service-bootstrapjson)** : `secret-service` alimente le binding `$Secrets` et contient les secrets applicatifs ordinaires, par tenant, tandis que `editor-secret-service` contient l'unique clé de chiffrement du bundle, que seul l'éditeur (l'équipe cœur PayOS produisant l'application de base) génère jamais — voir [integrators/tenant-bundle-encryption-key-lifecycle](../integrators/tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md) pour le cycle de vie complet et la justification de cette séparation.
+Configuration du provider de secrets qui alimente `ma.s2m.payos.editor.IEditorProvider` — concrètement, `EditorEncryptionKeyInitializer` y résout la clé `encryptionKey` unique au bundle, utilisée pour déchiffrer les payloads `P8G2`/`P8OS` produits par `edc` (module `payosv2-packer`). Ce bloc est **volontairement distinct de [3.12 `secret-service`](#312-secret-service-bootstrapjson)** : `secret-service` alimente le binding `$Secrets` et contient les secrets applicatifs ordinaires, par tenant, tandis que `editor-secret-service` contient l'unique clé de chiffrement du bundle, que seul l'éditeur (l'équipe cœur PayOS produisant l'application de base) génère jamais — voir [architecture/tenant-bundle-encryption-key-lifecycle](../architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md) pour le cycle de vie complet et la justification de cette séparation.
+
+Ce bloc est **obligatoire par défaut** dans tout `bootstrap.json`, pas seulement pour les bundles livrant des fichiers de configuration chiffrés : `EditorEncryptionKeyInitializer` s'exécute inconditionnellement pendant `ConfigLoader.loadServerConfig()`, et un bloc `editor-secret-service.configuration` absent ou malformé fait échouer le démarrage avec une `ResourceException` (remontée en `ConfigNotFoundException`), au lieu de différer l'échec jusqu'au premier fichier chiffré chargé. Les bundles qui ne chargent jamais de fichiers chiffrés peuvent explicitement s'en dispenser avec `"enabled": false` — voir le tableau des clés ci-dessous.
 
 ```json
 "editor-secret-service": {
@@ -1186,18 +1188,18 @@ Configuration du provider de secrets qui alimente `ma.s2m.payos.editor.IEditorPr
 
 | Clé | Type | Requis | Défaut | Description |
 |-----|------|--------|--------|-------------|
-| `enabled` | boolean | Non | `false` | Active le provider de secrets de l'éditeur. Si `false` (ou le bloc/`configuration` absent), tout code qui en dépend (aujourd'hui `CryptoService.loadKey()`) lève une `ResourceException`. |
-| `type` | string | Non | `"vault"` | Type de provider : `"filesystem"` ou `"vault"`, ou tout provider SPI disponible dans `connectors-dir`. **Défaut différent de `secret-service`** (qui défaut à `"filesystem"`) — ce bloc défaut à `"vault"`. |
+| `enabled` | boolean | Non | `true` | Défaut à `true` si omis — l'inverse de `secret-service.configuration`, car la clé propre à l'éditeur est requise par défaut plutôt qu'optionnelle. Mettre à `false` pour dispenser explicitement de la résolution du provider et laisser le démarrage continuer avec `CryptoService` sans clé (sûr uniquement si ce bundle ne charge jamais de fichiers chiffrés) ; toute autre valeur (y compris l'omission) exige une résolution réussie, sous peine d'échec du démarrage avec une `ResourceException`. |
+| `type` | string | Non | `"vault"` | Type de provider : `"filesystem"` ou `"vault"`, ou tout provider SPI disponible dans `service-adapters-dir`. **Défaut différent de `secret-service`** (qui défaut à `"filesystem"`) — ce bloc défaut à `"vault"`. |
 
-Les clés spécifiques à chaque `type` (`root`/`keyfile` pour `filesystem` ; `address`/`token`/`role-id`/`secret-id`/`approle-mount`/`kv-mount`/`namespace`/`tls-skip-verify`/`timeout` pour `vault`) sont exactement les mêmes que celles documentées en [3.12 `secret-service`](#312-secret-service-bootstrapjson) — même forme de configuration, seul le bloc racine change de nom, ce qui permet de pointer `secret-service` et `editor-secret-service` vers deux backends/identifiants entièrement indépendants. La factory est résolue via le même mécanisme `ServiceLoader`/`ISecretProviderFactory` (`ma.s2m.payos.secret.SecretProviders`) que `secret-service` ; le JAR provider doit donc être présent dans `connectors-dir`, typiquement le même JAR `secret-service-vault`/`secret-service-filesystem` que `secret-service`, instancié une seconde fois avec sa propre configuration.
+Les clés spécifiques à chaque `type` (`root`/`keyfile` pour `filesystem` ; `address`/`token`/`role-id`/`secret-id`/`approle-mount`/`kv-mount`/`namespace`/`tls-skip-verify`/`timeout` pour `vault`) sont exactement les mêmes que celles documentées en [3.12 `secret-service`](#312-secret-service-bootstrapjson) — même forme de configuration, seul le bloc racine change de nom, ce qui permet de pointer `secret-service` et `editor-secret-service` vers deux backends/identifiants entièrement indépendants. La factory est résolue via le même mécanisme `ServiceLoader`/`ISecretProviderFactory` (`ma.s2m.payos.secret.SecretProviders`) que `secret-service` ; le JAR provider doit donc être présent dans `service-adapters-dir`, typiquement le même JAR `secret-service-vault`/`secret-service-filesystem` que `secret-service`, instancié une seconde fois avec sa propre configuration.
 
-> **Pourquoi un bloc séparé plutôt qu'un alias de `secret-service`** : `encryptionKey` protège le code propriétaire de l'éditeur, n'est pas résolue par tenant de requête (`CryptoService.resolveSecretTenantId()` retourne toujours le slot fixe `"default"`), et son modèle d'accès est fondamentalement différent — seul l'éditeur l'écrit jamais, et chaque partie en aval (intégrateur, client) ne reçoit qu'un accès en lecture seule, scopé, au déchiffrement à la volée — jamais via le même identifiant qu'un tenant utiliserait pour `$Secrets`. Documenter ce bloc séparément permet à un opérateur de pointer `secret-service` et `editor-secret-service` vers deux instances Vault/politiques/tokens entièrement distincts, afin que la révocation ou la rotation de l'un ne touche jamais l'autre.
+> **Pourquoi un bloc séparé plutôt qu'un alias de `secret-service`** : `encryptionKey` protège le code propriétaire de l'éditeur, n'est pas résolue par tenant de requête (`EditorEncryptionKeyInitializer` retourne toujours le slot fixe `"default"`, une seule fois, au démarrage), et son modèle d'accès est fondamentalement différent — seul l'éditeur l'écrit jamais, et chaque partie en aval (intégrateur, client) ne reçoit qu'un accès en lecture seule, scopé, au déchiffrement à la volée — jamais via le même identifiant qu'un tenant utiliserait pour `$Secrets`. Documenter ce bloc séparément permet à un opérateur de pointer `secret-service` et `editor-secret-service` vers deux instances Vault/politiques/tokens entièrement distincts, afin que la révocation ou la rotation de l'un ne touche jamais l'autre.
 
 ---
 
 ### 3.19 `connectors.json` (fichier séparé, racine runtime)
 
-Configuration du **framework connecteur métier/paiement** (`IConnector`, module `payos-connector-sdk`) — à ne pas confondre avec [3.13 `extensions-dir`](#313-extensions-dir-bootstrapjson) qui est le chargeur SPI legacy (`connectors-dir`), un mécanisme totalement distinct malgré le nom similaire ; voir la section "Naming clash" du document détaillé ci-dessous. `connectors.json` n'est **pas** une clé de `bootstrap.json` : c'est un fichier séparé, à la racine du runtime base directory (même racine que `bootstrap.json`), chargé par `ma.s2m.payos.config.connector.ConnectorConfigurationLoader`. Un fichier absent équivaut à une configuration vide (PayOS démarre sans aucun connecteur). Câblé dans `BootServer` depuis le 2026-07-27 via `ConnectorFrameworkInitializer`, qui alimente `PayOSConfig.getConnectorRegistry()` au boot et à chaque rechargement de configuration.
+Configuration du **framework connecteur métier/paiement** (`IConnector`, module `payos-connector-sdk`) — à ne pas confondre avec [3.13 `extensions-dir`](#313-extensions-dir-bootstrapjson) qui est le chargeur SPI legacy (`service-adapters-dir`), un mécanisme totalement distinct malgré le nom similaire ; voir la section "Naming clash" du document détaillé ci-dessous. `connectors.json` n'est **pas** une clé de `bootstrap.json` : c'est un fichier séparé, à la racine du runtime base directory (même racine que `bootstrap.json`), chargé par `ma.s2m.payos.config.connector.ConnectorConfigurationLoader`. Un fichier absent équivaut à une configuration vide (PayOS démarre sans aucun connecteur). Câblé dans `BootServer` depuis le 2026-07-27 via `ConnectorFrameworkInitializer`, qui alimente `PayOSConfig.getConnectorRegistry()` au boot et à chaque rechargement de configuration.
 
 ```json
 {
@@ -1228,7 +1230,7 @@ Ces quatre clés (`connectors`, `connectors[].type/name/jar/parameters`) sont de
 
 Les JARs eux-mêmes sont scannés dans `<runtimeBaseDir>/connectors/`. Chaque tenant déclaré dans [3.4 `multitenancy`](#34-multitenancy) voit la même liste de connecteurs partagée (pas de `connectors.json` par tenant aujourd'hui) ; en l'absence de multitenancy, un tenant `"default"` unique est utilisé.
 
-Pour la couverture complète (résolution des credentials `${...}`, hot-reload, idempotence/déduplication plateforme, politique de retry, persistance de l'état d'exécution, routage DLQ, diagnostics), voir le document dédié : [connector-framework-parameters-v2-2026-07-12.md](connector-framework-parameters-v2-2026-07-12.md).
+Pour la couverture complète (résolution des credentials `${...}`, hot-reload, idempotence/déduplication plateforme, politique de retry, persistance de l'état d'exécution, routage DLQ, diagnostics), voir le document dédié : [connector-framework-parameters-v3-2026-08-11.md](connector-framework-parameters-v3-2026-08-11.md).
 
 ---
 
@@ -1320,7 +1322,7 @@ Ces clés de premier niveau existent dans `IConfigSpec.java` mais n'avaient pas 
 | Clé | Type | Défaut | Description |
 |-----|------|--------|-------------|
 | `config-hot-reload-enabled` | boolean | `true` | Désactive le rechargement à chaud (`ConfigWatcher`) si mis à `false`. Lu par `BootServer.java` et `ConnectorRuntimeSettingsEvaluator.java`. |
-| `connectors-dir` | string | — | Dossier des JARs de connecteurs (secret/session/idempotence/notification, etc.), résolu dans le même ordre que `extensions-dir` (propriété système `-Dconnectors-dir=...` → variable d'env `PAYOS_CONNECTORS_DIR` → clé `connectors-dir` du JSON). Voir `ConnectorLoader.java`. |
+| `service-adapters-dir` | string | — | Dossier des JARs de connecteurs (secret/session/idempotence/notification, etc.), résolu dans le même ordre que `extensions-dir` (propriété système `-Dservice-adapters-dir=...` → variable d'env `PAYOS_SERVICE_ADAPTERS_DIR` → clé `service-adapters-dir` du JSON). Voir `ServiceAdapterLoader.java`. |
 | `servers-dir` | string | — | Dossier des JARs `ServerProvider` (implémentations de transport supplémentaires), même ordre de résolution que ci-dessus (variable d'env `PAYOS_SERVERS_DIR`). Voir `ServerProviderLoader.java`. |
 | `tcp-handlers-dir` | string | — | Valeur globale par défaut du dossier des handlers TCP — surchargée par serveur via `servers[].tcp-handlers-dir` (§3.1) et par tenant via `multitenancy.tenants.{id}.tcp.handlers.dir` (§3.4). |
 | `runtimeBaseDir` | string | Dossier de `bootstrap.json` | **Valeur calculée par `ConfigLoader`, pas destinée à être définie manuellement** — le runtime la dérive de l'emplacement effectif du fichier de configuration et la republie dans la config résolue pour que d'autres composants (résolution de chemins relatifs, etc.) puissent la lire. |

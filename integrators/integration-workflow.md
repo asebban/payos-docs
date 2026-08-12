@@ -33,7 +33,7 @@ Before starting the mission, confirm the following with the editor and with the 
 
 - [ ] Received the **encrypted bundle archive** and the mechanism to decrypt the encrypted files of the bundle (see [Decryption mechanism](./decryption%20mechanism.md)).
 - [ ] Received the `payos-runtime-<version>.jar` matching the bundle's applications versions, pre-configured with a vault access token for the integrator.
-- [ ] Received the list of **connector JARs** required by the product (secret provider, webhook dispatcher, ... — these are not bundled in the runtime JAR in the integrator packaging but are all in the connectors directory).
+- [ ] Received the list of **service-adapter JARs** required by the product (secret provider, webhook dispatcher, ... — these are not bundled in the runtime JAR in the integrator packaging but are all in the service-adapters directory).
 - [ ] Optionnaly, either a preconfigured vault instance (secret provider) entirely editor controlled (no access to it by the integrator) or an access to the central editor's vault
 - [ ] Received the necessary editor's CLI tools (receive a payos-pm folder containing the Jars and the install scripts of the CLI tools)
 - [ ] Confirmed the exact **product identifiers** and their version (e.g. `payment-gateway:2.1.0`).
@@ -306,7 +306,7 @@ cp -r overlay/atlas-payment-gateway/ build/local-bundle/apps/
 # 3. If you have custom capabilities, copy them too
 cp -r custom-capabilities/loyalty-points/ build/local-bundle/.capabilities
 
-# 4. Copy local dev connector JARs (database, secret provider, etc.)
+# 4. Copy local dev service-adapter JARs (database, secret provider, etc.)
 cp connectors/*.jar build/local-bundle/connectors/
 ```
 make sure relative paths in configuration files remain correct.
@@ -344,7 +344,7 @@ The runtime merges all `*.json` files in `configDir` — your dev overrides laye
 java -jar payos-runtime-<version>.jar --bundle-path ./build/local-bundle
 ```
 
-With hot-reload active, changes to your overlay files (`api/`, `hooks/`, `webhooks.json`, `menu/`, `i18n/`) take effect immediately. Changes to connector JARs and new server / ports require a restart.
+With hot-reload active, changes to your overlay files (`api/`, `hooks/`, `webhooks.json`, `menu/`, `i18n/`) take effect immediately. Changes to service-adapter JARs and new server / ports require a restart.
 
 ### 6.4 Provisioning local development secrets
 
@@ -353,7 +353,7 @@ The filesystem secret provider Jar should exist in connectors/ folder as a prere
 ```bash
 spm set --root ./secrets/dev \
         --tenant atlas \
-        --connectors-dir ./build/local-bundle/connectors \
+        --service-adapters-dir ./build/local-bundle/connectors \
         --name atlas-psp-api-key \
         --value "sk_test_xxx"
 ```
@@ -389,7 +389,7 @@ The corresponding config for the runtime to be able to read the created keys:
 │ 3. Inspect logs                                         │
 │    tail -f runtime.log | grep "X-Correlation-Id: ..."   │
 │                                                         │
-│ 4. If a connector JAR changed → restart runtime         │
+│ 4. If a service-adapter JAR changed → restart runtime   │
 │                                                         │
 │ 5. Commit to feature branch when unit of work is done   │
 └─────────────────────────────────────────────────────────┘
@@ -515,7 +515,7 @@ One changelog per tenant schema (if using `dedicated-schema`) — parameterize v
 > For the full lifecycle this section and §12 are part of — key generation, custody decision,
 > what to encrypt vs. exclude, the actual `edc` commands, rotation, and where today's mechanism
 > still has gaps — see
-> [tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md](tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md).
+> [architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md](../architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md).
 
 ### 10.1 Key ownership decision
 
@@ -540,7 +540,7 @@ Prepare the following delivery package for the customer:
 | `atlas-prod.zip` | The zipped new deliverable artifact developed by the integrator. |
 | `editor-bundle.zip` | The zipped original encrypted editor's bundle. You could embed the atlas-prod application or a set of integrator developed applications inside the editor's bundle. |
 | `payos-runtime-<version>.jar` | The runtime JAR matching the bundle. |
-| Connector JARs | Any connector already embedded in the runtime JAR (database, queue, secret provider, ...) |
+| Service-adapter JARs | Any service adapter already embedded in the runtime JAR (database, queue, secret provider, ...) |
 | `delivery-notes.md` | Human-readable delivery notes (see [§15](#15-handover-documentation)). |
 | `custom.json` (template) | Config customized for client with `${ENV_VAR}` placeholders for the customer to fill in. |
 | Systemd/Windows Service unit file (optional) | Service definition for the customer's ops team. |

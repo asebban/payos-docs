@@ -41,7 +41,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 | Compute runtime | Java 21 + payos-kernel + GraalVM JS | API script execution and request dispatch | Queue/message handlers and webhook callbacks | Batch-like application scripts and tools | Same kernel contracts across on-prem, cloud, and PaaS. |
 | Transport | Undertow HTTP, TCP server, Queue server | HTTP/TCP synchronous exchange | Queue-backed processing and callbacks | Batch/event ingestion (like POS EOD downloads) | Transport modules adapt communication without changing business scripts. |
 | Data | HikariCP + database-service + Hibernate | Business JDBC-backed queries | Transaction state (e.g. authorization → capture → settlement), idempotency (checking DB to see if an event was already handled), reconciliation support | Historical/reporting/demo storage | Real production database choice is deployment-specific; H2 remains demo/test in database-service. |
-| Messaging | IQueueClient + queue-service-nats / jnats | no hot-path role mechanism | Main warm-path integration mechanism (Queue consumers receive messages, execute JS scripts, persist state, and may fire webhooks — all within a seconds-scale window) | Batch/event (the queue is used to broadcast a single trigger to multiple consumers for bulk or deferred processing) | Queue implementation is a connector and should remain swappable. |
+| Messaging | IQueueClient + queue-service-nats / jnats | no hot-path role mechanism | Main warm-path integration mechanism (Queue consumers receive messages, execute JS scripts, persist state, and may fire webhooks — all within a seconds-scale window) | Batch/event (the queue is used to broadcast a single trigger to multiple consumers for bulk or deferred processing) | Queue implementation is a service adapter and should remain swappable. |
 | Security | Nimbus implementation docs + legacy pac4j dependencies | Token validation and principal resolution | Secured async callbacks and hooks | Audit/replay authorization checks (e.g. After a transaction has settled, a compliance or fraud investigation tool needs to verify who was authorized at the time of the operation) | T1 deployments require strongest hardening and tenant isolation controls. |
 | Observability | SLF4J + Logback + correlation/tenant metadata (additional metrics should be added later on) | Request tracing, error correlation | Async processing correlation | Batch/audit traceability | Deployment mode decides sink/exporter at deployment time|
 | Tooling | payos-pm CLI + Maven packaging | No hot path role | No warm path role | Package/install apps and capabilities, Activate/deactivate capabilities, Build/release/report automation | Supports one codebase across customer and deployment profiles. |
@@ -276,7 +276,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 **Shade transformers:** `ManifestResourceTransformer` (main class), `ServicesResourceTransformer` (merges SPI `META-INF/services` files).
 
-**Connector deployment:** `queue-service-nats` and `dynamic-database-service` will **not** be shaded into the runtime JAR in the future (they are currently). They will be placed as self-contained fat JARs in the operator-configured `connectors-dir` directory (resolved from system property `connectors-dir`, env var `PAYOS_CONNECTORS_DIR`, or bootstrap setting `connectors-dir`). The runtime scans this directory at startup and loads connector implementations via a `URLClassLoader` before initializing the database and queue services.
+**Connector deployment:** `queue-service-nats` and `dynamic-database-service` will **not** be shaded into the runtime JAR in the future (they are currently). They will be placed as self-contained fat JARs in the operator-configured `service-adapters-dir` directory (resolved from system property `service-adapters-dir`, env var `PAYOS_SERVICE_ADAPTERS_DIR`, or bootstrap setting `service-adapters-dir`). The runtime scans this directory at startup and loads connector implementations via a `URLClassLoader` before initializing the database and queue services.
 
 ---
 
@@ -495,7 +495,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 > **Reading guide — what is a PayOS bundle?**
 > A *bundle* is a self-contained runtime unit composed of:
 > - `payos-runtime.jar` — the fat JAR (kernel + all server modules shaded in)
-> - `connectors-dir/` — `dynamic-database-service.jar`, `queue-service-nats.jar` (loaded at startup via `URLClassLoader`)
+> - `service-adapters-dir/` — `dynamic-database-service.jar`, `queue-service-nats.jar` (loaded at startup via `URLClassLoader`)
 > - `apps/` — one or more products. Each product is a composition of one or more applications and capabilities ( with HBM models, Pages, Components, JS endpoints / API, ...)
 > - one `bootstrap.json`
 >
@@ -516,7 +516,7 @@ flowchart TB
         direction TB
         subgraph BUNDLE["PayOS Bundle"]
             RT["payos-runtime.jar\n──────────────────\npayos-kernel\npayos-server-http\npayos-server-tcp\npayos-server-queue\nwebhook-service-http"]
-            CON["connectors-dir/\n├ dynamic-database-service.jar\n└ queue-service-nats.jar"]
+            CON["service-adapters-dir/\n├ dynamic-database-service.jar\n└ queue-service-nats.jar"]
             APPS["apps/\n├ capability-issuing/\n└ capability-acquiring/"]
         end
         DB[("PostgreSQL")]

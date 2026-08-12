@@ -10,8 +10,8 @@ block heading.
 | --- | --- | --- |
 | `runtimeBaseDir` | directory containing `payos.json` | Effective runtime base directory; computed by the loader, not normally authored in `payos.json`. |
 | `configDir` | `.` | Directory merged into the configuration, resolved relative to `runtimeBaseDir` when not absolute. |
-| `config-hot-reload-enabled` | `true` | Enable configuration hot-reload (watches config directories for changes). Also governs whether the connector framework's `ConnectorRuntimeReloader` may hot-swap a replacement connector JAR — see [connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md) §4. |
-| `connectors-dir` | — | Connector (SPI) JAR directory — the **legacy** SPI-backend loader (database/queue/secret factories), not the business/payment connector framework. See [Naming clash](../configuration/connector-framework-parameters-v2-2026-07-12.md#naming-clash-with-the-legacy-connectors-dir-loader). |
+| `config-hot-reload-enabled` | `true` | Enable configuration hot-reload (watches config directories for changes). Also governs whether the connector framework's `ConnectorRuntimeReloader` may hot-swap a replacement connector JAR — see [connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md) §4. |
+| `service-adapters-dir` | — | Service-adapter (SPI) JAR directory — the legacy SPI-backend loader (database/queue/secret factories), not the business/payment connector framework. Formerly `connectors-dir`. See [distinguishing the two](../configuration/connector-framework-parameters-v3-2026-08-11.md#distinguishing-this-from-the-service-adapter-loader). |
 | `extensions-dir` | — | Extension JAR directory. |
 | `tcp-handlers-dir` | — | TCP plugin directory (also per-server). |
 | `applications[]` | — | Registered applications (see below). |
@@ -237,14 +237,14 @@ No system property / environment variable fallback for this block — see
 
 | Bootstrap key | Env var |
 | --- | --- |
-| `connectors-dir` | `PAYOS_CONNECTORS_DIR` |
+| `service-adapters-dir` | `PAYOS_SERVICE_ADAPTERS_DIR` |
 | `extensions-dir` | `PAYOS_EXTENSIONS_DIR` |
 | `tcp-handlers-dir` | `TCP_HANDLERS_DIR` |
 | (filesystem secrets master key) | `PAYOS_SECRET_MASTER_KEY` |
 
 Resolution order for each: system property → env var → bootstrap/server key.
 
-## Connector framework — [connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
+## Connector framework — [connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md)
 
 `connectors.json`'s structural keys are `IConfigSpec.ConnectorFramework` constants (used by `ConnectorConfigurationLoader`), so — unlike the rest of this section — they belong in the tables above too; repeated here for discoverability next to the descriptor keys. `META-INF/connector.properties` keys are still not `IConfigSpec` constants — they're parsed by `ConnectorDescriptorParser` in the standalone `connector-sdk` module, not the kernel.
 
@@ -254,4 +254,5 @@ Resolution order for each: system property → env var → bootstrap/server key.
 | `connectors.json` (config, `IConfigSpec.ConnectorFramework`) | `connectors[].type`, `connectors[].name`, `connectors[].jar`, `connectors[].parameters` |
 
 Wired into `BootServer` since 2026-07-27 (`ConnectorFrameworkInitializer`). Do not confuse with the
-`connectors-dir` legacy SPI loader above — see the linked doc's "Naming clash" section.
+`service-adapters-dir` legacy SPI loader above (formerly `service-adapters-dir`) — see the linked doc's
+"Distinguishing this from the service-adapter loader" section.

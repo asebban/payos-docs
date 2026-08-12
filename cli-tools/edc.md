@@ -39,7 +39,7 @@ Instead of `--key`, `edc` can pull the key from a secret provider (mirrors the r
 | `--root` | — | Filesystem provider root. |
 | `--keyfile` | — | Filesystem provider master key file. |
 | `--secret-config` | — | Secret provider config path. |
-| `--connectors-dir` | — | Where to load the provider connector from. |
+| `--service-adapters-dir` | — | Where to load the provider connector from. |
 
 ### Vault provider flags
 

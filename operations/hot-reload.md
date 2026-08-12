@@ -70,7 +70,7 @@ This avoids tearing connections out from under active requests. See
 
 ## When a restart is still required
 
-- Replacing **SPI connector/extension JARs** (`connectors-dir`/`extensions-dir`) on the
+- Replacing **SPI service-adapter/extension JARs** (`service-adapters-dir`/`extensions-dir`) on the
   classpath — those classloaders are built at startup.
 - Changing the set of **server listeners** in ways that require rebinding ports.
 
@@ -82,7 +82,7 @@ active connector and isolated classloader, then rebuilds the registry from
 single-connector, drain-then-swap replacement `ConnectorRuntimeReloader` implements (validate
 the replacement JAR reaches `READY`, drain in-flight calls against the *current* connector
 only, then switch) — that finer-grained mechanism exists and is tested (see
-[configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md)
+[configuration/connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md)
 §4) but is not yet called from the config-watcher path described here.
 
 For everything else, perform a controlled restart (e.g. `/stop` then relaunch, or your

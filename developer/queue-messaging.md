@@ -94,7 +94,7 @@ See [operations/observability.md](../operations/observability.md).
 
 `$Queue` is injected only when a queue client is registered. Configure the
 [queue service](../configuration/queue-service.md) and place the `queue-service-nats`
-connector JAR on the [connectors path](../configuration/extensions-connectors.md).
+service-adapter JAR on the [service-adapters path](../configuration/extensions-connectors.md).
 
 ## Next
 

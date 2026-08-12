@@ -55,10 +55,10 @@ configured by `queue-service`, which meant:
 `QueueClients.create(type)` / `ServiceLoader`, exactly like `QueueServiceInitializer` does for
 `$Queue` — but the two connections, and their configuration, are entirely independent.
 
-## Connector discovery
+## Service-adapter discovery
 
-The notification connector JAR (`ma.s2m.payos:payos-notification-connector`) must be on the
-[connectors path](extensions-connectors.md). `NotificationServiceInitializer` resolves the
+The notification service-adapter JAR (`ma.s2m.payos:payos-notification-connector`) must be on the
+[service-adapters path](extensions-connectors.md). `NotificationServiceInitializer` resolves the
 active `INotificationServiceFactory` via `ServiceLoader`, calls `initialize(configuration)`
 once at boot (and again on hot-reload) with this block's `configuration` map, then registers
 the factory with `PayOSConfig.setNotificationServiceFactory(...)` so scripts see

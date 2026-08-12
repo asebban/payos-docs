@@ -65,7 +65,7 @@ Your jar must declare **exactly one** `IConnector` implementation — zero decla
 
 At startup (or on a hot reload), the runtime scans the jar, validates the descriptor and API-version compatibility, checks that every declared `connector.required.params` is present in `parameters`, then instantiates and initializes the connector. A validation or initialization failure never crashes the runtime — the affected connector simply moves to the `FAILED` state and is never exposed to scripts, while the rest of the application keeps working normally.
 
-For the full operator-facing configuration surface — every `connectors.json` field, API-version compatibility policy details, retry/DLQ parameters, diagnostics — see [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md). That page also documents the split between what you (the connector author) declare in the descriptor versus what the operator declares in `connectors.json`.
+For the full operator-facing configuration surface — every `connectors.json` field, API-version compatibility policy details, retry/DLQ parameters, diagnostics — see [configuration/connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md). That page also documents the split between what you (the connector author) declare in the descriptor versus what the operator declares in `connectors.json`.
 
 ## 4. Versioning
 
@@ -74,4 +74,4 @@ Two distinct version numbers, not to be confused. The **Maven version** of the `
 ## Next
 
 - [testing-and-delivery-checklist-v1-2026-07-27.md](testing-and-delivery-checklist-v1-2026-07-27.md) — verify your connector before shipping it, and the full pre-delivery checklist.
-- [configuration/connector-framework-parameters-v2-2026-07-12.md](../configuration/connector-framework-parameters-v2-2026-07-12.md) — the complete operator-side configuration reference.
+- [configuration/connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md) — the complete operator-side configuration reference.

@@ -71,8 +71,8 @@ bootstrap level and per tenant under `multitenancy.tenants[].database-service`:
 
 Full key documentation: [configuration/database-service.md](../configuration/database-service.md).
 
-> The JDBC driver itself is **not** bundled in the kernel. Provide it as a connector JAR in
-> `connectors-dir` (see [extensibility.md](extensibility.md)).
+> The JDBC driver itself is **not** bundled in the kernel. Provide it as a service-adapter JAR in
+> `service-adapters-dir` (see [extensibility.md](extensibility.md)).
 
 ## Multi-tenant data access
 

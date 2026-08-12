@@ -51,7 +51,7 @@ Resolution order for the extensions directory:
 system property  →  PAYOS_EXTENSIONS_DIR env var  →  bootstrap key (extensions-dir)
 ```
 
-Connectors (SPI backends) use the analogous `connectors-dir` / `PAYOS_CONNECTORS_DIR`. The
+Connectors (SPI backends) use the analogous `service-adapters-dir` / `PAYOS_SERVICE_ADAPTERS_DIR`. The
 classloader hierarchy is: **application → extension → connector → runtime**. Details:
 [configuration/extensions-connectors.md](../configuration/extensions-connectors.md).
 

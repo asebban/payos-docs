@@ -2,7 +2,7 @@
 
 Operator guidance for running `payos-service-notification`: a standalone daemon that consumes notification requests from a message queue and delivers them via channel adapters (email in the MVP), with retry, fallback-channel escalation, and a push status callback to the publisher.
 
-Unlike the main PayOS runtime (`payos-runtime`/`BootServer`), this is its **own deployable process** with its own `main()` — it does not implement `IServer`/`ServerProvider`, is not booted from a bundle's `connectors-dir`/`extensions-dir`, and has no HTTP surface. The message queue is its only ingress. If you're looking for the main runtime's deployment model, see [deployment.md](deployment.md) instead — this page is specific to the notification daemon.
+Unlike the main PayOS runtime (`payos-runtime`/`BootServer`), this is its **own deployable process** with its own `main()` — it does not implement `IServer`/`ServerProvider`, is not booted from a bundle's `service-adapters-dir`/`extensions-dir`, and has no HTTP surface. The message queue is its only ingress. If you're looking for the main runtime's deployment model, see [deployment.md](deployment.md) instead — this page is specific to the notification daemon.
 
 > **Not to be confused with** the `notification-service` *bootstrap.json* block — that one configures the `payos-notification-connector` running inside `BootServer`, which **publishes** notification requests onto the queue that this daemon consumes. See [configuration/notification-service.md](../configuration/notification-service.md) for the publisher side.
 
@@ -12,7 +12,7 @@ Unlike the main PayOS runtime (`payos-runtime`/`BootServer`), this is its **own 
 | --- | --- |
 | `payos-service-notification-<version>.jar` | Self-contained runnable JAR (built with  `maven-shade-plugin`) — includes the NATS broker adapter, the database connector, and the H2/ PostgreSQL JDBC drivers. Main class `ma.s2m.payos.notification.NotificationDaemon`. |
 
-There is no separate connectors/extensions directory for this service — every backend it can use (NATS, Hibernate/H2/PostgreSQL) is already bundled into the JAR at build time as an ordinary Maven dependency, not resolved via `ServiceLoader`/`connectors-dir` at runtime the way the main runtime's connector JARs are.
+There is no separate connectors/extensions directory for this service — every backend it can use (NATS, Hibernate/H2/PostgreSQL) is already bundled into the JAR at build time as an ordinary Maven dependency, not resolved via `ServiceLoader`/`service-adapters-dir` at runtime the way the main runtime's service-adapter JARs are.
 
 ## Building
 

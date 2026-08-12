@@ -98,7 +98,7 @@ echo "=== Pre-encryption validation passed ==="
 >    `edc pack`/`unpack` mutate every regular file **in place**, recursively, inside `--inputdir`;
 >    there is no single combined archive output and no `--outputdir` flag.
 >
-> See [tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md §4-5](tenant-bundle-encryption-key-lifecycle-v2-2026-07-27.md#4-editor-encrypts-its-own-bundle)
+> See [architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md §4-5](../architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md#4-editor-encrypts-its-own-bundle)
 > for the corrected actor model and command shape.
 
 ```bash

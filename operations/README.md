@@ -26,7 +26,7 @@ For **operators** running PayOS in production: deployment, bundle encryption, se
 - A **bundle** is rooted at `payos.json`; that entrypoint points to `configDir`, where the
   runtime configuration files (typically `bootstrap.json`) live alongside applications and
   plugin dirs.
-- Services (DB, queue, secrets, webhooks) are **connector JARs** chosen by configuration.
+- Services (DB, queue, secrets, webhooks) are **service-adapter JARs** chosen by configuration.
 - Configuration changes are picked up live by the [config watcher](hot-reload.md).
 - Every request is tenant- and correlation-scoped and audited
   ([observability](observability.md)).

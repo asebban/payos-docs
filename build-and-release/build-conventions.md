@@ -76,3 +76,4 @@ mvn -q -DskipTests -f payos-runtime/pom.xml package
 
 - [versioning.md](versioning.md)
 - [module-map.md](module-map.md)
+- [kernel-build-profiles.md](kernel-build-profiles.md) — dev vs production build profiles for payos-kernel

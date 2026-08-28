@@ -73,5 +73,6 @@ Two distinct version numbers, not to be confused. The **Maven version** of the `
 
 ## Next
 
-- [testing-and-delivery-checklist-v1-2026-07-27.md](testing-and-delivery-checklist-v1-2026-07-27.md) — verify your connector before shipping it, and the full pre-delivery checklist.
+- [testing-and-delivery-checklist-v2-2026-08-28.md](testing-and-delivery-checklist-v2-2026-08-28.md) — verify your connector before shipping it, and the full pre-delivery checklist.
+- [external-dependency-approval-v4-2026-08-28.md](external-dependency-approval-v4-2026-08-28.md) — how to get a bundled third-party library approved.
 - [configuration/connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md) — the complete operator-side configuration reference.

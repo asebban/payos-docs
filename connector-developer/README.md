@@ -12,7 +12,8 @@ Documentation for a third-party or partner team writing a **business/payment con
 | --- | --- |
 | [writing-a-connector-v1-2026-07-27.md](writing-a-connector-v1-2026-07-27.md) | The `IConnector` contract, the model types (`ConnectorConfig`, `ConnectorExecutionContext`, `ConnectorResponse`, ...), error-category semantics, the idempotency ownership split, and a complete minimal example (plain `IConnector` and via `AbstractConnector`). |
 | [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md) | The `META-INF/connector.properties` descriptor, `ServiceLoader` (SPI) registration, classloader isolation rules, `connectors.json` deployment, and the two independent version numbers you need to track. |
-| [testing-and-delivery-checklist-v1-2026-07-27.md](testing-and-delivery-checklist-v1-2026-07-27.md) | Exercising your connector with `ConnectorTestHarness` before any real PayOS runtime is involved, and the checklist to run through before shipping a connector JAR. |
+| [external-dependency-approval-v4-2026-08-28.md](external-dependency-approval-v4-2026-08-28.md) | How to get a third-party library approved for bundling into your connector jar, the approval criteria, and the registry of currently approved libraries. |
+| [testing-and-delivery-checklist-v2-2026-08-28.md](testing-and-delivery-checklist-v2-2026-08-28.md) | Exercising your connector with `ConnectorTestHarness` before any real PayOS runtime is involved, and the checklist to run through before shipping a connector JAR. |
 
 ## Quick start
 

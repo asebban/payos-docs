@@ -26,6 +26,8 @@ Each ADR follows a short template:
 | [ADR-0003](0003-transport-agnostic-request-model.md) | Transport-agnostic request/response model | Accepted |
 | [ADR-0004](0004-structural-multi-tenancy.md) | Structural multi-tenancy with mandatory tenant/correlation IDs | Accepted |
 | [ADR-0005](0005-sandboxed-graalvm-scripting.md) | Sandboxed GraalVM scripting, deny-by-default | Accepted |
+| [ADR-0006](0006-distributed-cache-over-sticky-sessions.md) | Distributed shared cache (Redis) over sticky sessions for cross-instance state | Accepted |
+| [ADR-0007](0007-distributed-cache-middleware-selection.md) | Distributed cache middleware selection: Valkey over Redis, Dragonfly, Hazelcast/Ignite, NATS JetStream KV, Memcached | Proposed |
 
 > To add a new decision, copy the format above into `NNNN-title.md`, increment the number,
 > and add a row here.

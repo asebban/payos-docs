@@ -19,6 +19,7 @@ Internal design of PayOS for **architects** and anyone who needs to understand h
 12. [Ecosystem surface](./ecosystem-surface.md) — a description of the surface that enables access to the PayOS platform
 13. [Queue server](./queue-architecture.md) — Queue server architecture
 14. [License validation](./license-validation-architecture.md)
+15. [Connector framework architecture](./connector-framework-architecture-v1-2026-08-24.md) — the business/payment connector plugin system (`IConnector`, `$Connector(...)`, module split across `payos-connector-api`/`payos-connector-sdk`/`payos-foundation`/kernel)
 
 ## Cross-cutting principles
 

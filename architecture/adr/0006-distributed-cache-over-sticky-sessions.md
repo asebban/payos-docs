@@ -1,0 +1,45 @@
+# ADR-0006 — Distributed shared cache (Redis) as the default cross-instance state mechanism, sticky sessions as an infrastructure-only fallback
+
+**Status:** Proposed
+
+## Context
+
+PayOS's primary horizontal-scaling model (Model A, see [`deployment-topologies.md` §2](../../../payos/docs/architects/deployment-topologies.md#2-modèle-a--scaling-horizontal-homogène)) runs several identical instances behind a plain round-robin load balancer with no built-in session affinity. Several categories of small, key-indexed, expiring state are local to each JVM process today, and are therefore inconsistent across instances unless addressed explicitly: OIDC sessions (`PayOSSessionStore`), HTTP idempotency keys (`IIdempotencyStore`), tenant-quota sliding-window counters (`TenantPolicyService`), and — identified during Epic 5 of the connector framework — connector execution/terminal-routing evidence (`ConnectorExecutionStateRecord`/`InMemoryConnectorExecutionStateStore`, `ConnectorTerminalRoutingRecord`/`InMemoryConnectorTerminalRoutingStore`): a terminal-routing decision recorded on the instance that ran the connector is invisible to any other instance that later inspects it.
+
+Two generic solutions exist for this entire class of problem: (A) session affinity ("sticky sessions") configured purely at the load balancer, requiring no PayOS code; (B) a distributed shared cache — Redis in every implementation shipped so far — that any instance can read from or write to, exposed behind a pluggable-store SPI per state category.
+
+## Options considered
+
+### Option A — Sticky sessions (load-balancer affinity)
+
+- **Pros:** zero PayOS code and zero new runtime dependency; available immediately on any deployment by configuring the LB (cookie-based affinity or source-IP hashing); already documented as always-available for OIDC sessions in [`deployment-topologies.md` §9.1](../../../payos/docs/architects/deployment-topologies.md#91-sessions-oidc--implémenté).
+- **Cons:** a session/state pinned to one instance is lost the moment that instance restarts, is scaled down, or is drained from the pool — there is no failover for pinned state; it only helps when the *same client* is routed back to the *same instance*, so it is a partial, client-scoped mitigation at best for idempotency retries (a retry that arrives via a different network path, a cleared affinity cookie, or an intermediary proxy can still land on a different instance) and it cannot address tenant-quota aggregation at all, because quota enforcement needs the sum of *every* end-user's traffic for a tenant, not one client's own repeated requests pinned to one node — per [`deployment-topologies.md` §2](../../../payos/docs/architects/deployment-topologies.md#2-modèle-a--scaling-horizontal-homogène), a tenant behind N sticky-routed instances still gets an effective budget of N × the configured limit, not the configured limit.
+
+### Option B — Distributed shared cache (Redis) behind a pluggable-store SPI
+
+- **Pros:** any instance can serve any request — instances stay truly stateless and horizontally fungible; state survives an individual instance's restart or removal from the pool because it lives outside the JVM; the same mechanism uniformly covers every category identified so far (session, HTTP idempotency, connector idempotency, tenant quota, and — by the same reasoning — connector execution/terminal-routing state), using the SPI-pluggable-store pattern PayOS already applies everywhere else (`IQueueClient`/`queue-service-nats`, `ISecretProvider`/`secret-service-filesystem`/`secret-service-vault`, `INotificationService`/`payos-notification-connector`, and now `ISessionStore`/`session-service-redis`, `IIdempotencyStore`/`idempotency-service-redis`); the in-memory implementation stays the zero-dependency default, so single-instance and local-development deployments are unaffected.
+- **Cons:** introduces a new shared dependency and a new single point of failure — a Redis outage or latency spike now degrades every enrolled mechanism across the *whole* cluster simultaneously, whereas today an incident on one node stays confined to that node (see the trade-off called out in [`deployment-topologies.md` §2](../../../payos/docs/architects/deployment-topologies.md#un-cache-distribué-unique-peut-il-résoudre-les-trois-à-la-fois-)); each mechanism must define its own degraded-mode behavior when the cache is unreachable rather than assume permanent availability (fail-open is the recommended default for tenant quotas specifically — letting traffic through and logging a warning rather than blocking every tenant cluster-wide over a cache blip, per [§9.3](../../../payos/docs/architects/deployment-topologies.md#93-quotas-de-tenant)); implementation effort is not uniform — it is proportional to how "cache-shaped" the existing abstraction already is for that mechanism (session-store extraction was medium effort, since no interface existed before this decision; HTTP idempotency and connector idempotency are low effort, since a narrow interface already existed; tenant quotas are the highest effort, since the current mechanism is a static field with no abstraction and needs atomic increment-plus-expiry semantics, not a simple get/put).
+
+## Decision
+
+Adopt **Option B** as the default answer for every category of per-node state identified in the platform, using the SPI-pluggable-store shape already established: a narrow interface in the kernel, an in-memory default implementation, and an optional Redis-backed module discovered via `ServiceLoader`, selected by an explicit config key (mirroring `security.sessionStoreType`/`session-service-redis` and `idempotency.storeType`/`idempotency-service-redis`).
+
+**Sticky sessions (Option A) remain available and are not being removed or discouraged as an infrastructure-level, zero-code stopgap** wherever a mechanism's Redis-backed store does not exist yet or is not configured — this is already the documented interim posture for OIDC sessions. They are, however, not an acceptable *substitute* for Option B wherever they cannot structurally solve the problem: tenant-quota aggregation across nodes, and cross-instance idempotency deduplication in the general case (a client is not guaranteed to be routed back to the same instance on retry). For those two, only a shared store (Redis or equivalent) is considered a correct answer for a genuinely multi-instance deployment.
+
+Current status per mechanism, per [`deployment-topologies.md` §9](../../../payos/docs/architects/deployment-topologies.md#9-plan-daction--lever-les-trois-limitations):
+
+| Mechanism | Status |
+| --- | --- |
+| OIDC sessions (`ISessionStore`) | Done — `RedisSessionStore` (`session-service-redis`), `security.sessionStoreType: redis` |
+| HTTP idempotency (`IIdempotencyStore`) | Done — `RedisIdempotencyStore` (`idempotency-service-redis`), `idempotency.storeType: redis` |
+| Connector idempotency (`IConnectorIdempotencyStore`) | Not yet done — same pattern, `tryClaim` maps naturally to `SET key val NX EX ttl` |
+| Tenant quotas (`TenantPolicyService`) | Done — new interface plus atomic `INCR`/`EXPIRE` semantics, Sliding Window Counter interface and Redis implementation |
+| Connector execution/terminal-routing state (`IConnectorExecutionStateStore`, `IConnectorTerminalRoutingStore`) | Not yet done — interfaces already pluggable, so this is a low-effort case once a multi-instance connector deployment needs it |
+
+This ADR sets the direction for the 'Not yet done' rows; it does not itself deliver them.
+
+## Consequences
+
+- **Positive:** one architectural pattern across the platform for "state that must be visible from any instance," already recognized by anyone familiar with `session-service-redis`/`idempotency-service-redis` / `sliding-window-counter-redis`; alternatively, a single Redis instance or cluster can back every category through distinct key prefixes (`payos:session:`, `payos:idem:`, a future `payos:quota:`, and — following the same convention — `payos:connector:state:`/`payos:connector:routing:`) without provisioning separate infrastructure per mechanism; no behavior change for existing deployments that leave every `storeType` at its `memory` default — this decision is purely additive.
+- **Negative:** Redis becomes a new operational dependency to provision, monitor, and capacity-plan, and a new shared failure mode across the cluster; every mechanism enrolled in this decision must explicitly choose and document its degraded-mode behavior (fail-open vs. fail-closed) rather than assume the cache is always reachable; connector idempotency, and connector execution/terminal-routing state still require dedicated implementation work before they benefit from this decision.
+- See [`deployment-topologies.md`](../../../payos/docs/architects/deployment-topologies.md) for the full analysis this ADR is based on, and [`session-store-redis-design.md`](../../../payos/docs/architects/session-store-redis-design.md) for the reference design of the pattern being generalized here.

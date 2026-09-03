@@ -17,7 +17,7 @@ PayOS is deliberately split into two layers with very different change profiles.
 The core is **never** modified to add a business feature. New behavior is delivered by:
 
 - writing / extending **JavaScript** application/capability resources (the primary mechanism), using all [extensibility mechanisms](./extensibility.md).
-- plugging in **service connectors** (database, queue, secret, webhook) through the SPI,
+- plugging in **service connectors** (database, queue, secret, webhook, ...) through the SPI,
 - dropping in **Java extensions** callable from scripts via `Java.type()`, and
 - plugging in **new TCP handlers** as encoder / decoder and handler.
 - adding **transport providers** for new protocols.

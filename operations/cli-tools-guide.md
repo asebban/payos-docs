@@ -182,7 +182,7 @@ java -jar secret-service-filesystem\target\spm.jar --help
 |---|---|---|
 | `--app-id <id>` | `-AppId` (obligatoire) | Identifiant unique de l'application (ex. `my-app`) |
 | `--output <dir>` | `-OutputDir` / `-output` | Répertoire parent où créer le dossier `<app-id>`. Défaut : répertoire courant |
-| `--template standard|ui` | `-Template` | Type de squelette à générer. `standard` conserve le comportement actuel ; `ui` ajoute un template Nuxt UI |
+| `--template standard|ui` | `-Template` | Type de squelette à générer. `standard` : socle backend complet ; `ui` ajoute en plus un frontend Vue pur, sans étape de build |
 
 ### Exemples
 
@@ -200,28 +200,37 @@ java -jar secret-service-filesystem\target\spm.jar --help
 
 ### Structure générée
 
+Le template `standard` couvre un exemple pour chaque type de ressource supporté par le runtime (voir [create-application-guide.md §3](../developer/create-application-guide.md#3-scaffolding-rapide) pour la liste complète) :
+
 ```
 <app-id>/
   manifest.json               # Descripteur de l'application
+  webhooks.json                # Abonnements aux événements sortants
   config/
     application.json          # Configuration applicative
     mappings.json             # Mappings de ressources
     routes.json               # Définition des routes
+    i18n.json                 # Configuration de localisation
   api/
     items/
-      list.js                 # GET /items
-      get.js                  # GET /items/:id
-      create.js               # POST /items
-  lib/
-    utils.js                  # Utilitaires partagés
+      list.js, get.js, create.js
   page/
-    index.vue                 # Page d'accueil
-    home.vue                  # Page principale
+    index.vue, home.vue        # Pages backend (PAGE_RESOURCE)
+  component/
+    card.vue                  # Composant réutilisable (COMPONENT_RESOURCE)
+  lib/
+    utils.js                  # Librairie JS partagée
+  files/
+    styles.css, logo.png, docs/guide.pdf, assets/banner.jpg
+  i18n/
+    fr/, en/                  # Messages localisés
+  hooks/
+    pre-request.js, post-request.js, on-error.js, page-pre-serve.js, page-post-serve.js, page-on-error.js
   menu/
     entries.json              # Définition du menu
 ```
 
-En mode `ui`, le script conserve ce squelette backend et y ajoute un frontend Nuxt entièrement embarqué dans le script : `app/`, `components/`, `composables/`, `plugins/`, `public/`, `nuxt.config.ts`, `package.json`, `tsconfig.json`, ainsi qu'une version enrichie de `config/routes.json` et `menu/entries.json`. Aucun template externe n'est requis sur disque.
+En mode `ui`, le script conserve ce squelette backend et y ajoute un frontend **Vue pur, sans étape de build** (copié depuis `payos/templates/vue-ui/`, qui doit accompagner les scripts) : `page/index.html`, `page/app/` (Vue et `vue3-sfc-loader` vendorisés + code applicatif), `page/dashboard.vue`, ainsi qu'une version enrichie de `config/routes.json` et `menu/entries.json`. Contrairement au socle `standard`, ce mode n'est donc pas totalement autonome — voir [create-application-guide.md §3](../developer/create-application-guide.md#3-scaffolding-rapide) pour le détail.
 
 ---
 

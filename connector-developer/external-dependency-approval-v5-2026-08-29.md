@@ -1,8 +1,8 @@
 # External dependency approval for connectors
 
 Created: 2026-08-28
-Last updated: 2026-08-28
-Version: v4
+Last updated: 2026-08-29
+Version: v5
 
 This page defines how a connector author gets a third-party (non-PayOS) library approved for use in a business/payment connector, and where the list of already-approved libraries lives. It complements [packaging-and-deployment-v1-2026-07-27.md §3](packaging-and-deployment-v1-2026-07-27.md#3-deployment-connectorsjson), which covers how to package a connector jar, and [writing-a-connector-v1-2026-07-27.md](writing-a-connector-v1-2026-07-27.md), which covers the `IConnector` contract itself.
 
@@ -70,26 +70,9 @@ An empty registry is `{ "entries": [] }`.
 
 ## 6. How this feeds certification today
 
-`ConnectorCertificationGate.certify(...)` reads `ConnectorCertificationInput.approvedExternalDependencies` as a plain `Set<String>` of `groupId:artifactId` coordinates — it does not read this document directly. Module `payos-connector-sdk`, package `ma.s2m.payos.connector.certification.approval`, provides the actual certification entry point, `ConnectorCertificationCli`, so nobody has to hand-copy coordinates into a `ConnectorCertificationInput`:
+`ConnectorCertificationGate.certify(...)` reads `ConnectorCertificationInput.approvedExternalDependencies` as a plain `Set<String>` of `groupId:artifactId` coordinates — it does not read this document directly. **See [connector-certification-v1-2026-08-29.md](connector-certification-v1-2026-08-29.md) for the full certification reference** (everything the gate checks, and how to run `ConnectorCertificationCli`, module `payos-connector-sdk` package `ma.s2m.payos.connector.certification.approval`) — this section covers only the registry-specific part of that flow.
 
-```
-java -cp connector-sdk-<version>.jar ma.s2m.payos.connector.certification.approval.ConnectorCertificationCli \
-    --jar   /path/to/the-connector.jar \
-    --pom   /path/to/the-connector/pom.xml \
-    --registry payos-docs/connector-developer/connector-approved-deps-registry.json \
-    --isolation-documented
-```
-
-Given those three paths, the CLI derives everything it can and runs `ConnectorCertificationGate.certify(...)` itself:
-
-- The connector **descriptor** (type, name, API version, required params) comes straight from `META-INF/connector.properties` inside the jar (§1 of [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md#1-the-descriptor-meta-infconnectorproperties)) — the same file the runtime itself reads, so there's no separate place to retype it.
-- The **dependency list** comes from scanning the connector's `pom.xml` (`ConnectorDependencyScanner`) — only the top-level `<project><dependencies>` block, since `<dependencyManagement>`/`<profiles>` entries aren't what actually ships in the jar.
-- The **approved-coordinate set** comes from parsing `connector-approved-deps-registry.json` (`ApprovedDependencyRegistryReader` / `ApprovedDependencyRegistry.approvedCoordinatesFor(...)`), filtered to entries scoped `all connectors` or to this connector's type/name, with any entry carrying a non-null `revoked` (§7) excluded.
-- Whether **connector-sdk got bundled** is detected by checking the jar for any `ma/s2m/payos/connector/**/*.class` entry — those classes belong to the SDK itself, so their presence means it was shaded in rather than left `provided`.
-
-Two things are intentionally *not* derived automatically, and stay explicit CLI inputs: the imported-types list (`--import <fully.qualified.Type>`, repeatable — would need bytecode scanning, which this doesn't do) and the runtime-isolation acknowledgement (`--isolation-documented` — a human sign-off, not a fact discoverable from the artifacts). The CLI exits `0` when certification passes and `1` when it doesn't, so it's usable as a CI gate. See `ConnectorCertificationCliTest` in that package for the full wiring, including how a bundled-SDK jar and a wrong-scope approval each get caught.
-
-Treat any `UNAPPROVED_DEPENDENCY` finding that comes out of this — a mismatch between what's actually bundled in the jar and what's listed as approved for that connector — as a certification failure to investigate, not something to route around by widening the registry's scope.
+`ConnectorCertificationCli`'s **approved-coordinate set** comes from parsing `connector-approved-deps-registry.json` (`ApprovedDependencyRegistryReader` / `ApprovedDependencyRegistry.approvedCoordinatesFor(...)`), filtered to entries scoped `all connectors` or to the connector's type/name, with any entry carrying a non-null `revoked` (§7) excluded. Treat any resulting `UNAPPROVED_DEPENDENCY` finding — a mismatch between what's actually bundled in the jar and what's listed as approved for that connector — as a certification failure to investigate, not something to route around by widening the registry's scope.
 
 `ApprovedDependencyRegistryReader` deserializes `connector-approved-deps-registry.json` strictly: an entry missing a required field, or the file containing an unrecognized field, fails to load rather than being silently skipped — a malformed edit to the registry surfaces as a read error, not a quietly-wrong approved set.
 
@@ -99,5 +82,6 @@ If a previously approved coordinate is later found to have a critical/high vulne
 
 ## Next
 
+- [connector-certification-v1-2026-08-29.md](connector-certification-v1-2026-08-29.md) — the full certification reference: every check the gate runs, and how to run `ConnectorCertificationCli`.
 - [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md) — descriptor, SPI registration, classloader isolation, `connectors.json`.
-- [testing-and-delivery-checklist-v2-2026-08-28.md](testing-and-delivery-checklist-v2-2026-08-28.md) — pre-delivery checklist, which should be read alongside this page before shipping a connector that bundles third-party libraries.
+- [testing-and-delivery-checklist-v3-2026-08-29.md](testing-and-delivery-checklist-v3-2026-08-29.md) — pre-delivery checklist, which should be read alongside this page before shipping a connector that bundles third-party libraries.

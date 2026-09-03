@@ -20,6 +20,7 @@ Internal design of PayOS for **architects** and anyone who needs to understand h
 13. [Queue server](./queue-architecture.md) — Queue server architecture
 14. [License validation](./license-validation-architecture.md)
 15. [Connector framework architecture](./connector-framework-architecture-v1-2026-08-24.md) — the business/payment connector plugin system (`IConnector`, `$Connector(...)`, module split across `payos-connector-api`/`payos-connector-sdk`/`payos-foundation`/kernel)
+16. [Connector framework class diagram](./connector-framework-class-diagram-v1-2026-09-02.md) — every production class of the connector framework across all five repositories, with inheritance/implementation/usage/instantiation relationships
 
 ## Cross-cutting principles
 

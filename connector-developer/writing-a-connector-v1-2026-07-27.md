@@ -4,7 +4,7 @@ Created: 2026-07-27
 Last updated: 2026-07-27
 Version: v1
 
-This page covers the Java contract you implement, the model types you receive and return, and how errors are classified. For packaging/deployment, see [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md); for exercising your implementation before any runtime is involved, see [testing-and-delivery-checklist-v2-2026-08-28.md](testing-and-delivery-checklist-v2-2026-08-28.md).
+This page covers the Java contract you implement, the model types you receive and return, and how errors are classified. For packaging/deployment, see [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md); for exercising your implementation before any runtime is involved, see [testing-and-delivery-checklist-v3-2026-08-29.md](testing-and-delivery-checklist-v3-2026-08-29.md).
 
 ## 1. Overview
 
@@ -165,4 +165,4 @@ public class SampleConnector extends AbstractConnector {
 ## Next
 
 - [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md) — descriptor, SPI registration, classloader isolation, `connectors.json`, versioning.
-- [testing-and-delivery-checklist-v2-2026-08-28.md](testing-and-delivery-checklist-v2-2026-08-28.md) — exercising this contract with `ConnectorTestHarness`, and the pre-delivery checklist.
+- [testing-and-delivery-checklist-v3-2026-08-29.md](testing-and-delivery-checklist-v3-2026-08-29.md) — exercising this contract with `ConnectorTestHarness`, and the pre-delivery checklist.

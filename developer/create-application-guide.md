@@ -34,9 +34,9 @@ Une application PayOS est un **dossier** contenant des fichiers de configuration
 
 | Type | Dossier | Description |
 |------|---------|-------------|
-| Configuration | `config/` | Déclaration des mappings API et des routes page, extensions (héritage) d'applications, ... |
+| Configuration | `config/` | Déclaration des mappings API et des routes page, extensions (héritage) d'applications, verrouillage des hooks (`hooks.json`), ... |
 | Endpoint API | `api/` | Scripts JavaScript exposés en HTTP/TCP/Queue |
-| Page | `page/` | Fichiers `.vue` ou `.html` servis comme pages |
+| Page | `page/` | Fichiers `.vue` ou `.html (statique) servis comme pages |
 | Composant | `component/` | Composants Vue réutilisables |
 | Librairie | `lib/` | Modules JS partagés entre endpoints |
 | Fichiers statiques | `files/` | Fichiers statiques (images, CSS, JS, PDF, etc.) |
@@ -55,7 +55,8 @@ my-app/
 │   ├── application.json     ← métadonnées (extends, category…)
 │   ├── i18n.json            ← configuration de localisation côté serveur
 │   ├── mappings.json        ← mappings des endpoints API
-│   └── routes.json          ← routes des pages Vue
+│   ├── routes.json          ← routes des pages Vue
+│   └── hooks.json           ← manifeste de verrouillage des hooks hérités (optionnel, voir 7.5)
 ├── api/
 │   └── items/
 │       ├── list.js          ← handler GET /items
@@ -107,7 +108,7 @@ Le runtime fournit un script pour générer la structure minimale d'une applicat
 # Avec répertoire de sortie
 ./generate_app.sh --app-id my-app --output /opt/payos/apps
 
-# Avec template UI Nuxt embarqué
+# Avec template UI Vue (sans build)
 ./generate_app.sh --app-id my-app --output /opt/payos/apps --template ui
 ```
 
@@ -119,12 +120,14 @@ Le runtime fournit un script pour générer la structure minimale d'une applicat
 # Avec répertoire de sortie
 .\generate_app.ps1 -AppId my-app -output C:\payos\apps
 
-# Avec template UI Nuxt embarqué
+# Avec template UI Vue (sans build)
 .\generate_app.ps1 -AppId my-app -output C:\payos\apps -Template ui
 ```
 
 Le script crée un dossier `<AppId>` dans le répertoire de base fourni (ou dans le répertoire courant par défaut).
-Le mode `ui` est désormais entièrement autonome : tous les artefacts Nuxt générés sont intégrés directement dans les scripts, sans dépendance vers un template externe présent sur disque.
+Le mode `ui` copie un frontend **Vue pur, sans étape de build** (`payos/templates/vue-ui/` — voir son `README.md` pour l'origine et la resynchronisation) : Vue est chargé en ESM natif dans le navigateur, et les composants d'infrastructure (`AppRoot`, `AppMenu`, `CustomLink`, `PlayfulCheckbox`) sont de véritables fichiers `.vue`, compilés à la volée par `vue3-sfc-loader` (vendorisé). Ce dossier `templates/vue-ui/` doit accompagner `generate_app.ps1`/`generate_app.sh` (il vit dans le même dépôt) — contrairement au socle `standard`, le mode `ui` n'est donc pas un script totalement autonome.
+
+Le template `standard` couvre désormais **tous les types de ressource** décrits en [section 2](#2-structure-de-fichiers-dune-application) — pas seulement le socle API/page minimal — afin de servir de référence complète pour découvrir la structure d'une application PayOS.
 
 Fichiers générés :
 
@@ -134,15 +137,36 @@ Fichiers générés :
 | `config/application.json` | Configuration de base avec `extends: ["default"]` |
 | `config/mappings.json` | Mappings API exemples pour `/items` et `/items/{id}` |
 | `config/routes.json` | Routes de pages : `/` → `index`, `/home` → `home` |
+| `config/i18n.json` | Configuration de localisation côté serveur (`$I18n`) |
 | `api/items/list.js` | Handler GET `/items` |
 | `api/items/get.js` | Handler GET `/items/{id}` |
 | `api/items/create.js` | Handler POST `/items` |
-| `lib/utils.js` | Librairie JS partagée exemple |
 | `page/index.vue` | Page principale |
 | `page/home.vue` | Page d'accueil |
+| `component/card.vue` | Composant Vue réutilisable exemple |
+| `lib/utils.js` | Librairie JS partagée exemple |
+| `files/styles.css` | Fichier statique exemple (CSS) |
+| `files/logo.png`, `files/docs/guide.pdf`, `files/assets/banner.jpg` | Emplacements exemples pour assets statiques (image, PDF, image) — à remplacer par de vrais fichiers binaires |
+| `i18n/fr/common.json`, `i18n/fr/items.json`, `i18n/en/common.json` | Messages localisés exemples (fr complet, en partiel pour illustrer le fallback) |
+| `hooks/pre-request.js`, `post-request.js`, `on-error.js`, `page-pre-serve.js`, `page-post-serve.js`, `page-on-error.js` | Scripts de cycle de vie exemples |
+| `webhooks.json` | Abonnement webhook exemple sur l'événement `item.created` |
 | `menu/entries.json` | Entrée de menu pointant vers `/home` |
 
-En mode `ui`, ce socle est complété avec un frontend Nuxt : composants, plugins, assets publics, configuration Nuxt et `package.json` prêts pour `npm install` puis `npm run dev`. Les fichiers `config/routes.json` et `menu/entries.json` sont alors enrichis par le template UI.
+En mode `ui`, ce socle est complété avec :
+
+| Fichier | Description |
+|---------|-------------|
+| `page/index.html` | Point d'entrée du frontend (charge `page/app/src/main.js` en module ES natif) |
+| `page/app/vendor/` | Vue 3 et `vue3-sfc-loader` vendorisés (aucune dépendance CDN/npm) |
+| `page/app/src/main.js` | Bootstrap : `createApp`, `provide('runtime', …)`, enregistrement des composants/directives globaux |
+| `page/app/src/config.js` | Configuration frontend (`appBase` pré-rempli avec l'id de l'application, `basePath`, `tenantId`, `defaultPage`) |
+| `page/app/src/runtime.js` | Moteur de chargement des pages/composants backend (`loadPage`, `createDynamicComponent`, session `/me`) |
+| `page/app/src/AppRoot.vue`, `components/AppMenu.vue`, `components/CustomLink.vue`, `components/PlayfulCheckbox.vue` | Composants d'infrastructure, compilés à la volée par `vue3-sfc-loader` |
+| `page/dashboard.vue` | 2e page backend exemple, illustrant `createDynamicComponent('card')` (charge `component/card.vue` dynamiquement) |
+
+Les fichiers `config/routes.json` et `menu/entries.json` sont alors enrichis (route et entrée de menu pour `/dashboard`, champ `page` au lieu de `path` dans `menu/entries.json` — c'est le champ lu par `AppMenu.vue`).
+
+Aucune étape de build : servez `page/` avec n'importe quel serveur HTTP statique (`npx serve page`, `python3 -m http.server`, etc.) puis ouvrez l'URL affichée. Si ce frontend est servi depuis une origine différente du runtime PayOS, renseignez `basePath` dans `page/app/src/config.js` et autorisez le CORS avec `credentials` côté runtime pour cette origine.
 
 ---
 
@@ -544,6 +568,18 @@ $Response.setStatusCode(500);
 $Response.setJsonBody({ error: "Erreur interne" });
 $HookChain.stop();
 ```
+
+### Verrouillage des hooks hérités (`config/hooks.json`)
+
+Une application dont `extends` d'autres applications peut déclarer un hook comme verrouillé (`locked: true`) dans `config/hooks.json` :
+
+```json
+{
+  "pre-request.js": { "locked": true }
+}
+```
+
+Un hook verrouillé ne peut pas être interrompu par un appel à `$HookChain.stop()` dans une application enfant qui hérite de celui-ci — le moteur lève une erreur de pipeline si la règle est violée. Ce fichier est optionnel ; en son absence, aucun hook n'est verrouillé.
 
 ### Webhooks — notifications sortantes
 

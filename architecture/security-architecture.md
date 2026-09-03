@@ -106,6 +106,8 @@ CORS headers are added only when the request origin matches an allowlist. CORS o
 
 Sensitive material is never hard-coded. Secrets are retrieved through the secret-provider SPI (`$Secrets`), configuration files may be encrypted at rest (`CryptoService`), and the secret provider encrypts values with AES-256-GCM. You can find here a detailed description of the [Secret Provider Architecture](./secret-provider-architecture.md)
 
+For how `CryptoService` fits into the broader bundle-encryption picture — key generation, delivery to integrators/clients, and in-memory decrypt-on-load — see [Tenant Bundle Encryption — Key Lifecycle](./tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md).
+
 See [extensibility.md](extensibility.md) and [operations/secrets-management.md](../operations/secrets-management.md).
 
 ## Audit & traceability (PCI DSS)

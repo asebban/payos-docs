@@ -37,7 +37,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Technical Layer | Core Stack | Hot Path Fit | Warm Path Fit | Cold Path Fit | Deployment Notes |
 |---|---|---|---|---|---|
-| UI | Nuxt / Vue runtime shell | No hot path role | Workflow screens, asynchronous status views | Reporting/admin views | Part of the UI is hosted on the backend application (asynchronous components), and the static part can be hosted with the runtime or separately depending on customer deployment profile. |
+| UI | Plain Vue 3 runtime shell (no build step, `vue3-sfc-loader`) | No hot path role | Workflow screens, asynchronous status views | Reporting/admin views | Part of the UI is hosted on the backend application (asynchronous components), and the static part can be hosted with the runtime or separately depending on customer deployment profile. |
 | Compute runtime | Java 21 + payos-kernel + GraalVM JS | API script execution and request dispatch | Queue/message handlers and webhook callbacks | Batch-like application scripts and tools | Same kernel contracts across on-prem, cloud, and PaaS. |
 | Transport | Undertow HTTP, TCP server, Queue server | HTTP/TCP synchronous exchange | Queue-backed processing and callbacks | Batch/event ingestion (like POS EOD downloads) | Transport modules adapt communication without changing business scripts. |
 | Data | HikariCP + database-service + Hibernate | Business JDBC-backed queries | Transaction state (e.g. authorization → capture → settlement), idempotency (checking DB to see if an event was already handled), reconciliation support | Historical/reporting/demo storage | Real production database choice is deployment-specific; H2 remains demo/test in database-service. |
@@ -82,7 +82,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 
 | Layer | Primary Technologies | Design Rule |
 |---|---|---|
-| UI | Nuxt, Vue, Vue Router | UI is a technical layer, not a separate platform fork. It must consume runtime capabilities through stable contracts. |
+| UI | Vue 3 (no build step, `vue3-sfc-loader`) | UI is a technical layer, not a separate platform fork. It must consume runtime capabilities through stable contracts. |
 | Compute | Java 21, GraalVM JS, kernel/server modules | Keep business execution behind stable kernel and resource APIs. |
 | Data | HikariCP, database-service, Hibernate, production DB binding | Keep concrete database choices outside the kernel when possible. |
 | Messaging | IQueueClient, queue-service-nats, jnats | Keep MoM implementations as connectors or proxies, not kernel embedded. |
@@ -314,26 +314,25 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 | **Build** | Maven (no shade plugin, no extra dependencies) |
 | **Crypto** | AES via JCE (ECB/PKCS5Padding), magic header `P8OS` |
 
-### 11. `nuxt-app` — Frontend Template (PayOS UI)
+### 11. `vue-app` — Frontend Template (PayOS UI)
 
 | Property | Value |
 |---|---|
-| **Framework** | Nuxt 4 |
-| **Rendering** | CSR only (`ssr: false`) |
+| **Framework** | Plain Vue 3 — no bundler, no build step |
+| **Rendering** | Client-side; `.vue` SFCs (`AppRoot`, `AppMenu`, `CustomLink`, `PlayfulCheckbox`) compiled at runtime in the browser by `vue3-sfc-loader` (vendored) |
 | **Language** | JavaScript / Vue 3 |
-| **Compatibility Date** | 2025-07-15 |
-| **Dev Server** | `127.0.0.1:3000` |
+| **Serving** | Any static HTTP server (`npx serve`, `python3 -m http.server`, …) — no dev server |
 
-**Runtime config:**
+**Runtime config (`page/app/src/config.js`):**
 
 | Key | Default |
 |---|---|
-| `appBase` | `nuxt-app` |
-| `basePath` | `http://127.0.0.1:8081` |
+| `appBase` | set to the target application's id |
+| `basePath` | `""` (same origin as the page; set only if the frontend is served from a different origin than the PayOS backend) |
 | `componentDirectory` | `component` |
-| `tenantId` | `tenant1` (env: `NUXT_PUBLIC_TENANT_ID`) |
+| `tenantId` | `""` (resolved per-request — query param, then `sessionStorage`, then `localStorage`) |
 
-**Key composables/plugins:** `useRuntimeLoader`, `custom-link.client.ts`, `runtime.client.ts` — indicates a dynamic UI component loading pattern aligned with the platform's application runtime model.
+**Key modules:** `runtime.js` (fetches pages/components from the backend, evaluates their script via `new Function()`, session via `/me`), `AppRoot.vue`, `AppMenu.vue`, `CustomLink.vue`, `PlayfulCheckbox.vue` — real `.vue` SFCs, compiled in-browser via `vue3-sfc-loader`, never through a bundler. `generate_app.ps1`/`generate_app.sh --template ui` vendors this shell into `payos/templates/vue-ui/` and copies it into generated applications.
 
 ---
 
@@ -483,7 +482,7 @@ The **core stack** is common across all dimensions. Variation is introduced thro
 | Assertions | AssertJ | 3.25.3 |
 | Test DB | H2 | 2.3.232 |
 | Production DB driver | PostgreSQL JDBC | 42.7.3 |
-| Frontend framework | Nuxt 4 / Vue 3 | Nuxt compat 2025-07-15 |
+| Frontend framework | Vue 3 (no build step) | `vue3-sfc-loader` for in-browser SFC compilation |
 | Frontend language | JavaScript | — |
 | Package (fat JAR) | maven-shade-plugin | 3.5.1 |
 | SPI merging | ServicesResourceTransformer | (shade plugin built-in) |
@@ -692,7 +691,7 @@ flowchart TB
             CPM_S["cpm — capability manager\n(deploy apps per tenant)"]
             PPM_S["ppm — product manager\n(configure products per tenant)"]
             APM_S["apm — app manager\n(lifecycle per tenant)"]
-            NUXT["nuxt-app\n(multi-tenant UI)"]
+            VUEAPP["vue-app\n(multi-tenant UI)"]
         end
     end
 
@@ -701,7 +700,7 @@ flowchart TB
     R1 & R2 & R3 -->|schema per tenant| PG_MT
     R1 & R2 & R3 -->|subject per tenant| NATS_MT
     CPM_S & PPM_S & APM_S -.->|provision / hot-reload| RUNTIME
-    NUXT -.->|API calls with X-Tenant-Id| LB_P
+    VUEAPP -.->|API calls with X-Tenant-Id| LB_P
 
     style T1 fill:#dbeafe,stroke:#3b82f6
     style T2 fill:#dcfce7,stroke:#16a34a

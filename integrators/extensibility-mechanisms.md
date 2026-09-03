@@ -1445,16 +1445,14 @@ GET /atlas-payment-gateway/files/styles-atlas.css
 
 ### 12.3 Home pages and personalized screens
 
-The standard way in nuxt to include a global CSS file to apply the client's graphic charter: logo, colors, wording, layout is in `nuxt.config.ts` :
+The PayOS UI frontend (`page/index.html` + `page/app/`) has no build step — there is no bundler config to hook a global CSS file into. The standard way to apply the client's graphic charter (logo, colors, wording, layout) is to serve a stylesheet as a `files/` resource and link it from `page/index.html` :
 
-```javascript
-export default defineNuxtConfig({
-  css: [
-    '~/files/css/main.css'
-  ]
-})
+```html
+<!-- page/index.html, before <script type="module" src="./app/src/main.js"> -->
+<link rel="stylesheet" href="/atlas-payment-gateway/files/css/main.css" />
 ```
-Then main.css is automatically loaded on every page. The inheritence principle is applicable here just like the API handlers or any other files. To override the UI entry point of the application (which is not recommended), you should override the Vue page pointed to by the `/home` route (this route is the standard route for the home page of the application).  
+
+`main.css` then follows the same inheritance principle as any other `files/` resource, the API handlers, or the Vue pages. To override the UI entry point of the application (which is not recommended), you should override the Vue page pointed to by the `/home` route (this route is the standard route for the home page of the application).  
 
 ---
 
@@ -2015,7 +2013,7 @@ dev (local) → recipe (client sandbox) → production (real client tenant)
 | --- | --- | --- | --- |
 | 1 | Create the personalization space | Overlay `atlas-payment-gateway` which `extends: ["payment-gateway"]` | [§5](#5-set-up-the-personalization-application--overlay--client) |
 | 2 | Make `agencyCode` mandatory when creating a payment | `hooks/pre-request.js` with `$HookChain.stop()` if absent | [§7.3](#73-recipe--client-specific-pre-request-validation) |
-| 3 | Home page in Atlas colors | Change css in nuxt config + change assets in `files/` | [§6.3](#63-pages-components-and-branding), [§12.2](#122-logos-colors-static-assets) |
+| 3 | Home page in Atlas colors | Link a stylesheet from `page/index.html` + change assets in `files/` | [§6.3](#63-pages-components-and-branding), [§12.2](#122-logos-colors-static-assets) |
 | 4 | Activate loyalty program | `cpm --activate --id loyalty-points --app atlas-payment-gateway --tenant atlas` | [§9](#9-capabilities--activate/deactivate-optional-modules) |
 | 5 | Dedicated database and schema | `multitenancy.tenants.atlas` with `isolationMode: dedicated-database` | [§10.2](#102-isolate-client-data) |
 | 6 | IdP Keycloak specific to Atlas | `security` dedicated on `atlas-payment-gateway` | [§10.3](#103-oidc-identity-dedicated-to-client) |

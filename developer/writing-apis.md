@@ -34,7 +34,7 @@ function emitInsight(request, response, payload) {
 
 In the current runtime implementation, all three functions must exist and be executable. If you do not need insight emission, define `emitInsight` and return `null`.
 
-The return value of `execute` may be:
+The return value of `execute` is a:
 
 - a plain JSON-compatible object/array → serialized as the response body and wrapped in a `Response` automatically, or
 - a `Response` object (when you need full control of status, headers, and body).

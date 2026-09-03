@@ -85,7 +85,7 @@ flowchart TD
 
 ## 3. Module `payos-secret-api` — contrat SPI
 
-Ce module est la **seule dépendance** que le kernel introduit. Il ne contient aucune implémentation concrète. Les providers le dépendent ; le kernel le dépend. C'est le contrat d'intégration.
+Ce module est la **seule dépendance** que le kernel introduit. Il ne contient aucune implémentation concrète. Les providers le dépendent ; le kernel le dépend. C'est le contrat d'intégration. Référence complète des types et interfaces de ce module : [payos-secret-api.md](./payos-secret-api.md).
 
 ### ISecretProvider — interface noyau
 

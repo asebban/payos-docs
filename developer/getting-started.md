@@ -73,8 +73,7 @@ my-bundle/
 
 > The `tenantSimulator` is enabled here so you can call the API without sending `X-Tenant-Id`.
 > **Never enable it in production** — see [multi-tenancy](../architecture/multi-tenancy.md).
-> Note that `base.path` is resolved relative to `configDir`; since `bootstrap.json` lives in
-> `.` and the app is in `apps/hello/`, we use `./apps/hello`.
+> Note that `base.path` is resolved relative to `configDir`; since `bootstrap.json` lives in `.` and the app is in `apps/hello/`, we use `./apps/hello`.
 
 `apps/hello/api/greet.js`:
 

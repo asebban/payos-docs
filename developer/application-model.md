@@ -12,13 +12,17 @@ An application's root is given by its `base.path` (default `.apps/{id}`, resolve
 
 ```
 apps/{appId}/
-├── config/            configuration files (config.json, security.json, webhooks.json, …)
-├── api/               API scripts (.js)            → resource type "api"
-├── page/              pages (.vue, .html)          → resource type "page"
-├── menu/              menu definitions             → resource type "menu"
-├── lib/               shared JavaScript libraries  → resource type "lib"
-├── hook/              hook scripts (.js)           → resource type "hook"
-└── i18n/              translation files            → resource type "i18n"
+├── manifest.json      application manifest consumed by apm to register the app (id, name, version, base.path, …)
+├── webhooks.json      outbound webhook subscriptions, at the application root (see architecture/hooks-webhooks.md)
+├── config/            configuration files — every *.json file here is merged into the app's effective config; conventional names are application.json, mappings.json, routes.json, i18n.json, hooks.json (hook lock manifest, see below), but the filenames themselves are arbitrary
+├── api/               API scripts (.js)                        → resource type "api"
+├── page/              pages (.vue, .html)                      → resource type "page"
+├── component/         reusable Vue components (.vue, .html)    → resource type "component"
+├── menu/              menu definitions                         → resource type "menu"
+├── lib/               shared JavaScript libraries (.js)        → resource type "lib"
+├── i18n/              translation files (.json), one subdirectory per locale → resource type "i18n"
+├── files/             static files served as-is (images, CSS, PDF, fonts, …) → resource type "file"
+└── hooks/             lifecycle hook scripts (.js), see "Hooks" below — not a generic resource type
 ```
 
 Resource types and directory names are defined by `ma.s2m.payos.resources.IResource`:
@@ -27,11 +31,23 @@ Resource types and directory names are defined by `ma.s2m.payos.resources.IResou
 | --- | --- | --- | --- |
 | `API_RESOURCE` | `api/` | `.js` | `/{appId}/api/...` |
 | `PAGE_RESOURCE` | `page/` | `.vue`, `.html` | `/{appId}/page/...` |
-| `COMPONENT_RESOURCE` | `page/` (components) | `.vue`, `.html` | `/{appId}/component/...` |
-| `MENU_RESOURCE` | `menu/` | `.json` | `/{appId}/menu/...` |
+| `COMPONENT_RESOURCE` | `component/` | `.vue`, `.html` | `/{appId}/component/...` |
+| `MENU_RESOURCE` | `menu/` | `.json` | `/{appId}/menu` |
 | `LIB_RESOURCE` | `lib/` | `.js` | loaded via `$Library` |
-| `HOOK_RESOURCE` | `hook/` | `.js` | executed by `HookEngine` on lifecycle events |
 | `I18N_RESOURCE` | `i18n/` | `.json` | loaded via `$I18n` |
+| `FILE_RESOURCE` | `files/` | any | `/{appId}/files/...` — static assets, served with MIME detection, ETag/Last-Modified/304 caching, and directory-traversal protection |
+
+### Hooks
+
+The `hooks/` directory holds lifecycle scripts run by `HookEngine` around API and page requests — `pre-request.js`, `post-request.js`, `on-error.js`, `page-pre-serve.js`, `page-post-serve.js`, `page-on-error.js`. Hooks are resolved along the same `extends` chain as other resources but are **not** a generic `IResource` type (no `HOOK_RESOURCE` constant, no HTTP-served path); the presence of the file is enough to register it, no mapping entry is required. A parent app can prevent a child from short-circuiting one of its hooks by declaring it in `config/hooks.json`:
+
+```json
+{
+  "pre-request.js": { "locked": true }
+}
+```
+
+A locked hook raises a pipeline error if a child hook calls `$HookChain.stop()` instead of `$HookChain.proceed()`. Full reference: [architecture/hooks-webhooks.md](../architecture/hooks-webhooks.md) and the step-by-step walkthrough in [create-application-guide.md](./create-application-guide.md#75-hooks-et-webhooks).
 
 ## Registering an application
 
@@ -76,6 +92,8 @@ From `IConfigSpec.Applications.Application` (full reference in
 | `mapping-files` | Array of data-model mapping file paths (see [data access](data-access.md)). |
 | `security` | Per-app security/OIDC overrides (see [security config](../configuration/security-oidc.md)). |
 | `database-service` | Per-app database configuration (see [database config](../configuration/database-service.md)). |
+
+The keys could equally be declared in separate `.json` files whose names are arbitrary but these files should all reside in the root of the base directory of the runtime ("configDir").
 
 ## Runtime compatibility policy
 
@@ -125,11 +143,11 @@ Applications can be loaded from a **catalog** instead of a local path, configure
 
 | Field | Purpose |
 | --- | --- |
-| source type | `"local"` or `"git"`. |
+| `type` | `"local"` or `"git"`. |
 | `baseUrl` | Git repository base URL (for `git`). |
 | `path` | Local repository path (for `local`). |
 
-The package managers ([`apm`](../cli-tools/apm.md), [`ppm`](../cli-tools/ppm.md)) can resolve applications from this catalog.
+The package managers ([`apm`](../cli-tools/apm.md), [`ppm`](../cli-tools/ppm.md)) can resolve applications from this catalog. The `applicationCatalog` key can be declared in the main `payos.json` file of the runtime.
 
 ## Creating an appilcation from sratch
 

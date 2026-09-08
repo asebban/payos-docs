@@ -59,6 +59,7 @@ The first six items below (descriptor, SPI registration, `connector-sdk` scope, 
 
 ## Next
 
+- [getting-started-v1-2026-09-07.md](getting-started-v1-2026-09-07.md) — where `ConnectorTestHarness` and this checklist fit into the full path from an empty directory.
 - [writing-a-connector-v1-2026-07-27.md](writing-a-connector-v1-2026-07-27.md) — the contract this checklist verifies.
 - [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md) — descriptor, SPI registration, `connectors.json`.
 - [external-dependency-approval-v5-2026-08-29.md](external-dependency-approval-v5-2026-08-29.md) — how to get a bundled third-party library approved before delivery.

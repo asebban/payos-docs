@@ -1,3 +1,6 @@
+Created: 2026-07-27
+Last update date: 2026-09-07
+
 # Guide développeur — Framework de connecteurs (`$Connector`)
 
 Ce guide couvre l'utilisation du binding `$Connector` **depuis un script applicatif** — c'est-à-dire le point de vue du développeur qui appelle un connecteur métier/paiement déjà déployé (`CardNetwork`/`visa`, `Switch`/`cmi`, etc.), pas celui de la personne qui écrit le connecteur lui-même. Pour écrire un connecteur (implémenter `IConnector`, empaqueter le JAR, le descripteur SPI), voir [connector-developer/README.md](../connector-developer/README.md) — ce guide, déjà complet et vérifié contre le code, ne sera pas dupliqué ici. Pour la configuration opérateur complète (`connectors.json`, versions d'API, politiques de retry/DLQ), voir [configuration/connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md).
@@ -63,6 +66,20 @@ function execute(request, controlData) {
     }
 }
 ```
+
+### 2.2 Contexte d'invocation résolu automatiquement
+
+Quand le script appelle `handle.execute(payload)`, PayOS construit un `ConnectorExecutionContext` pour le connecteur Java. Le script ne construit pas cet objet lui-même, mais il est important de connaître les sources utilisées car elles expliquent ce que le connecteur reçoit dans `context.operation()`, `context.attempt()`, `context.correlationId()`, `context.idempotencyContext()` et `context.metadata()`.
+
+| Valeur reçue par le connecteur | Résolution runtime |
+| --- | --- |
+| `correlationId` | D'abord `Request.contextData[IServer.CONTEXT_CORRELATION_ID]`, sinon header `X-Correlation-Id`, sinon MDC courant. |
+| `operation` | D'abord `Request.contextData["connector.operation"]`, sinon header `X-Connector-Operation`, sinon méthode de la requête (`GET`, `POST`, etc.). |
+| `attempt` | D'abord `Request.contextData["connector.attempt"]`, sinon header `X-Connector-Attempt`. La valeur doit être un entier strictement positif ; sinon elle est ignorée. |
+| `idempotencyContext.key` | Header du service d'idempotence configuré, par défaut `X-Idempotency-Key`. |
+| `metadata.path` / `metadata.method` | Chemin et méthode de la requête courante, lorsqu'ils sont disponibles. |
+
+Les headers `X-Connector-Operation` et `X-Connector-Attempt` ne sont pas des paramètres de configuration du connecteur. Ce sont des métadonnées d'invocation. Leur usage naturel est l'intégration runtime, un transport, un hook ou une orchestration qui veut préciser l'opération logique et le numéro de tentative transmis au connecteur. Si l'API est exposée publiquement, ne laissez pas un client externe les contrôler sans filtrage explicite.
 
 ## 3. Idempotence — automatique, pas un paramètre de `execute(...)`
 

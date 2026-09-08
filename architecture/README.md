@@ -21,6 +21,8 @@ Internal design of PayOS for **architects** and anyone who needs to understand h
 14. [License validation](./license-validation-architecture.md)
 15. [Connector framework architecture](./connector-framework-architecture-v1-2026-08-24.md) — the business/payment connector plugin system (`IConnector`, `$Connector(...)`, module split across `payos-connector-api`/`payos-connector-sdk`/`payos-foundation`/kernel)
 16. [Connector framework class diagram](./connector-framework-class-diagram-v1-2026-09-02.md) — every production class of the connector framework across all five repositories, with inheritance/implementation/usage/instantiation relationships
+17. [Connector framework class reference](./connector-framework-class-reference-v1-2026-09-07.md) — guided class-by-class map of the connector framework by repository, lifecycle phase, execution flow, and debugging symptom
+18. [Observability metrics architecture](./observability-metrics-architecture-v1-2026-09-06.md) — Micrometer-backed PayOS metrics, Prometheus exposure, execution flows, class diagrams, and metric taxonomy
 
 ## Cross-cutting principles
 

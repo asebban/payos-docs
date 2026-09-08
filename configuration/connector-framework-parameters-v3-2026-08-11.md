@@ -1,7 +1,7 @@
 # Connector Framework — Configuration Parameters
 
 > **Created:** 2026-07-10
-> **Last updated:** 2026-08-11
+> **Last updated:** 2026-09-07
 > **Version:** v3
 
 ## Scope
@@ -191,6 +191,22 @@ Connectors can read this context to propagate provider-side idempotency metadata
 the framework's core design constraint — **they never decide whether to suppress, replay, or
 persist a duplicate request**. That decision belongs entirely to the platform (§6.2).
 
+The non-configuration invocation keys used to populate this context are resolved by
+`ConnectorBindingFactory` in this order:
+
+| Context value | First source | Second source | Final fallback |
+| --- | --- | --- | --- |
+| `correlationId` | `Request.contextData[IServer.CONTEXT_CORRELATION_ID]` | `X-Correlation-Id` header | MDC `TenantScope.MDC_CORRELATION_ID` |
+| `operation` | `Request.contextData["connector.operation"]` | `X-Connector-Operation` header | `request.getMethod()` |
+| `attempt` | `Request.contextData["connector.attempt"]` | `X-Connector-Attempt` header | `null`; retry/state code treats it as attempt `1` |
+| `idempotencyContext.key` | configured idempotency header | `X-Idempotency-Key` when no idempotency service is configured | `null` |
+| `metadata` | `request.getPath()` and `request.getMethod()` | none | empty map |
+
+`X-Connector-Operation`, `X-Connector-Attempt`, `connector.operation`, and `connector.attempt`
+are not JSON configuration parameters and are not descriptor keys. They are request-scoped
+invocation metadata. Only positive integer attempt values are accepted; blank, zero, negative,
+or non-numeric values are ignored.
+
 ### 6.2 Platform-owned deduplication gate
 
 Before a connector is ever invoked, `ConnectorScriptHandle.execute(...)` calls
@@ -274,8 +290,14 @@ Stores (all `ma.s2m.payos.connector.state`, accessed via the static facade
 
 | Store | Durable across restarts? | Notes |
 | --- | --- | --- |
-| `InMemoryConnectorExecutionStateStore` | No | **Default.** |
-| `DatabaseConnectorExecutionStateStore` | Yes | Table `payos_connector_execution_state`, mirrors `DatabaseIdempotencyStore`'s find-then-save-or-update pattern. **Not wired in by default** — swapping to it is a deployment-wiring decision an operator makes explicitly; no `connectors.json`/bootstrap key selects it. |
+| `InMemoryConnectorExecutionStateStore` | No | **Default**, including when `connector-execution-state.storeType` is absent or blank. |
+| `DatabaseConnectorExecutionStateStore` | Yes | Table `payos_connector_execution_state`, mirrors `DatabaseIdempotencyStore`'s find-then-save-or-update pattern. Reuses the already-configured `database-service` — no separate connection block. **Never the default** — select it explicitly with `connector-execution-state.storeType: "database"` in `bootstrap.json`; `BootServer` resolves it at boot via `ConnectorExecutionStateStoreInitializer`/`ConnectorExecutionStateStores.resolve(...)` (same shape as `ConnectorIdempotencyStoreInitializer`/`ConnectorIdempotencyStores` in §&nbsp;connector idempotency). Selecting `"database"` without a configured `database-service` fails fast at boot (`ConnectorExecutionStateStoreException`). |
+
+```json
+"connector-execution-state": {
+  "storeType": "database"
+}
+```
 
 ## 10. Terminal routing — DLQ vs. terminal Connector State (Epic 5.6)
 
@@ -386,7 +408,7 @@ service-adapter loader, not this page's connector framework:
 - `payos/src/main/java/ma/s2m/payos/config/connector/TenantConnectorRegistry.java`.
 - `payos/src/main/java/ma/s2m/payos/config/connector/ConnectorDeduplicationGate.java`, `ConnectorDeduplicationDecision.java`, `ConnectorDeduplicationAction.java`, and `payos/src/main/java/ma/s2m/payos/idempotency/ConnectorIdempotencyStores.java`.
 - `payos/src/main/java/ma/s2m/payos/config/connector/ConnectorRetryPolicy.java`, `ConnectorRetryPolicies.java`, `ConnectorRetryContext.java`, `ConnectorRetryDecision.java`.
-- `payos/src/main/java/ma/s2m/payos/connector/state/` — `ConnectorExecutionState.java`, `ConnectorExecutionStateRecord.java`, `IConnectorExecutionStateStore.java`, `InMemoryConnectorExecutionStateStore.java`, `DatabaseConnectorExecutionStateStore.java`, `ConnectorExecutionStateStores.java`, `ConnectorTerminalRoutingRecord.java`, `IConnectorTerminalRoutingStore.java`, `InMemoryConnectorTerminalRoutingStore.java`, `ConnectorTerminalRoutingStores.java`.
+- `payos/src/main/java/ma/s2m/payos/connector/state/` — `ConnectorExecutionState.java`, `ConnectorExecutionStateRecord.java`, `IConnectorExecutionStateStore.java`, `InMemoryConnectorExecutionStateStore.java`, `DatabaseConnectorExecutionStateStore.java`, `ConnectorExecutionStateStores.java`, `ConnectorExecutionStateStoreException.java`, `ConnectorExecutionStateStoreInitializer.java` (`bootstrap.json` \u2192 `connector-execution-state.storeType` wiring, called from `BootServer`), `ConnectorTerminalRoutingRecord.java`, `IConnectorTerminalRoutingStore.java`, `InMemoryConnectorTerminalRoutingStore.java`, `ConnectorTerminalRoutingStores.java`.
 - `payos/src/main/java/ma/s2m/payos/config/connector/ConnectorTerminalDestination.java`, `ConnectorTerminalRoutingDecision.java`, `ConnectorTerminalRoutingPolicy.java`, `ConnectorTerminalRoutingPolicies.java`.
 - `payos/src/main/java/ma/s2m/payos/diagnostics/` — `DiagnosticEvent.java`, `IDiagnosticsRecorder.java`, `Diagnostics.java`, `Slf4jDiagnosticsRecorder.java`.
 - `payos/src/main/java/ma/s2m/payos/connector/diagnostics/ConnectorDiagnosticsHelper.java` — connector-specific producer, builds `nature="connector"` events and calls `Diagnostics.logEvent(...)`.

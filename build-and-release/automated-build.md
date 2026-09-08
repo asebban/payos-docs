@@ -194,23 +194,32 @@ Without runtime embed:
 
 ## 8. Build Sequences Executed by Scripts
 
+Internal modules install list (used by `kernel`, `parent`, and `release` modes):
+`payos-server-http`, `payos-server-tcp`, `payos-server-queue`, `database-service`,
+`queue-service-nats`, `webhook-service-http`, `payos-pm`, `payos-service-notification`,
+`secret-service-filesystem`, `secret-service-vault`, `payos-notification-connector`,
+`session-service-redis`, `idempotency-service-redis`, `cache-service-redis`,
+`cache-service-memory`, `sliding-window-counter-redis`, `sliding-window-counter-memory`,
+`payos-foundation`, `payosv2-packer`.
+
+API dependency modules install list (used by every mode ahead of `payos-kernel`):
+`payos-secret-api`, `payos-notification-api`, `payos-connector-api`, `payos-connector-sdk`,
+`payos-foundation`.
+
 ### 8.1 `kernel` mode
 
 1. `payos-parent` install
 2. `payos-core-bom` install
-3. API dependency modules install: `payos-secret-api`, `payos-notification-api`, `payos-connector-sdk`
+3. API dependency modules install (see list above)
 4. `payos-kernel` install
-5. Internal modules install (`payos-server-http`, `payos-server-tcp`, `payos-server-queue`,
-   `database-service`, `queue-service-nats`, `webhook-service-http`, `payos-pm`,
-   `payos-service-notification`, `secret-service-filesystem`, `secret-service-vault`,
-   `payos-notification-connector`)
+5. Internal modules install (see list above)
 6. `payos-runtime` package
 
 ### 8.2 `module` and `new-module` modes
 
 1. `payos-parent` install
 2. `payos-core-bom` install
-3. API dependency modules install: `payos-secret-api`, `payos-notification-api`, `payos-connector-sdk`
+3. API dependency modules install (see list above)
 4. `payos-kernel` install
 5. Changed module install
 6. `payos-runtime` package
@@ -219,12 +228,9 @@ Without runtime embed:
 
 1. `payos-parent` install
 2. `payos-core-bom` install
-3. API dependency modules install: `payos-secret-api`, `payos-notification-api`, `payos-connector-sdk`
+3. API dependency modules install (see list above)
 4. `payos-kernel` install
-5. Internal modules install (`payos-server-http`, `payos-server-tcp`, `payos-server-queue`,
-   `database-service`, `queue-service-nats`, `webhook-service-http`, `payos-pm`,
-   `payos-service-notification`, `secret-service-filesystem`, `secret-service-vault`,
-   `payos-notification-connector`)
+5. Internal modules install (see list above)
 6. `payos-runtime` package
 
 ### 8.4 `release` mode
@@ -237,10 +243,9 @@ Without runtime embed:
 6. Run one consolidated build sequence:
    - `payos-parent` install
    - `payos-core-bom` install
-   - API dependency modules install: `payos-secret-api`, `payos-notification-api`, `payos-connector-sdk`
+   - API dependency modules install (see list above)
    - `payos-kernel` install
-   - standard internal modules install (including `payos-service-notification` and
-     `payos-notification-connector`)
+   - standard internal modules install (see list above)
    - additionally changed/new modules install
    - `payos-runtime` package
 

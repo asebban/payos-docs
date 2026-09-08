@@ -10,13 +10,17 @@ Documentation for a third-party or partner team writing a **business/payment con
 
 | Document | Covers |
 | --- | --- |
+| [getting-started-v1-2026-09-07.md](getting-started-v1-2026-09-07.md) | **Start here.** The full path from an empty directory to a delivered connector — prerequisites, resolving `connector-sdk` locally (there is no hosted Maven repo), a complete `pom.xml`, project layout, and where each other page in this table fits into that sequence. |
 | [writing-a-connector-v1-2026-07-27.md](writing-a-connector-v1-2026-07-27.md) | The `IConnector` contract, the model types (`ConnectorConfig`, `ConnectorExecutionContext`, `ConnectorResponse`, ...), error-category semantics, the idempotency ownership split, and a complete minimal example (plain `IConnector` and via `AbstractConnector`). |
 | [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md) | The `META-INF/connector.properties` descriptor, `ServiceLoader` (SPI) registration, classloader isolation rules, `connectors.json` deployment, and the two independent version numbers you need to track. |
 | [external-dependency-approval-v5-2026-08-29.md](external-dependency-approval-v5-2026-08-29.md) | How to get a third-party library approved for bundling into your connector jar, the approval criteria, and the registry of currently approved libraries. |
 | [connector-certification-v1-2026-08-29.md](connector-certification-v1-2026-08-29.md) | What `ConnectorCertificationGate` checks before a connector ships, and how to run it with `ConnectorCertificationCli` — a static, offline check that automates most of the pre-delivery checklist. |
 | [testing-and-delivery-checklist-v3-2026-08-29.md](testing-and-delivery-checklist-v3-2026-08-29.md) | Exercising your connector with `ConnectorTestHarness` before any real PayOS runtime is involved, and the checklist to run through before shipping a connector JAR. |
+| [../architecture/connector-framework-class-reference-v1-2026-09-07.md](../architecture/connector-framework-class-reference-v1-2026-09-07.md) | Guided class-by-class map of the runtime, SDK, API, foundation contracts, Redis backend, execution flows, and debugging entry points. |
 
 ## Quick start
+
+For the full path from an empty directory to a delivered connector — including the `pom.xml` and how to resolve `connector-sdk` before a hosted Maven repo exists for it — see [getting-started-v1-2026-09-07.md](getting-started-v1-2026-09-07.md). The snippet below is only the shape of the contract, not a starting point on its own.
 
 ```java
 public class ExampleConnector implements IConnector {

@@ -1,6 +1,7 @@
 # ADR-0006 — Distributed shared cache (Redis) as the default cross-instance state mechanism, sticky sessions as an infrastructure-only fallback
 
 **Status:** Proposed
+**Created:** 2026-08-28 · **Last updated:** 2026-09-04
 
 ## Context
 
@@ -32,14 +33,15 @@ Current status per mechanism, per [`deployment-topologies.md` §9](../../../payo
 | --- | --- |
 | OIDC sessions (`ISessionStore`) | Done — `RedisSessionStore` (`session-service-redis`), `security.sessionStoreType: redis` |
 | HTTP idempotency (`IIdempotencyStore`) | Done — `RedisIdempotencyStore` (`idempotency-service-redis`), `idempotency.storeType: redis` |
-| Connector idempotency (`IConnectorIdempotencyStore`) | Not yet done — same pattern, `tryClaim` maps naturally to `SET key val NX EX ttl` |
+| Connector idempotency (`IConnectorIdempotencyStore`) | Done — `RedisConnectorIdempotencyStore` (`idempotency-service-redis`), `connector-idempotency.storeType: redis` |
 | Tenant quotas (`TenantPolicyService`) | Done — new interface plus atomic `INCR`/`EXPIRE` semantics, Sliding Window Counter interface and Redis implementation |
-| Connector execution/terminal-routing state (`IConnectorExecutionStateStore`, `IConnectorTerminalRoutingStore`) | Not yet done — interfaces already pluggable, so this is a low-effort case once a multi-instance connector deployment needs it |
+| Connector execution state (`IConnectorExecutionStateStore`) | Already has a shared implementation outside this ADR's Redis pattern — `DatabaseConnectorExecutionStateStore` (the already-shared DB, not Redis), now configurable via `connector-execution-state.storeType: database` (`ConnectorExecutionStateStoreInitializer`, resolved at boot), but still defaults to in-memory when absent/blank. No Redis implementation planned: `findByState` fits SQL far more naturally than a Redis secondary index |
+| Connector terminal-routing state (`IConnectorTerminalRoutingStore`) | Not yet done — no shared implementation exists yet; if/when needed, mirror `DatabaseConnectorExecutionStateStore` (DB-backed), not Redis, for the same querying reason |
 
-This ADR sets the direction for the 'Not yet done' rows; it does not itself deliver them.
+This ADR sets the direction for the 'Not yet done' row (connector terminal-routing state); it does not itself deliver it. Connector execution state already has a shared implementation, but it predates this ADR and sits outside its Redis pattern (see note above).
 
 ## Consequences
 
 - **Positive:** one architectural pattern across the platform for "state that must be visible from any instance," already recognized by anyone familiar with `session-service-redis`/`idempotency-service-redis` / `sliding-window-counter-redis`; alternatively, a single Redis instance or cluster can back every category through distinct key prefixes (`payos:session:`, `payos:idem:`, a future `payos:quota:`, and — following the same convention — `payos:connector:state:`/`payos:connector:routing:`) without provisioning separate infrastructure per mechanism; no behavior change for existing deployments that leave every `storeType` at its `memory` default — this decision is purely additive.
-- **Negative:** Redis becomes a new operational dependency to provision, monitor, and capacity-plan, and a new shared failure mode across the cluster; every mechanism enrolled in this decision must explicitly choose and document its degraded-mode behavior (fail-open vs. fail-closed) rather than assume the cache is always reachable; connector idempotency, and connector execution/terminal-routing state still require dedicated implementation work before they benefit from this decision.
+- **Negative:** Redis becomes a new operational dependency to provision, monitor, and capacity-plan, and a new shared failure mode across the cluster; every mechanism enrolled in this decision must explicitly choose and document its degraded-mode behavior (fail-open vs. fail-closed) rather than assume the cache is always reachable; connector terminal-routing state still has no shared implementation at all, and connector execution state's existing shared implementation (`DatabaseConnectorExecutionStateStore`) is DB-backed and config-selectable but not the default, not part of this decision's Redis pattern.
 - See [`deployment-topologies.md`](../../../payos/docs/architects/deployment-topologies.md) for the full analysis this ADR is based on, and [`session-store-redis-design.md`](../../../payos/docs/architects/session-store-redis-design.md) for the reference design of the pattern being generalized here.

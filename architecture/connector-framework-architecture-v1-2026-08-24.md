@@ -3,7 +3,7 @@
 **Audience :** architectes, tech leads, contributeurs au kernel, auteurs de connecteurs tiers
 **Périmètre :** modules `payos-connector-api`, `payos-connector-sdk`, le SPI connecteur de `payos-foundation`, l'intégration runtime dans `payos` (kernel)
 **Created :** 2026-08-24
-**Dernière mise à jour :** 2026-08-24
+**Dernière mise à jour :** 2026-09-07
 **Version :** v1
 
 ---
@@ -202,6 +202,20 @@ sequenceDiagram
 ```
 
 `$Connector(typeOrName)` (un seul argument) essaie d'abord une résolution par type par défaut, puis retombe sur une résolution par nom si le type ne correspond à rien — `$Connector(type, name)` cible directement une paire. Le handle retourné reste utilisable même si la résolution a échoué : `execute(...)` retourne alors directement une `ConnectorResponse` d'erreur (`CONNECTOR_NOT_FOUND`/`CONNECTOR_AMBIGUOUS`) sans jamais lever d'exception au niveau du script.
+
+#### 6.2.1 Contexte d'invocation transmis au connecteur
+
+`ConnectorBindingFactory` est la source de vérité pour construire le contexte passé à `ConnectorExecutionContext`. Ces valeurs ne viennent pas du descripteur `META-INF/connector.properties` ni de `connectors.json` : ce sont des métadonnées d'exécution résolues à partir de la requête courante.
+
+| Champ `ConnectorExecutionContext` | Source prioritaire | Fallback | Remarques |
+| --- | --- | --- | --- |
+| `correlationId` | `Request.contextData[IServer.CONTEXT_CORRELATION_ID]` | Header `X-Correlation-Id`, puis MDC `TenantScope.MDC_CORRELATION_ID` | Obligatoire pour construire le contexte d'exécution ; utilisé pour corréler logs, audit, diagnostics et réponses connecteur. |
+| `operation` | `Request.contextData["connector.operation"]` | Header `X-Connector-Operation`, puis `request.getMethod()` | Nom logique de l'opération connecteur. Ce n'est pas forcément la méthode HTTP ; la méthode n'est qu'un fallback. |
+| `attempt` | `Request.contextData["connector.attempt"]` | Header `X-Connector-Attempt` | Seuls les entiers strictement positifs sont acceptés. Si absent ou invalide, le handle le garde à `null` et les politiques de retry/state utilisent `1` comme première tentative. |
+| `idempotencyContext.key` | Header configuré par `IdempotencyService.getHeaderName()` | `X-Idempotency-Key` si le service n'est pas configuré | Lu automatiquement ; le script ne passe pas la clé à `execute(...)`. |
+| `metadata.path` / `metadata.method` | `request.getPath()` / `request.getMethod()` | absent si vide | Métadonnées informatives transmises au connecteur. |
+
+Les clés `connector.operation` et `connector.attempt` sont des clés internes de `Request.contextData`, utiles aux transports ou orchestrations qui construisent une requête PayOS avant l'injection de `$Connector`. Les headers `X-Connector-Operation` et `X-Connector-Attempt` sont un pont transport pour le même besoin. Sur une API exposée à des clients non fiables, un gateway ou un handler amont doit les filtrer s'ils ne doivent pas être contrôlés par l'appelant.
 
 ### 6.3 Le cycle `execute()` complet
 

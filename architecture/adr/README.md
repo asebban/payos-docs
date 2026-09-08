@@ -28,6 +28,7 @@ Each ADR follows a short template:
 | [ADR-0005](0005-sandboxed-graalvm-scripting.md) | Sandboxed GraalVM scripting, deny-by-default | Accepted |
 | [ADR-0006](0006-distributed-cache-over-sticky-sessions.md) | Distributed shared cache (Redis) over sticky sessions for cross-instance state | Accepted |
 | [ADR-0007](0007-distributed-cache-middleware-selection.md) | Distributed cache middleware selection: Valkey over Redis, Dragonfly, Hazelcast/Ignite, NATS JetStream KV, Memcached | Proposed |
+| [ADR-0008](0008-audit-trail-delivery-mechanism.md) | Audit trail delivery: buffered queue publish (blocks on backpressure, never drops) + autonomous listener + `IAuditTrailStore`, over local logging, transactional outbox, JetStream-as-store, and CDC | Proposed |
 
 > To add a new decision, copy the format above into `NNNN-title.md`, increment the number,
 > and add a row here.

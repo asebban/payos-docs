@@ -82,6 +82,7 @@ If a previously approved coordinate is later found to have a critical/high vulne
 
 ## Next
 
+- [getting-started-v1-2026-09-07.md](getting-started-v1-2026-09-07.md) — where getting a dependency approved fits into the full path from an empty directory to a delivered connector.
 - [connector-certification-v1-2026-08-29.md](connector-certification-v1-2026-08-29.md) — the full certification reference: every check the gate runs, and how to run `ConnectorCertificationCli`.
 - [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md) — descriptor, SPI registration, classloader isolation, `connectors.json`.
 - [testing-and-delivery-checklist-v3-2026-08-29.md](testing-and-delivery-checklist-v3-2026-08-29.md) — pre-delivery checklist, which should be read alongside this page before shipping a connector that bundles third-party libraries.

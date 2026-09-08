@@ -1,7 +1,7 @@
 # Writing a connector — the `IConnector` contract
 
 Created: 2026-07-27
-Last updated: 2026-07-27
+Last updated: 2026-09-07
 Version: v1
 
 This page covers the Java contract you implement, the model types you receive and return, and how errors are classified. For packaging/deployment, see [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md); for exercising your implementation before any runtime is involved, see [testing-and-delivery-checklist-v3-2026-08-29.md](testing-and-delivery-checklist-v3-2026-08-29.md).
@@ -46,6 +46,8 @@ All of the following are immutable Java `record`s with validation in their compa
 **`ConnectorConfig(String type, String name, Map<String, Object> parameters)`** — passed to `init(...)`. `type` and `name` are required (non-blank). `parameters` comes from the matching entry in the operator's `connectors.json` (see [packaging-and-deployment-v1-2026-07-27.md §3](packaging-and-deployment-v1-2026-07-27.md#3-deployment-connectorsjson)) — this is where you receive your API credentials, endpoint URL, timeouts, etc. Its `toString()` automatically masks common sensitive-looking field names (API key, secret, password) so it's safer to log by accident — don't rely on this for real secret handling, but it avoids accidental leakage into debug logs.
 
 **`ConnectorExecutionContext(String tenantId, String correlationId, String operation, Integer attempt, IdempotencyContext idempotencyContext, Map<String, String> metadata)`** — passed to every `execute(...)` call. `correlationId` is **required** (the constructor throws if blank) — use it consistently in your own logs so they correlate with runtime traces. `attempt` is the attempt number (1 for the first try, incremented by the platform on retry — see §4). `idempotencyContext` is nullable and read-only (see §6) — you may read its key to forward as an idempotency header to an external provider, but you have no influence over the deduplication decision itself.
+
+PayOS resolves this execution context from the current request before your connector is called. `operation` comes first from `Request.contextData["connector.operation"]`, then from the `X-Connector-Operation` header, then from the request method. `attempt` comes first from `Request.contextData["connector.attempt"]`, then from the `X-Connector-Attempt` header; non-positive or non-numeric values are ignored. The idempotency key comes from the configured idempotency header, defaulting to `X-Idempotency-Key`. These headers and context keys are runtime invocation metadata, not connector descriptor keys; do not declare them in `META-INF/connector.properties`.
 
 **`IdempotencyContext(String key, Map<String, String> metadata)`** — `key` required non-blank when the object is present.
 
@@ -164,5 +166,6 @@ public class SampleConnector extends AbstractConnector {
 
 ## Next
 
+- [getting-started-v1-2026-09-07.md](getting-started-v1-2026-09-07.md) — the full path from an empty directory to a delivered connector, including the `pom.xml` this page doesn't cover.
 - [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md) — descriptor, SPI registration, classloader isolation, `connectors.json`, versioning.
 - [testing-and-delivery-checklist-v3-2026-08-29.md](testing-and-delivery-checklist-v3-2026-08-29.md) — exercising this contract with `ConnectorTestHarness`, and the pre-delivery checklist.

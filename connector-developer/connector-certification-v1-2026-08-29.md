@@ -70,6 +70,7 @@ See `ConnectorCertificationCliTest` and `ApprovedDependencyCertificationWorkflow
 
 ## Next
 
+- [getting-started-v1-2026-09-07.md](getting-started-v1-2026-09-07.md) — where running this CLI fits into the full path from an empty directory to a delivered connector.
 - [external-dependency-approval-v5-2026-08-29.md](external-dependency-approval-v5-2026-08-29.md) — the approved-dependencies registry this reads for `UNAPPROVED_DEPENDENCY`, and how to get a coordinate added.
 - [packaging-and-deployment-v1-2026-07-27.md](packaging-and-deployment-v1-2026-07-27.md) — the descriptor and packaging rules this gate enforces.
 - [testing-and-delivery-checklist-v3-2026-08-29.md](testing-and-delivery-checklist-v3-2026-08-29.md) — where certification fits in the pre-delivery process.

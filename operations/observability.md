@@ -83,5 +83,6 @@ publishing to a queue, include these in the payload — see
 
 ## Next
 
+- [metrics-catalog-v1-2026-09-09.md](metrics-catalog-v1-2026-09-09.md) — exhaustive Micrometer/Prometheus metrics inventory.
 - [hot-reload.md](hot-reload.md)
 - [reference/http-endpoints.md](../reference/http-endpoints.md)

@@ -11,6 +11,7 @@ For **operators** running PayOS in production: deployment, bundle encryption, se
 | Encrypting/packing bundles (`edc`) | [bundle-encryption.md](bundle-encryption.md) |
 | Managing secrets (Vault, rotation, `spm`) | [secrets-management.md](secrets-management.md) |
 | Logging, correlation, tenancy, audit | [observability.md](observability.md) |
+| Exhaustive Micrometer/Prometheus metrics catalog | [metrics-catalog-v1-2026-09-09.md](metrics-catalog-v1-2026-09-09.md) |
 | Zero-downtime configuration reload | [hot-reload.md](hot-reload.md) |
 | Guide of all CLI tools | [cli-tools-guide.md](./cli-tools-guide.md) |
 

@@ -39,6 +39,7 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | `webhooks` / `http-webhook-service` | [webhook-service.md](webhook-service.md) | Webhook dispatcher. |
 | `i18n` | [i18n.md](i18n.md) | Locale resolution. |
 | `idempotency` | [idempotency.md](idempotency.md) | Idempotent-response cache for mutating API requests. |
+| `audit-trail` | [audit-trail.md](audit-trail.md) | Pluggable, durable PCI-DSS audit-trail: delivery category, store backend, business-keys allowlist. Optional — a durable default activates with zero configuration. |
 | `cache-service` | [cache-service.md](cache-service.md) | Optional distributed cache abstraction (`ICacheStore`), shared across instances/bundles — `memory` or `redis` backend. |
 | `sliding-window-service` | [sliding-window-service.md](sliding-window-service.md) | Optional exact sliding-window event counter (`ISlidingWindowCounter`) for quota/rate-limit checks — `memory` or `redis` backend. |
 | `service-adapters-dir` / `extensions-dir` | [extensions-connectors.md](extensions-connectors.md) | Plugin discovery paths and classloaders (legacy SPI-backend loader). |

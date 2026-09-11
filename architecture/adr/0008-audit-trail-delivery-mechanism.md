@@ -1,9 +1,9 @@
 # ADR-0008 — Audit trail delivery mechanism: how a new `IAuditLogger` gets events to a durable, queryable store without adding hot-path latency under normal load, and without ever silently losing one
 
 Created: 2026-09-08  
-Last updated: 2026-09-09
+Last updated: 2026-09-11
 
-**Status:** Proposed
+**Status:** Accepted — implemented (2026-09-11). See the Implementation Note at the end of this document.
 
 ## Context
 
@@ -115,3 +115,13 @@ Option E is rejected as an end state: it under-delivers on exactly the two prope
 - **Negative:** overflow direct persistence means a store outage or slowdown long enough to saturate the buffer can add storage latency to audited hot-path calls, so buffer size, overflow thresholds, and alerting are safety-critical configuration, not tuning knobs to leave at defaults. The in-process buffer is still not durable, so an event already accepted but not yet written is lost on a process crash at that exact moment. `IAuditTrailStore` implementations must handle concurrent background and caller-path writes correctly and dedupe by `eventId`.
 - **Neutral / open follow-up:** exact module/package layout for the buffered-store `IAuditLogger`, `IAuditTrailStore`, and its first concrete implementation is an implementation-story decision, not fixed by this ADR. Buffer capacity is also left to the implementation story, but must be chosen deliberately: large enough to absorb realistic store hiccups without frequent overflow writes, small enough that the crash-loss window it implies stays acceptable alongside any local-file companion logging. Queue-backed delivery remains a future implementation category if a deployment later needs broker-mediated decoupling.
 - See [`developer/event-category-payload-contracts-v7-2026-07-28.md`](../../developer/event-category-payload-contracts-v7-2026-07-28.md) for the governing per-category-abstraction principle this ADR's new `IAuditLogger` implementation must keep following, and [`architecture/queue-architecture.md`](../queue-architecture.md) for the `IQueueClient`/NATS mechanics relevant if the queue-backed category is implemented later.
+
+## Implementation Note (2026-09-11)
+
+Option C was implemented essentially as decided, across `payos-foundation` (contracts), `payos` kernel (SPI resolution/wiring), `payos-buffered-audit-trail` (the `buffered-store` `IAuditLogger`), and `payos-audit-trail-store-filesystem` (the first `IAuditTrailStore` implementation). Operator-facing documentation: [operations/audit-trail.md](../../operations/audit-trail.md) and [configuration/audit-trail.md](../../configuration/audit-trail.md).
+
+- Bounded buffer + background writer + synchronous overflow-on-full, exactly as decided; `append(...)` is idempotent by `eventId` via a bounded per-tenant dedup cache, as required.
+- The queue-backed category (Option B) remains an unimplemented future extension point, per the Decision — its structural feasibility (resolvable via the same SPI, can share the same `IAuditTrailStore` without kernel changes) was proven with a test double, not built as a real implementation.
+- One correctness detail this ADR's diagrams didn't anticipate: the background writer must poll with a bounded timeout rather than block indefinitely on the buffer, because a buffer-growth swap can otherwise abandon an already-blocked consumer permanently. See the writer's own Javadoc (`BufferedAuditLogger.Writer`) for the race and the fix — a concurrency test caught it during implementation.
+- **Not done**: this ADR's own flagged "small, immediately actionable" companion fix — giving the `AUDIT` SLF4J category a real async, protected appender in `logback.xml` — was not part of this implementation and remains exactly the gap this ADR originally described. The buffered-store `IAuditLogger`'s own in-process buffer is also still not durable across a process crash, same residual gap this ADR named for Option C; nothing in the implementation closes it.
+- Two capabilities beyond this ADR's original scope were added during implementation, driven by the epics/architecture documents written after this ADR: `businessKeys` (an allowlisted, scalar-only, indexable subset of business context) and integrity verification (a per-partition SHA-256 hash chain with an explicit `verify(...)` operation). Neither changes this ADR's decision, both are additive to `AuditEvent`/`IAuditTrailStore`.

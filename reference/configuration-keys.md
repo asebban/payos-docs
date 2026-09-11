@@ -201,6 +201,24 @@ Each key also resolves from a system property (`payos.idempotency.<key>`) and en
 variable (`PAYOS_IDEMPOTENCY_<KEY>`) if not set in `bootstrap.json` — see
 [idempotency.md](../configuration/idempotency.md#resolution-order).
 
+## `audit-trail` — [audit-trail.md](../configuration/audit-trail.md)
+
+Entirely optional — absent means a best-effort zero-config default (`buffered-store` + `filesystem`) activates automatically. No system property / environment variable fallback for any key below.
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `implementation.category` | `buffered-store` (zero-config only) | `IAuditLogger` provider `type()` to resolve. |
+| `implementation.parameters.buffer.initial-capacity` | `10000` | Starting buffer size. |
+| `implementation.parameters.buffer.max-capacity` | value of `initial-capacity` | Upper bound the buffer may grow to. |
+| `implementation.parameters.buffer.growth-percentage` | `0` | Growth step size (%), capped at `max-capacity`. |
+| `implementation.parameters.buffer.growth-enabled` | `false` | Allow bounded growth before falling back to synchronous overflow persistence. |
+| `store.backend` | `filesystem` (zero-config only) | `IAuditTrailStore` provider `type()` to resolve; may be left unset to run without a store. |
+| `store.filesystem.root` | current working directory (WARN logged) | Base directory for `tenant=<id>/date=YYYY-MM-DD/` partitions. |
+| `store.filesystem.partitioning` | `tenant-plus-day` | Only value supported. |
+| `store.integrity.mechanism` | `hash-chain` | Only value supported. |
+| `store.integrity.chain-scope` | `partition-local` | Only value supported. |
+| `business-keys.approved` | `[]` (deny-by-default) | Allowlist of `AuditEvent.businessKeys` names eligible for indexing. |
+
 ## `cache-service` — [cache-service.md](../configuration/cache-service.md)
 
 | Key | Default | Purpose |

@@ -41,7 +41,10 @@ This makes every log line attributable to a tenant and a request.
 succeeded or failed**. Secret operations additionally write to the `payos.secret.audit`
 logger (see [secrets-management.md](secrets-management.md)).
 
-For PCI DSS evidence, route audit loggers to a tamper-resistant sink / SIEM.
+For PCI DSS evidence, route audit loggers to a tamper-resistant sink / SIEM — or enable the
+built-in pluggable, durable audit-trail capability behind the same `IAuditLogger` call surface:
+buffered non-blocking delivery, tenant/day-partitioned filesystem persistence with a per-partition tamper-evidence hash chain, integrity verification, and internal operator query, all without any audit-producing call site changing. See [audit-trail.md](audit-trail.md) and
+[configuration/audit-trail.md](../configuration/audit-trail.md). It works with zero configuration (a sensible durable default activates automatically), but review the config reference before relying on it in production — the zero-config root path defaults to the current working directory.
 
 ## Diagnostics
 
@@ -83,6 +86,7 @@ publishing to a queue, include these in the payload — see
 
 ## Next
 
-- [metrics-catalog-v1-2026-09-09.md](metrics-catalog-v1-2026-09-09.md) — exhaustive Micrometer/Prometheus metrics inventory.
+- [audit-trail.md](audit-trail.md) — the pluggable, durable audit-trail capability.
+- [metrics-catalog-v2-2026-09-11.md](metrics-catalog-v2-2026-09-11.md) — exhaustive Micrometer/Prometheus metrics inventory.
 - [hot-reload.md](hot-reload.md)
 - [reference/http-endpoints.md](../reference/http-endpoints.md)

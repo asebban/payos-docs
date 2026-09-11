@@ -1,10 +1,10 @@
 Created: 2026-09-09
-Last updated: 2026-09-09
-Version: 1
+Last updated: 2026-09-11
+Version: 2
 
 # Metrics Catalog (Micrometer / Prometheus)
 
-This is the operational reference for every metric PayOS currently publishes through Micrometer, verified against the code on 2026-09-09 rather than derived from design intent. For the runtime design (contract layer, facade, recorder resolution, Prometheus mapping rules, tag policy) see [architecture/observability-metrics-architecture-v1-2026-09-06.md](../architecture/observability-metrics-architecture-v1-2026-09-06.md); this page only lists what exists, where it comes from, and what an operator needs to know to scrape, dashboard, and alert on it correctly.
+This is the operational reference for every metric PayOS currently publishes through Micrometer, verified against the code on 2026-09-09 (audit-trail buffer/store metrics re-verified 2026-09-11 after the durable audit-trail feature landed) rather than derived from design intent. For the runtime design (contract layer, facade, recorder resolution, Prometheus mapping rules, tag policy) see [architecture/observability-metrics-architecture-v1-2026-09-06.md](../architecture/observability-metrics-architecture-v1-2026-09-06.md); this page only lists what exists, where it comes from, and what an operator needs to know to scrape, dashboard, and alert on it correctly.
 
 ## Scope and freshness
 
@@ -98,6 +98,35 @@ The `idempotency-service-redis` module itself has no metrics instrumentation —
 | `payos.audit.log.duration` | Timer | `outcome` (from `logEvent`) or `event_type`, `outcome`, `exception` (from `recordAuditCall`) | Same tag-set caveat as above. |
 
 Audit metrics answer volume/latency/failure-rate questions only; the structured audit log remains the record of truth (see [observability.md](observability.md)).
+
+### Audit trail — `payos-buffered-audit-trail` (`BufferedAuditLogger`) and `payos-audit-trail-store-filesystem` (`FilesystemAuditTrailStore`)
+
+The separate, optional, durable audit-trail capability described in [configuration/audit-trail.md](../configuration/audit-trail.md) and [audit-trail.md](audit-trail.md) — distinct from the `payos.audit.*` metrics above, which come from the always-on `AuditLogger` log line, not this pluggable evidence pipeline. Emitted via raw `MetricSample` construction (`MetricsRecorder.record(...)`), not the `PayOSMetrics` convenience helpers, for the plain counter/gauge metrics; `PayOSMetrics.duration(...)`/`increment(...)` are used for everything involving a duration or an `outcome` tag. All still go through the same `payos.` prefixing at the recorder boundary.
+
+**Buffer (`payos-buffered-audit-trail`)**
+
+| Metric | Type | Tags | Meaning |
+| --- | --- | --- | --- |
+| `payos.audit.buffer.occupancy` | Gauge | `tenant_id`\*, `correlation_id`\* | Buffer size, sampled on every `logEvent(...)` call. |
+| `payos.audit.buffer.overflow` | Counter | `tenant_id`\*, `correlation_id`\* | The buffer was full (after any growth attempt) and the event went to synchronous overflow persistence instead. |
+| `payos.audit.buffer.growth` | Counter | — | One successful bounded-growth step (`growth-enabled: true`). |
+| `payos.audit.buffer.overflow.persisted` | Counter | `tenant_id`\*, `correlation_id`\* | An overflow event's synchronous store write succeeded. |
+| `payos.audit.buffer.overflow.persistence.failed` | Counter | `tenant_id`\*, `correlation_id`\*, `reason` (`append-failed` \| `no-store`) | An overflow event was **not** persisted — either the synchronous `store.append(...)` call threw, or no store is bound at all. The event is lost either way; see [audit-trail.md#known-limitations](audit-trail.md#known-limitations). |
+| `payos.audit.buffer.writer.append.failed` | Counter | `tenant_id`\*, `correlation_id`\* | The background writer drained an already-*accepted* event and its `store.append(...)` call threw. The most severe failure category — the original caller already received a successful return. |
+
+\* `tenant_id`/`correlation_id` tags here follow `MetricSample`'s own low-cardinality policy — they are *not* automatically included in a Prometheus series unless `-Dpayos.metrics.tenant-tags-enabled=true` is set, same as every other metric in this catalog (see [How metrics are exposed](#how-metrics-are-exposed)).
+
+**Store (`payos-audit-trail-store-filesystem`)** — every metric below is tagged `outcome`, and where relevant `exception` (simple class name or `none`), via `PayOSMetrics`:
+
+| Metric | Type | `outcome` values | Meaning |
+| --- | --- | --- | --- |
+| `payos.audit.store.append.duration` | Timer | `success`, `error` | `IAuditTrailStore.append(...)` latency, from either the background writer or a synchronous overflow write — the tags alone don't distinguish which caller invoked it. |
+| `payos.audit.store.append.failures` | Counter | — (tagged `exception`) | Recorded only on the failure branch of `append(...)`. |
+| `payos.audit.store.verify.duration` | Timer | `intact`, `broken`, `error` | `verify(...)` latency. `error` means the verification attempt itself threw (e.g. an unreadable partition file), distinct from `broken` (the chain was readable but tamper/corruption was detected). |
+| `payos.audit.store.verify.result` | Counter | `intact`, `broken` | One increment per completed (non-exceptional) `verify(...)` call — not incremented on the `error`/exception path. |
+| `payos.audit.store.query.duration` | Timer | `success`, `error` | `IAuditTrailStore.find(...)` latency, called via `AuditTrailQueries.find(...)`. |
+| `payos.audit.store.query.truncated` | Counter | — | Incremented only when a query hit its `limit` before exhausting every matching partition. |
+| `payos.audit.store.query.failures` | Counter | — (tagged `exception`) | Recorded only on the failure branch of `find(...)`. |
 
 ### Connector — `payos-kernel` (`ConnectorScriptHandle`)
 
@@ -264,10 +293,11 @@ These modules ship no `PayOSMetrics` or Micrometer instrumentation at all, so th
 - Don't group `payos.audit.events` or `payos.audit.log.duration` by `exception` without checking whether the code path you care about actually sets that tag — the `logEvent` success/error paths don't.
 - `payos.runtime.startup.duration` and `payos.runtime.server.start.duration` only have success samples; alert on `payos.runtime.startup.failures` / `payos.runtime.servers.started{outcome="error"}` for failure detection, not on the absence of a duration sample.
 - A non-zero rate of `payos.security.authz.denials{resource_type="metrics"}` from a remote client usually means a scrape target was misconfigured against a `local-only` instance rather than an active attack, but is still worth alerting on.
-- Suggested alert set (mirrors [architecture/observability-metrics-architecture-v1-2026-09-06.md](../architecture/observability-metrics-architecture-v1-2026-09-06.md) §Alerts): `payos.runtime.startup.failures` any increment; sustained `payos.transport.errors` / `payos.resource.errors` rate; `payos.script.errors` rate; `payos.queue.connection.state == 0` sustained; `payos.audit.events{outcome="error"}`; `payos.session.store.errors` rate; `payos.webhook.delivery.exhausted` rate.
+- Suggested alert set (mirrors [architecture/observability-metrics-architecture-v1-2026-09-06.md](../architecture/observability-metrics-architecture-v1-2026-09-06.md) §Alerts): `payos.runtime.startup.failures` any increment; sustained `payos.transport.errors` / `payos.resource.errors` rate; `payos.script.errors` rate; `payos.queue.connection.state == 0` sustained; `payos.audit.events{outcome="error"}`; `payos.session.store.errors` rate; `payos.webhook.delivery.exhausted` rate; `payos.audit.buffer.overflow.persistence.failed` any increment; `payos.audit.buffer.writer.append.failed` any increment; `payos.audit.store.verify.result{outcome="broken"}` any increment — see [audit-trail.md#metrics](audit-trail.md#metrics) for why these three specifically matter more than a generic error-rate threshold.
 
 ## Related
 
 - [architecture/observability-metrics-architecture-v1-2026-09-06.md](../architecture/observability-metrics-architecture-v1-2026-09-06.md) — runtime design, contract layer, recorder resolution, tag/cardinality policy, extension guidance.
 - [observability.md](observability.md) — correlation IDs, logging/MDC, audit trail, diagnostics, health endpoints.
+- [audit-trail.md](audit-trail.md) / [configuration/audit-trail.md](../configuration/audit-trail.md) — the durable audit-trail capability behind the `payos.audit.buffer.*`/`payos.audit.store.*` metrics above.
 - [reference/http-endpoints.md](../reference/http-endpoints.md) — full HTTP endpoint reference including `/metrics`.

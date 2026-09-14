@@ -182,7 +182,7 @@ $Audit.logEvent("CARD_TOKENISED", "SUCCESS",
 The 7-argument form additionally accepts `operation`/`resourceType`/`resourceId` — the remaining schema-v2 business-context fields, each an optional plain string describing the audited action/object (e.g. `"AUTHORIZE"`/`"payment"`/`"pay_8391"`) rather than a lookup key/value pair:
 
 ```javascript
-$Audit.logEvent("CARD_TOKENISED", "SUCCESS", "TOKENIZE", "card", "card-42",
+$Audit.logEvent("CARD_TOKENISED", "SUCCESS", "TOKENIZE", "api", "/tokenize",
         { paymentId: "pay_8391" },
         { maskedPan: "************1234", tokenId: "tok_xyz" });
 ```

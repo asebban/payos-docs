@@ -58,6 +58,7 @@ It is structured by audience so that each reader can go straight to what they ne
 | Document | Purpose |
 | --- | --- |
 | [Reference](reference/README.md) | Exhaustive indexes: configuration keys, script bindings, system events, and built-in HTTP endpoints. |
+| [Security](security/README.md) | Compliance mapping — which code is concerned by which PCI-DSS requirement, coverage gaps, and how to keep the mapping current. |
 
 ---
 
@@ -81,7 +82,8 @@ payos-docs/
 ├── operations/          Running PayOS in production (operators)
 ├── cli-tools/           Command-line tool reference (developers + operators)
 ├── build-and-release/   Build, versioning, module map (maintainers)
-└── reference/           Cross-cutting indexes and appendices
+├── reference/           Cross-cutting indexes and appendices
+└── security/            Compliance mapping (PCI-DSS requirement → code)
 ```
 
 ### Separation of concerns (how redundancy is avoided)

@@ -166,6 +166,21 @@ Keys below live under `editor-secret-service.configuration.*` — same shape as 
 | `enabled` | — | Enable the editor secret provider. |
 | `type` | `vault` | `filesystem` / `vault`. Defaults to `vault`, unlike `secret-service` (defaults to `filesystem`). |
 
+Can alternatively be provisioned entirely from environment variables — required if `payos.json` itself is encrypted, since nothing can read a JSON block inside a file that needs that same block to be decrypted first. See the dedicated env-var table below.
+
+### `editor-secret-service` / `CryptoService` env vars (bypass `${...}` substitution entirely)
+
+These are **not** `${VAR}` placeholders resolved by `EnvVarResolver` (see [env-var-resolution.md](../configuration/env-var-resolution.md)) — `EditorEncryptionKeyInitializer`/`CryptoService` read them directly via `System.getenv(...)`, before `payos.json` is even opened, which is exactly what lets `payos.json` be encrypted in its entirety.
+
+| Env var | Equivalent JSON key | Default if unset |
+| --- | --- | --- |
+| `PAYOS_EDITOR_SECRET_TYPE` | `editor-secret-service.configuration.type` | falls back to reading `editor-secret-service` from `payos.json` |
+| `PAYOS_EDITOR_SECRET_ENABLED` | `editor-secret-service.configuration.enabled` | falls back to reading `editor-secret-service` from `payos.json` |
+| `PAYOS_EDITOR_SECRET_CFG_<NAME>` | `editor-secret-service.configuration.<name>` (`<NAME>` uppercased, `-` → `_`, e.g. `KV_MOUNT` → `kv-mount`) | falls back to reading `editor-secret-service` from `payos.json` |
+| `PAYOS_CRYPTO_REMASK_INTERVAL_SECONDS` | — (no JSON equivalent; a `CryptoService` in-memory hardening tunable, not a secret-provider setting) | `300` (5 minutes) if unset, blank, non-numeric, or non-positive |
+
+If any `PAYOS_EDITOR_SECRET_*` variable is set, resolution happens from the environment alone — the `editor-secret-service` block in `payos.json` (if present) is never read; mixing sources is not supported. See [editor-secret-service.md](../configuration/editor-secret-service.md#configuring-via-environment-variables-instead-required-if-payosjson-is-fully-encrypted) and [architecture/tenant-bundle-encryption-key-lifecycle](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md) for the full mechanism.
+
 ## `webhooks` / `http-webhook-service` — [webhook-service.md](../configuration/webhook-service.md)
 
 | Key | Default | Purpose |

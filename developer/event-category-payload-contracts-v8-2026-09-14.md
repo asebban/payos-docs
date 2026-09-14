@@ -1,10 +1,12 @@
 Created: 2026-07-10
-Last updated: 2026-07-28
-Version: v7
+Last updated: 2026-09-14
+Version: v8
 
 # Event Category Payload Contracts
 
 > Status: all six categories below are implemented, and all six now resolve their default implementation via the same SPI mechanism. Categories 2-5 (Analytics, Event-sourcing, Metrics, Integration events) were built on 2026-07-28, completing the set that started with categories 1 (audit) and 6 (diagnostics); later the same day, categories 1 and 6 were retrofitted onto the SPI resolution mechanism the four new categories introduced, closing the asymmetry the first version of this update left open.
+
+> **v8 (2026-09-14):** §1's `AuditEvent` table was the pre-durability, pre-business-context shape from when this document was first written (v7, 2026-07-28) — it never got updated when the audit trail gained a durable buffered-store/`IAuditTrailStore` delivery pipeline (see [ADR-0008](../architecture/adr/0008-audit-trail-delivery-mechanism.md), 2026-09-08 through 2026-09-11) or, separately, its schema-v2 business-context fields (`operation`/`resourceType`/`resourceId`/`businessKeys`, plus `eventId`/`schemaVersion`, added 2026-09-11 for evidence-quality querying without persisting raw payload values). §1 below now reflects the actual shipped shape. `$Audit`'s scripting surface (`AuditBinding.logEvent`) was found to have the same staleness — it had no way to pass `businessKeys` at all — and was fixed alongside this doc update; see [scripting-bindings.md](scripting-bindings.md#audit-diagnostics) for the corrected signature.
 > Supersedes the "one stable envelope for all event types" design principle in [`observability-event-contract-proposal.md`](observability-event-contract-proposal.md). That document's field-level detail (source/actor/correlation/transport/resource blocks, the existing-emitter mapping table, the mandatory/conditional field governance table) remains a useful reference for the field-shape rationale behind the per-category contracts below — but it was not implemented as one unified envelope.
 
 ## Governing principle
@@ -32,17 +34,45 @@ Every category's payload includes one field that is **intentionally unrestricted
 
 ## 1. Regulatory audit trail — `AuditEvent` (existing, reference shape)
 
-Interface: `IAuditLogger` · Facade: `AuditLogger` · Default impl: `Slf4jAuditLogger` (JSON to the `AUDIT` logger category). SPI-resolved like every other category (see the governing principle section) — override via a `META-INF/services/ma.s2m.payos.security.IAuditLogger` entry or `AuditLogger.setInstance(...)`.
+Interface: `IAuditLogger` · Facade: `AuditLogger` · Default impl (kernel-shipped, non-durable): `Slf4jAuditLogger` (JSON to the `AUDIT` logger category). SPI-resolved like every other category (see the governing principle section) — override via a `META-INF/services/ma.s2m.payos.security.IAuditLogger` entry or `AuditLogger.setInstance(...)`. A real deployment typically activates the durable `buffered-store` category instead (bounded in-process buffer, background writer, `IAuditTrailStore` persistence with hash-chain integrity) — see [ADR-0008](../architecture/adr/0008-audit-trail-delivery-mechanism.md) for the delivery-mechanism design and [configuration/audit-trail.md](../configuration/audit-trail.md)/[operations/audit-trail.md](../operations/audit-trail.md) for how to turn it on and run it. This section only covers `AuditEvent`'s payload shape, which is identical regardless of which `IAuditLogger` is active.
 
 | Field | Type | Notes |
 |---|---|---|
+| `eventId` | UUID | auto-generated if not supplied; the dedup key `IAuditTrailStore` implementations key on |
+| `schemaVersion` | int | `1` by default; auto-derives to `2` when any business-context field below is used, unless explicitly overridden |
 | `timestamp` | Instant | auto-set to `Instant.now()` unless overridden |
 | `event` | String | event type, e.g. `AUTH_SUCCESS` |
 | `userId`, `tenantId`, `appId`, `correlationId`, `path` | String | standard context, `"-"` when absent |
 | `result` | String | `SUCCESS` / `FAILURE` / `DENIED` / `ACTIVE` / `INFO` — drives log level in `Slf4jAuditLogger` |
-| **`extra`** | **Map\<String,Object\>** | **free-form section** |
+| `operation` (schema v2) | String, nullable | optional explicit context for the audited business action, e.g. `AUTHORIZE`; omitted from JSON when unset |
+| `resourceType` (schema v2) | String, nullable | optional explicit context for the audited business object's type, e.g. `payment`; omitted from JSON when unset |
+| `resourceId` (schema v2) | String, nullable | optional explicit context for the audited business object's identifier; omitted from JSON when unset |
+| **`businessKeys`** (schema v2) | **Map\<String,Object\>** | **approved, scalar-only lookup values** — the only business-data section the audit store indexes/queries. Values must be `String`/`Integer`/`Long`/`Double`/`BigDecimal`/`Boolean` (enforced at `.businessKey(key, value)`, `IllegalArgumentException` otherwise) and each *key* must additionally be on the deployment's `audit-trail.business-keys.approved` allowlist or `BusinessKeysPolicy` strips that one entry (not the whole event) with a WARN log — deny-by-default when the allowlist is empty/absent. See [configuration/audit-trail.md#business-keys-allowlist](../configuration/audit-trail.md#business-keys-allowlist). |
+| **`extra`** | **Map\<String,Object\>** | **free-form section** — never indexed/queryable, unlike `businessKeys`; values whose key name looks sensitive (`SensitiveFieldMasker`'s shared denylist) are auto-redacted unless the key name itself contains `"masked"` |
 
-This is the template the other five follow.
+`businessKeys` and `extra` are deliberately different: `businessKeys` is the narrow, validated, indexable subset of business context (Story 4.1's "capture safe business data" mechanism); `extra` remains the same unrestricted, unindexed bag every other category's free-form section already is. Putting a lookup value in `extra` instead of `businessKeys` is not wrong, it just means the audit store can't query on it later.
+
+```json
+{
+  "eventId": "7016e4a9-e1c3-483c-9713-1f5cb43d316c",
+  "schemaVersion": 2,
+  "timestamp": "2026-09-14T13:18:30.621Z",
+  "event": "CARD_TOKENISED",
+  "userId": "john.doe",
+  "tenantId": "acme",
+  "appId": "payment-app",
+  "correlationId": "corr-123",
+  "path": "/api/tokenize",
+  "result": "SUCCESS",
+  "operation": "TOKENIZE",
+  "resourceType": "card",
+  "businessKeys": { "paymentId": "pay_1" },
+  "maskedPan": "************1234",
+  "tokenId": "tok_xyz"
+}
+```
+
+This is the template the other five follow, extended in schema v2 with the business-context fields above. `payos-foundation`'s `AuditEvent`/`AuditEvent.Builder` and `payos` kernel's `BusinessKeysPolicy` are the authoritative source for exact validation rules; the config/operations docs linked above cover the allowlist and delivery pipeline.
 
 ---
 

@@ -12,6 +12,6 @@ Practical guides for partner teams customizing an editor-delivered PayOS applica
 ## Next
 
 - [Developer guide](../developer/README.md) — for building the application itself, as opposed to customizing/delivering someone else's.
-- [Architecture: tenant bundle encryption key lifecycle](../architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md) — end-to-end lifecycle of a bundle's `encryptionKey`: generating it, deciding custody, what to encrypt vs. exclude, encrypting with `edc`, delivering to the client, rotation, and the gaps to close before this is fully production-ready.
+- [Architecture: tenant bundle encryption key lifecycle](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md) — end-to-end lifecycle of a bundle's `encryptionKey`: generating it, deciding custody, what to encrypt vs. exclude, encrypting with `edc`, delivering to the client, rotation, and the gaps to close before this is fully production-ready.
 - [Operations: bundle encryption](../operations/bundle-encryption.md) — the `edc` CLI reference.
 - [Configuration: secret service](../configuration/secret-service.md) — the `filesystem`/`vault` providers backing `encryptionKey` storage.

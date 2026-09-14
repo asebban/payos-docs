@@ -6,9 +6,12 @@ reference is also summarized in [cli-tools/edc.md](../cli-tools/edc.md).
 
 ## What `edc` does
 
-`edc` performs AES encryption/decryption of bundle contents, writing a packed artifact with a
-magic header (`P8OS`). It supports two modes — **pack** (encrypt) and **unpack** (decrypt) —
-and can source its encryption key from a flag, a generated key, or a secret provider.
+`edc` performs AES encryption/decryption of bundle contents. **`pack` writes `P8G2`**
+(`AES/GCM/NoPadding`, a fresh random IV per file, 128-bit authentication tag) — `unpack` also
+still reads the legacy `P8OS` header (`AES/ECB/PKCS5Padding`, unauthenticated) for bundles
+produced by older tool versions, but never writes it. It supports two modes — **pack** (encrypt)
+and **unpack** (decrypt) — and can source its encryption key from a flag, a generated key, or a
+secret provider.
 
 - Main class: `ma.s2m.Main` (module `payosv2-packer`, version `1.3.0-RELEASE`).
 - Installed as the command `edc` via `install-edc.sh` / `install-edc.ps1`.
@@ -43,7 +46,21 @@ edc --encryption pack \
 | --- | --- |
 | `--encryption pack` | Encrypt mode. |
 | `--inputdir` | Bundle directory to pack. |
+| `--outputdir` | Write the packed result here instead of overwriting `--inputdir` (recommended — see below). |
 | `--key <16-char>` | Encryption key (or if --key is absent, source it from a secret provider, below). |
+
+**Prefer `--outputdir` over in-place packing.** Without it, `pack` overwrites files in `--inputdir`
+directly; a failed or interrupted run can then leave a mix of encrypted and plaintext files with
+no built-in way to tell them apart at a glance (re-running is still safe — see
+[cli-tools/edc.md](../cli-tools/edc.md#output-location-and-crash-safety) — but your source tree
+was at risk in the meantime). With `--outputdir`, `--inputdir` is never touched at all:
+
+```bash
+edc --encryption pack \
+    --inputdir ./bundle \
+    --outputdir ./bundle-packed \
+    --key "0123456789abcdef"
+```
 
 ## Unpack (decrypt)
 
@@ -52,6 +69,14 @@ edc --encryption unpack \
     --inputdir ./packed-bundle \
     --key "0123456789abcdef"
 ```
+
+**Access control:** `unpack` performs disk-level decryption, reserved to the editor's own internal
+verification — never an integrator or a client. When the key is resolved from a secret provider
+(not `--key`), `unpack` additionally requires a second secret (`unpackAuthorization` by default,
+`--unpack-auth-secret-name`/`PAYOS_UNPACK_AUTH_SECRET_NAME` to override) to be readable under the
+same provider/tenant — grant it only to editor-internal credentials, never to an integrator's or
+client's runtime-scoped Vault policy. See [cli-tools/edc.md](../cli-tools/edc.md#unpack-access-control)
+for the full flag reference; passing `--key` directly bypasses this check entirely.
 
 ## Sourcing the key from a secret provider
 
@@ -76,11 +101,12 @@ Vault or filesystem store can hold the bundle key.
 - Treat the bundle key as a high-value secret: store it in Vault, restrict access, and rotate
   it on a schedule (see [secrets-management.md](secrets-management.md)).
 - Keep an auditable record of which key version packed which delivered bundle.
-- The `P8OS` magic header lets tooling verify a packed artifact before unpacking.
+- The `P8G2` magic header (or legacy `P8OS`, for older artifacts) lets tooling verify a packed
+  artifact before unpacking.
 - This guide only shows an example for filesystem secret provider. To explore all options (including vault secret provider) see the following document [CLI tools guide](./cli-tools-guide.md).
 
 ## Next
 
 - [cli-tools/edc.md](../cli-tools/edc.md)
 - [secrets-management.md](secrets-management.md)
-- [architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md](../architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md) — the full key lifecycle this page's CLI reference fits into: generating the key, deciding custody, delivering to a client, and rotating it.
+- [architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md) — the full key lifecycle this page's CLI reference fits into: generating the key, deciding custody, delivering to a client, and rotating it.

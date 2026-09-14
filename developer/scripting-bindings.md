@@ -114,7 +114,7 @@ if (amount <= 0) {
 ### `$Analytics`, `$Metrics`, `$Integration`, `$EventStore`
 
 Four bindings over the event-category facades built in
-[event-category-payload-contracts-v7-2026-07-28.md](event-category-payload-contracts-v7-2026-07-28.md)
+[event-category-payload-contracts-v8-2026-09-14.md](event-category-payload-contracts-v8-2026-09-14.md)
 — business/usage tracking, numeric time series, external choreography, and durable replay,
 respectively. Unlike every other binding in this section, they wrap a **static facade**
 (`AnalyticsRecorder`/`MetricsRecorder`/`IntegrationEventPublisher`/`EventStore`, all in
@@ -157,18 +157,37 @@ The remaining two of the six event categories, both pre-existing "reference shap
 (§1 and §6 of the contract doc) rather than newly built — but only now, alongside the four
 above, exposed to scripts.
 
-`$Audit` wraps `AuditLogger` but exposes **only** its free-form `logEvent(eventType, result,
-extra)` entry point — deliberately none of `IAuditLogger`'s typed lifecycle methods
-(`logAuthSuccess`, `logSessionCreated`, `logApiExecution`, `logStartup`, ...). Those are system
-events the kernel already emits itself at the right moment; letting a script call them too would
-be redundant at best and, at worst, let it fabricate a fake `AUTH_SUCCESS` record in a trail
-that's supposed to be immutable/WORM. `tenantId`/`correlationId`/`appId`/`path`/`userId` are all
-pre-filled from the current request/principal — the script only supplies what's actually
-event-specific.
+`$Audit` wraps `AuditLogger` but exposes **only** its free-form `logEvent(...)` entry point —
+deliberately none of `IAuditLogger`'s typed lifecycle methods (`logAuthSuccess`,
+`logSessionCreated`, `logApiExecution`, `logStartup`, ...). Those are system events the kernel
+already emits itself at the right moment; letting a script call them too would be redundant at
+best and, at worst, let it fabricate a fake `AUTH_SUCCESS` record in a trail that's supposed to be
+immutable/WORM. `tenantId`/`correlationId`/`appId`/`path`/`userId` are all pre-filled from the
+current request/principal — the script only supplies what's actually event-specific.
+
+Three overloads are available, all building the same schema-v2 `AuditEvent` shape (see [event-category-payload-contracts-v8-2026-09-14.md §1](event-category-payload-contracts-v8-2026-09-14.md#1-regulatory-audit-trail--auditevent-existing-reference-shape) for the full field contract). The 3-argument form only ever populates `extra` (free-form, never indexed/queryable):
 
 ```javascript
 $Audit.logEvent("CARD_TOKENISED", "SUCCESS", { maskedPan: "************1234", tokenId: "tok_xyz" });
 ```
+
+The 4-argument form additionally accepts `businessKeys` — approved, scalar-only lookup values the audit store can later index and query on (see [configuration/audit-trail.md#business-keys-allowlist](../configuration/audit-trail.md#business-keys-allowlist) for the allowlist a deployment must configure before a key is actually indexed rather than stripped with a WARN log):
+
+```javascript
+$Audit.logEvent("CARD_TOKENISED", "SUCCESS",
+        { paymentId: "pay_8391" },
+        { maskedPan: "************1234", tokenId: "tok_xyz" });
+```
+
+The 7-argument form additionally accepts `operation`/`resourceType`/`resourceId` — the remaining schema-v2 business-context fields, each an optional plain string describing the audited action/object (e.g. `"AUTHORIZE"`/`"payment"`/`"pay_8391"`) rather than a lookup key/value pair:
+
+```javascript
+$Audit.logEvent("CARD_TOKENISED", "SUCCESS", "TOKENIZE", "card", "card-42",
+        { paymentId: "pay_8391" },
+        { maskedPan: "************1234", tokenId: "tok_xyz" });
+```
+
+Pass `null` for any argument that doesn't apply (`businessKeys`, `extra`, or any of `operation`/`resourceType`/`resourceId`) rather than an empty string/object — there is no requirement to supply values the event doesn't have, and the shorter overloads remain available when only `extra` (or `extra` plus `businessKeys`) is needed.
 
 `$Diagnostics` wraps `Diagnostics` with a single generic `logEvent(nature, stage, errorCode,
 rootCauseCategory, attemptCount, reason, details)` — `DiagnosticEvent` is already nature-agnostic

@@ -32,7 +32,7 @@ For developers **building applications on PayOS**. Applications are written prim
 25. [Debugging](debugging.md) — debugging server-side JavaScript.
 26. [Debug backend JavaScript in VS Code (Windows)](debug-backend-javascript-vscode.md) — exposing GraalVM Polyglot backend JavaScript over the Chrome DevTools Protocol and debugging it from VS Code.
 27. [Debug backend JavaScript in VS Code (Linux)](debug-backend-javascript-vscode-linux.md) — the same verified debugging flow, using Bash commands and Unix-style paths.
-28. [Event category payload contracts (v7, 2026-07-28)](./event-category-payload-contracts-v7-2026-07-28.md) - one abstraction per event category (audit, analytics, event-sourcing, metrics, integration, diagnostics), all six implemented and all six SPI-resolved; supersedes the older [single-envelope observability proposal](./observability-event-contract-proposal.md)
+28. [Event category payload contracts (v8, 2026-09-14)](./event-category-payload-contracts-v8-2026-09-14.md) - one abstraction per event category (audit, analytics, event-sourcing, metrics, integration, diagnostics), all six implemented and all six SPI-resolved; §1 covers the audit trail's schema-v2 business-context fields (`businessKeys` et al.); supersedes the older [single-envelope observability proposal](./observability-event-contract-proposal.md)
 29. [Implementing a custom licence validator](license-validation.md) — plugging a custom license validator into PayOS.
 
 ## Related references

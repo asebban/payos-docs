@@ -515,7 +515,7 @@ One changelog per tenant schema (if using `dedicated-schema`) — parameterize v
 > For the full lifecycle this section and §12 are part of — key generation, custody decision,
 > what to encrypt vs. exclude, the actual `edc` commands, rotation, and where today's mechanism
 > still has gaps — see
-> [architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md](../architecture/tenant-bundle-encryption-key-lifecycle-v4-2026-08-12.md).
+> [architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md).
 
 ### 10.1 Key ownership decision
 

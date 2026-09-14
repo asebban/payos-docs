@@ -8,6 +8,8 @@ PayOS configuration supports **bash-style environment variable expansion** using
 
 Resolution happens **after JSON parsing** but **before** values are stored in `PayOSConfig.settings`, ensuring passwords and API keys are never written to disk.
 
+> **Not for bootstrapping decryption itself.** Because this resolution runs after JSON parsing, it also runs after `CryptoService.decryptIfEncrypted` has already decrypted the file's raw bytes (`ConfigLoader.java`) — a `${VAR}` placeholder sitting inside a file that is itself encrypted can never be reached, since decryption would already have failed for lack of a key before any placeholder substitution runs. This is exactly what made earlier guidance about the `editor-secret-service` block wrong (see [architecture/tenant-bundle-encryption-key-lifecycle](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md), changelog v7): `${...}` placeholders keep literal credential *values* out of a file's content, they do not make the file itself safe to encrypt. If a block must be readable before any decrypt key exists — `editor-secret-service` is the one case that applies to today — it needs a mechanism that never touches the file at all; see [reference/configuration-keys.md](../reference/configuration-keys.md#editor-secret-service--cryptoservice-env-vars-bypass--substitution-entirely) for the direct-`System.getenv()` env vars that do this.
+
 ## Basic Syntax
 
 ### Simple substitution: `${VAR}`

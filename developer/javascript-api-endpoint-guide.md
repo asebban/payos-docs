@@ -1,6 +1,6 @@
 # Guide JavaScript des Endpoints API dans PayOS
 
-Dernier alignement: 2026-07-21
+Dernier alignement: 2026-09-16
 
 Ce document explique, de façon pratique et détaillée, comment écrire des scripts JavaScript pour les endpoints API dynamiques dans PayOS.
 
@@ -279,9 +279,19 @@ Méthodes disponibles :
 - `delete(apiPath: String) : Response`
 - `setApp(app: Application) : void` — change l'application cible pour les appels locaux
 - `getApp() : Application`
-- `setHeaders(headers: Map<String, String>) : void` — en-têtes ajoutés à chaque appel (local et distant)
+- `setHeaders(headers: Map<String, String>) : void` — **fusionne** ces en-têtes avec ceux déjà présents (voir ci-dessous), sans les remplacer
+- `clearHeaders() : void` — retire tous les en-têtes, y compris ceux propagés automatiquement ; à utiliser avant un appel qui ne doit porter aucun contexte de l'appelant
+- `removeHeader(name: String) : void` — retire un seul en-tête (insensible à la casse), par ex. pour ne pas transmettre `Authorization` à un appel distant précis
 - `getHeaders() : Map<String, String>`
 - `buildParameters(path: String) : Map<String, String>` — parse les paramètres de query string d'une URL
+
+**Propagation automatique des en-têtes de la requête entrante**
+
+`$Api` est initialisé avec une copie de **tous** les en-têtes de la requête `$Request` qui a obtenu ce proxy (`Authorization`, cookies de session, `X-Tenant-Id`, `X-Correlation-Id`, en-têtes métier custom, etc.), à l'exception des en-têtes de transport propres à la requête d'origine (`Host`, `Content-Length`, `Connection`) qui n'ont pas de sens une fois rejoués. Un appel `$Api.get(...)` sans aucun `setHeaders()` porte donc automatiquement l'identité et le contexte de l'appelant vers l'endpoint appelé — c'est ce qui permet à un endpoint protégé par rôles d'accepter un appel émis par un autre endpoint du même utilisateur.
+
+`setHeaders(...)` **ajoute/écrase par-dessus** cet ensemble de base plutôt que de le remplacer : appeler `$Api.setHeaders({"X-Correlation-Id": ...})` n'efface donc pas `Authorization` — il vient simplement compléter ou surcharger des clés précises.
+
+**Exception de sécurité pour les appels distants** : lorsque l'appel sort de l'instance PayOS (URL HTTP/HTTPS absolue, voir résolution locale/distante ci-dessous), les en-têtes sensibles (`Authorization`, `Cookie`, tout en-tête dont le nom contient un fragment comme `token`, `secret`, `apikey`, `credential`, etc. — voir `SensitiveFieldMasker`) sont automatiquement retirés avant l'envoi, même s'ils étaient présents dans le contexte propagé. Les en-têtes non sensibles (`X-Correlation-Id`, `X-Tenant-Id`, en-têtes métier) continuent, eux, d'être transmis normalement à l'hôte distant. Si un script a besoin de transmettre `Authorization` à un service distant précis et de confiance, il doit le faire explicitement avec `setHeaders({"Authorization": ...})` juste avant l'appel concerné.
 
 **Comportement de résolution local / distant**
 
@@ -293,7 +303,7 @@ Si l'endpoint local est introuvable _et_ que `apiPath` est une URL HTTP/HTTPS co
 ```javascript
 var userId = request.getPathVariables()["userId"];
 $Api.setApp($App.get("app1"));
-var r = $Api.get(`/orders/${userId}`);
+var r = $Api.get(`/orders/${userId}`); // porte déjà Authorization/session/tenant de la requête entrante
 ```
 
 **Appel distant**
@@ -302,12 +312,21 @@ var r = $Api.get(`/orders/${userId}`);
 var r = $Api.post(
   `http://remoteaddr.com:8080/orders`,
   JSON.stringify({ userId: userId, amount: 100 })
-);
+); // Authorization/Cookie sont retirés automatiquement ; X-Correlation-Id/X-Tenant-Id sont conservés
+```
+
+**Isoler un appel du contexte de l'appelant**
+
+Pour un appel (local ou distant) qui ne doit porter aucun en-tête de la requête entrante :
+
+```javascript
+$Api.clearHeaders();
+var r = $Api.get(`/public/catalog`);
 ```
 
 **Propagation du `X-Correlation-Id` (bonne pratique)**
 
-Lorsqu'un script appelle `$Api`, il est recommandé de propager l'identifiant de corrélation de la requête entrante :
+`X-Correlation-Id` et `X-Tenant-Id` sont déjà propagés automatiquement comme tout autre en-tête de la requête entrante — l'appel explicite ci-dessous reste utile pour les fixer/surcharger volontairement (par ex. si `$Tenant` a été résolu différemment du header brut) :
 
 ```javascript
 $Api.setHeaders({
@@ -544,13 +563,13 @@ Deux en-têtes sont reconnus nativement par le kernel PayOS :
 - `X-Tenant-Id` est lu par le kernel et injecté dans `$DB` → le script n'a pas besoin de passer le tenant à `$DB` explicitement.
 - `X-Correlation-Id` est inclus dans l'entrée d'audit PCI-DSS générée automatiquement à la fin de chaque exécution.
 
-**Bonne pratique** : lire ces en-têtes dans le script et les propager aux appels sortants (`$Api`, `$Queue`) pour maintenir la traçabilité de bout en bout :
+**Bonne pratique** : `$Api` propage déjà ces en-têtes automatiquement (voir 3.3) — seul `$Queue`, qui ne lit pas `$Request`, a besoin qu'on les lui passe explicitement pour maintenir la traçabilité de bout en bout :
 
 ```javascript
 var correlationId = request.getHeader("X-Correlation-Id");
 var tenantId = request.getHeader("X-Tenant-Id");
 
-$Api.setHeaders({ "X-Correlation-Id": correlationId, "X-Tenant-Id": tenantId });
+var r = $Api.get(`/payments/${paymentId}`); // X-Correlation-Id/X-Tenant-Id déjà transmis automatiquement
 
 if ($Queue && $Queue.isConnected()) {
   $Queue.publish(JSON.stringify({ correlationId: correlationId, event: "...", tenantId: tenantId }));
@@ -906,7 +925,7 @@ L'implémentation par défaut écrit ces événements via SLF4J/logback. Elle pe
 
 - Ne jamais faire confiance à une valeur client sans validation
 - Éviter d'exposer des détails internes dans les erreurs (stack traces, noms de tables, etc.)
-- Propager `X-Correlation-Id` et `X-Tenant-Id` dans tous les appels sortants (`$Api`, `$Queue`)
+- `$Api` propage déjà automatiquement tous les en-têtes de la requête entrante (dont `X-Correlation-Id`/`X-Tenant-Id`) vers les appels locaux, et vers les appels distants hors en-têtes sensibles — explicitement propager `X-Correlation-Id`/`X-Tenant-Id` reste nécessaire pour `$Queue`, qui ne lit pas `$Request`
 - Vérifier `$Queue != null && $Queue.isConnected()` avant tout appel de publication
 
 ## 6. Checklist de développement

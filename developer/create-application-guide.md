@@ -1,5 +1,8 @@
 # Guide — Créer une application PayOS
 
+Créé: 2026-06-07
+Dernier alignement: 2026-09-17
+
 > Ce guide couvre la création d'une application PayOS de zéro : structure de fichiers, configuration, endpoints API JavaScript, pages Vue, localisation côté serveur, et intégration avec la base de données et les librairies partagées.
 >
 > Prérequis : un runtime PayOS opérationnel avec un `bootstrap.json` existant.
@@ -256,7 +259,7 @@ Déclare les routes de navigation pour les pages Vue.
 }
 ```
 
-La valeur de `component` est le chemin relatif du fichier `.vue` dans `page/`, sans extension.
+La valeur de `component` est le chemin relatif du fichier `.vue` dans `page/`, sans extension. Une route peut aussi porter `"roles": ["admin"]` (optionnel, tableau de strings) : la page exige alors une authentification et l'un des rôles listés, sinon 403 — même mécanisme que `roles` sur un mapping API (section 10).
 
 > **Limitation — pas de path variables dans les routes de pages :** le routeur de pages effectue une **comparaison exacte** de l'URL (`Map.get(path)`). Il ne supporte pas les segments dynamiques du type `:id` ou `{id}`. Pour afficher un détail avec un identifiant, passez-le en **query parameter** (`/payments/detail?id=123`) ou chargez les données depuis le composant Vue via un appel à l'endpoint API correspondant.
 
@@ -390,6 +393,10 @@ h1 { color: #2c3e50; }
 ```
 
 > Les fichiers `.html` statiques sont également supportés dans `page/`.
+
+> **`<style scoped>` n'a aucun effet ici** : le backend extrait le bloc `<style>` par simple regex (pas un vrai compilateur SFC) et l'injecte tel quel, globalement — l'attribut `scoped` est toléré syntaxiquement mais silencieusement ignoré. Préfixez vos classes CSS (`.payments-list` plutôt que `.container`) pour éviter les collisions entre pages.
+
+Pour le cycle de chargement détaillé d'une page (`?version=true`, distinction shell HTML / JSON selon `X-Requested-With`), pour créer un composant réutilisable (asynchrone ou non), et pour importer une bibliothèque de composants Vue "normale" avec un `import` classique, voir le guide dédié : [Créer une interface utilisateur Vue.js](writing-vue-uis.md).
 
 ---
 

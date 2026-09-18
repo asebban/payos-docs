@@ -1,5 +1,8 @@
 # PayOS — Inventaire des aspects de sécurité implémentés
 
+Créé: 2026-06-07
+Dernier alignement: 2026-09-16
+
 ## 1. Authentification
 
 | Mécanisme | Classe | Détail |
@@ -18,6 +21,8 @@ Ces mécanismes permettent gérer un IAM compatible OIDC (Open ID Connect) comme
 - Extraction des rôles depuis les claims JWT du principal OIDC
 - `$Principal` injecté dans les scripts avec `id`, `roles`, et l'ensemble des claims
 - Toutes les autorisations refusées sont tracées dans l'audit
+- Appels API-à-API via `$Api` : le proxy est initialisé avec tous les en-têtes de la requête entrante (dont `Authorization`/session), donc un endpoint appelant un autre endpoint protégé par rôles propage automatiquement l'identité de l'appelant — sans quoi le callee ne verrait aucun principal et rejetterait l'appel en 403 même si les rôles requis sont satisfaits (voir [scripting-bindings.md `$Api`](../../developer/scripting-bindings.md) et [javascript-api-endpoint-guide.md §3.3](../../developer/javascript-api-endpoint-guide.md))
+- Pour les appels `$Api` sortant vers un hôte distant (fallback HTTP/HTTPS hors de l'instance PayOS), les en-têtes sensibles (`Authorization`, `Cookie`, tout ce qui ressemble à un token/secret/credential — via `SensitiveFieldMasker`) sont retirés automatiquement avant l'envoi
 
 ## 3. Cryptographie (PCI-DSS Req 3.5)
 

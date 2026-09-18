@@ -1,5 +1,8 @@
 # Scripting bindings reference
 
+Created: 2026-06-05
+Last updated: 2026-09-16
+
 Before a script runs, the kernel injects a set of `$`-prefixed **bindings** into the
 scripting context via `scriptingEngine.putMember(name, value)`. They are the only sanctioned
 way for JavaScript to reach the platform (the sandbox blocks ambient I/O — see
@@ -51,11 +54,14 @@ API invocation utility (`ApiProxy`) that calls APIs within the current applicati
 back to remote HTTP/HTTPS endpoints when the local API is not found. Provides `get()`,
 `post()`, `put()`, and `delete()` methods.
 
+`$Api` is seeded with every header of the current `$Request` (`Authorization`, session cookie, `X-Tenant-Id`, `X-Correlation-Id`, custom headers, ...), so a call to another endpoint carries the caller's identity by default — this is what lets a role-protected callee accept a call made from another endpoint on behalf of the same authenticated user. On the remote-HTTP fallback path, sensitive headers (`Authorization`, `Cookie`, anything token/secret/credential-shaped) are stripped automatically before the request leaves the PayOS instance. `setHeaders(...)` merges on top of this base rather than replacing it; `clearHeaders()`/`removeHeader(name)` opt a specific call out of some or all of it. Full details and examples in [javascript-api-endpoint-guide.md](javascript-api-endpoint-guide.md), section "`$Api` : façade endpoint".
+
 ```javascript
-// Call a local API within the same bundle
+// Call a local API within the same bundle — Authorization/session/tenant already carried over
 var response = $Api.get("/orders/123");
 
 // If local API not found and path is a valid HTTP URL, falls back to remote call
+// (Authorization/Cookie are stripped automatically for this remote hop)
 var remoteResponse = $Api.post("http://payment-service:8080/process", JSON.stringify({amount: 100}));
 ```
 

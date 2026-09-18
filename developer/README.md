@@ -10,6 +10,7 @@ For developers **building applications on PayOS**. Applications are written prim
 3. [Capability system](./capability%20system.md) — capabilities as self-contained functional packages, managed by `cpm`, extending applications at runtime without redeployment.
 4. [Writing API scripts](writing-apis.md) — the `loadControlData` / `execute` / `emitInsight` contract.
 5. [Guide JavaScript des Endpoints API (FR)](javascript-api-endpoint-guide.md) — practical, detailed companion to "Writing API scripts", in French.
+5.1. [Créer une interface utilisateur Vue.js (FR)](writing-vue-uis.md) — building a PayOS Vue UI app: main components, writing/registering a page served at `.../page/...`, async reusable components, and importing normal (non-async) Vue components/libraries.
 6. [Scripting bindings reference](scripting-bindings.md) — every `$` binding and its use.
 7. [Data access](data-access.md) — using `$DB`.
 8. [Secrets usage](secrets-usage.md) — using `$Secrets`.

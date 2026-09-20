@@ -3,7 +3,7 @@
 
 **Created:** 2026-09-18
 **Last updated:** 2026-09-20
-**Version:** 4 — supersedes v3 (2026-09-19): `TenantPolicyService` no longer reads a principal stashed by `Server.processRequest`; it resolves its own, directly, for the reason explained in §3.4.
+**Version:** 5 — supersedes v4 (2026-09-20): adds §9, a related but distinct fix in `DynamicDataAccessService`/`ApiResourceHandler` found while reviewing `TenantScope`'s save-and-restore pattern — the ambient DB tenant context (`CURRENT_TENANT`) was being cleared unconditionally on nested `$Api.*` calls, not restore-safe the way `TenantScope`/MDC already was.
 
 ## 1. What changed since v2
 
@@ -123,3 +123,47 @@ Unchanged from v3: both still resolve their own principal independently, deliber
 ## 8. Rollout
 
 Implemented and verified in one pass; the v4 correction in §3.4 was folded into the same change rather than shipped separately, since it touches the same lines v3 had just written. Remaining before this is production-ready: the tests in §6, and the documentation in §7.
+
+## 9. Related fix: `DynamicDataAccessService`'s ambient tenant context wasn't restore-safe
+
+Found while explaining why `TenantScope.open()`/`close()` save and restore the *previous* MDC values instead of unconditionally clearing them — a question naturally leads to: is anything else thread-bound and request-scoped handled the same way? One thing is, and correctly: `DynamicDataAccessService`'s `requestScopeDepth`/`requestScopedSession` (`beginRequestScope()`/`endRequestScope()`), which uses a depth counter rather than save-and-restore, because it needs to support real reentrancy (nested `$Api.*` calls on the same thread), not just thread-pool-reuse safety. One thing wasn't: the same class's `CURRENT_TENANT` (a static `ThreadLocal<String>`, `setCurrentTenant`/`clearCurrentTenant`) — and `ApiResourceHandler.handle()` was calling it asymmetrically with its own `beginRequestScope`/`endRequestScope` pair right next to it:
+
+```java
+if (currentTenantId != null && !currentTenantId.isBlank()) {
+    databaseService.setCurrentTenant(currentTenantId);
+}
+databaseService.beginRequestScope();   // depth-guarded
+...
+finally {
+    databaseService.endRequestScope();    // depth-guarded
+    databaseService.clearCurrentTenant(); // NOT depth-guarded — ran on every exit, nested or not
+}
+```
+
+**The bug**: endpoint1 calls endpoint2 via `$Api.post(...)` (`ApiProxy.executeWithFallback` runs a fresh `ApiResourceHandler` synchronously on the same thread). When endpoint2's `handle()` returns, its `finally` unconditionally cleared `CURRENT_TENANT` — even though endpoint1 is still running and may call `$DB` again afterward. Not observable in practice, because `DynamicDataAccessService.resolveOptionalCurrentTenantId()` falls back to the MDC tenant when `CURRENT_TENANT` is empty, and the MDC tenant is untouched by nested calls (only `Server.processRequest`'s single `TenantScope` touches it) — so the bug was silently absorbed by an unrelated fallback path rather than actually fixed.
+
+**Fix**: `IDatabaseService.beginRequestScope()`'s contract changed from `void` to `boolean`, returning whether *this* call is the depth 0→1 owner (`false` for a nested reentry). `DynamicDataAccessService.beginRequestScope()` implements this (session-backed mode, which has no depth tracking at all, always returns `true` — unchanged behavior for that mode). `ApiResourceHandler.handle()` now calls `beginRequestScope()` *before* `setCurrentTenant(...)` (reordered — see below) and only calls `setCurrentTenant`/`clearCurrentTenant` when it owns the scope:
+
+```java
+boolean isTenantContextOwner = false;
+if (databaseService != null) {
+    isTenantContextOwner = databaseService.beginRequestScope();
+    if (isTenantContextOwner && currentTenantId != null && !currentTenantId.isBlank()) {
+        databaseService.setCurrentTenant(currentTenantId);
+    }
+}
+...
+finally {
+    if (databaseService != null) {
+        databaseService.endRequestScope();
+        if (isTenantContextOwner) {
+            databaseService.clearCurrentTenant();
+        }
+    }
+```
+
+**Why reordering `beginRequestScope()` before `setCurrentTenant()` is safe**: `beginRequestScope()`'s own internal tenant resolution (to open the right tenant's session, on the owning call) goes through the same `resolveOptionalCurrentTenantId()` MDC fallback described above — and MDC is already correctly set by the time `ApiResourceHandler.handle()` runs at all, because `Server.processRequest` opens `TenantScope` (which sets MDC) before ever dispatching to a `ResourceHandler`. So the session still opens for the correct tenant even though `CURRENT_TENANT` itself isn't set until one line later.
+
+**Deliberately not touched**: `HibernateNotificationStore.withTenant(tenantId, action)` (`payos-service-notification`), the other production caller of `setCurrentTenant`/`clearCurrentTenant`, keeps its own unconditional set-then-clear — it's a different, legitimate pattern (temporarily switch to an *explicitly given*, possibly different tenant for one sub-operation, always self-contained within its own `try`/`finally`, never spanning a nested `$Api.*` call), and gating it the same way `ApiResourceHandler` now is would have broken it: it needs to actually switch tenant even when called while another scope is already active on the thread. Changing `setCurrentTenant`/`clearCurrentTenant` themselves to be depth-aware — rather than fixing only `ApiResourceHandler`'s own call site — was considered and rejected for exactly this reason.
+
+**Verification**: `payos-foundation`, `database-service`, `payos`, `payos-server-http`/`tcp`/`queue`, and `payos-service-notification` all rebuilt clean (`mvn -o clean ...`) and re-tested — `database-service`: 23/23, `payos`: 557/557, `payos-service-notification`: 158/158 (including `HibernateNotificationStoreTest`, confirming its untouched pattern still works). One operational note from this verification pass, unrelated to the fix itself: a stale/incorrectly-compiled `target/classes` (apparently left by a background IDE compiler using a classpath that didn't see the freshly-reinstalled `payos-foundation` jar) caused spurious "Unresolved compilation problem" test failures until `mvn clean` forced a real recompile — worth knowing if a similar false failure shows up after a foundation-interface change in the future.

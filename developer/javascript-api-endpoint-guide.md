@@ -578,7 +578,7 @@ if ($Queue && $Queue.isConnected()) {
 
 ## 3.9. `$Tenant` : tenant résolu
 
-`$Tenant` est injecté automatiquement dans le script et contient l'identifiant du tenant courant, résolu par le kernel à partir du header `X-Tenant-Id`, du contexte de la requête, ou du MDC.
+`$Tenant` est injecté automatiquement dans le script et contient l'identifiant du tenant courant. Pour un appelant authentifié, c'est toujours le tenant porté par son identité (realm Keycloak ou claim `tenantId`) — le header `X-Tenant-Id` n'est même pas consulté dans ce cas. Pour un appelant anonyme, la résolution retombe sur le simulateur de tenant (si activé), puis le header `X-Tenant-Id`, puis le contexte de la requête, puis le MDC. Voir [developer/tenant-resolution.md](tenant-resolution.md) pour l'ordre de priorité complet et des exemples.
 Sa valeur est `null` si aucun tenant n'est identifiable pour la requête.
 
 ```javascript

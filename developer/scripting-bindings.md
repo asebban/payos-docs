@@ -82,8 +82,12 @@ var roles  = $Principal.get("roles");
 
 ### `$Tenant`
 
-The resolved tenant identifier for the current request (see
-[multi-tenancy](../architecture/multi-tenancy.md)).
+The resolved tenant identifier for the current request. For an authenticated caller this is
+always their own tenant (Keycloak realm or `tenantId` claim) — `X-Tenant-Id` is not even consulted
+in that case; for an anonymous caller it falls back to the tenant simulator, then `X-Tenant-Id`,
+then request context, then MDC. See [tenant resolution](tenant-resolution.md) for the full
+priority order and worked examples, and [architecture/multi-tenancy.md](../architecture/multi-tenancy.md)
+for the runtime model.
 
 ### `$Logger`
 

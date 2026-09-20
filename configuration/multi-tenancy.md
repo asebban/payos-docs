@@ -45,14 +45,16 @@ From `IConfigSpec.MultiTenancy`:
 
 ## Tenant resolution
 
-The tenant is resolved (in order):
-
-1. `Request.contextData[CONTEXT_TENANT_ID]` (`"tenantId"`),
-2. the `X-Tenant-Id` header (case-insensitive),
-3. the MDC tenant (`TenantScope.MDC_TENANT_ID`).
+If the caller is authenticated (a valid session, or a valid `Authorization: Bearer` token), the
+tenant is always the caller's own tenant (their Keycloak realm, or a `tenantId` claim) — the
+`X-Tenant-Id` header below is not consulted at all in that case. Only for an anonymous request
+does resolution fall through to `tenantSimulator` (if enabled), then the `X-Tenant-Id` header,
+then internal request context, then the current thread's MDC tenant.
 
 If none resolves and `requireTenantId` is `true`, the request is rejected **before** business
-logic runs. See [architecture/multi-tenancy.md](../architecture/multi-tenancy.md).
+logic runs. Full priority order, worked examples, and how to test as a specific tenant locally:
+[developer/tenant-resolution.md](../developer/tenant-resolution.md). Runtime/enforcement detail:
+[architecture/multi-tenancy.md](../architecture/multi-tenancy.md).
 
 ## The tenant simulator (development only)
 

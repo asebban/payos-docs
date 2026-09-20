@@ -23,6 +23,7 @@ Internal design of PayOS for **architects** and anyone who needs to understand h
 16. [Connector framework class diagram](./connector-framework-class-diagram-v1-2026-09-02.md) — every production class of the connector framework across all five repositories, with inheritance/implementation/usage/instantiation relationships
 17. [Connector framework class reference](./connector-framework-class-reference-v1-2026-09-07.md) — guided class-by-class map of the connector framework by repository, lifecycle phase, execution flow, and debugging symptom
 18. [Observability metrics architecture](./observability-metrics-architecture-v1-2026-09-06.md) — Micrometer-backed PayOS metrics, Prometheus exposure, execution flows, class diagrams, and metric taxonomy
+19. [Identity-first tenant resolution & centralized transport security](./tenant-identity-resolution-plan-v4-2026-09-20.md) — implemented: authenticated principal is the primary tenant source ahead of `X-Tenant-Id`; principal resolution, API-key validation, and tenant scope opening are centralized in `Server.processRequest` rather than per transport; interactive Keycloak login stays HTTP-only; `TenantPolicyService` resolves its own principal directly rather than reading one stashed by another class
 
 ## Cross-cutting principles
 

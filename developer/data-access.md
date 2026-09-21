@@ -39,7 +39,11 @@ An application can declare entity/data-model mappings through `mapping-files` in
 
 ## Transactions and request scope
 
-Each request opens a database **request scope** before bindings are injected and closes it in the `finally` stage of the pipeline (`endRequestScope`). Work performed via `$DB` during the request participates in that scope; you do not manage connections manually.
+Each request opens a database **request scope** before bindings are injected and closes it in the `finally` stage of the pipeline (`endRequestScope`). Work performed via `$DB` during the request participates in that scope — including every nested endpoint-to-endpoint call the request makes via `$Api.get/post/put/delete` (same thread, in-process) — so you never manage connections manually.
+
+The same request scope now also carries **one transaction for the whole request**, opened automatically before your script runs and committed — or rolled back, if your script throws — exactly once, when the entry endpoint's response is ready. This holds across nested `$Api.*` calls too: an endpoint your script calls joins the same transaction and has no way to end it early or affect a caller further up the chain. There is no `beginTransaction`/`commitTransaction`/`rollbackTransaction` on `$DB` any more — a write is just a write; the platform decides when it becomes durable. See [database-service/docs/DynamicDataAccessService.md](../../database-service/docs/DynamicDataAccessService.md) §8 for the full mechanics.
+
+One escape hatch remains: `$DB.markRollbackOnly()`. Any endpoint in the call chain — the entry endpoint or one it calls — can flag the shared transaction so it can only be rolled back, even if the entry endpoint's own script never sees an error and returns what looks like a success response. The platform then overrides that response with `409 Conflict` rather than let a caller believe a rolled-back write succeeded. It's asymmetric on purpose: a script can request a rollback from anywhere, but only the platform ever decides to actually commit or end the transaction.
 
 ## Schema and isolation
 

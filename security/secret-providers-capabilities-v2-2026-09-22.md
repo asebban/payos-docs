@@ -1,8 +1,8 @@
 # Secret Providers — capacités exposées et guide technique d'exploitation
 
 Created: 2026-09-15
-Last updated: 2026-09-15
-Version: v1
+Last updated: 2026-09-22
+Version: v2
 
 Ce document répertorie, capacité par capacité, tout ce que les deux Secret Providers livrés avec PayOS (`secret-service-filesystem` et `secret-service-vault`) savent faire, et explique techniquement comment exploiter chaque capacité — signatures exactes, exemples de code Java, structure de stockage, mapping vers les moteurs Vault, et limites de sécurité connues. Il complète [architecture/secret-provider-architecture.md](../architecture/secret-provider-architecture.md) (contrat SPI, intégration kernel, cycle de vie `$Secrets`) sans le dupliquer : ce document-ci répond à « qu'est-ce que je peux faire avec un provider, et comment » plutôt qu'à « comment le kernel le charge ». Voir aussi [§6](#6-écart-avec-la-documentation-existante) pour un écart de documentation identifié pendant la rédaction de ce document.
 
@@ -92,6 +92,19 @@ provider.deleteSecret(tenantId, "stripe-api-key");
 **Filesystem** : chaque secret devient `<root>/<tenantId>/<name>.enc` (enveloppe AES/GCM/NoPadding : IV 12 octets + ciphertext + tag 128 bits) plus `<root>/<tenantId>/<name>.meta.json`. L'écriture passe par `<name>.enc.tmp` puis `Files.move(ATOMIC_MOVE, REPLACE_EXISTING)` — un lecteur concurrent voit toujours soit l'ancienne, soit la nouvelle version, jamais un fichier partiel. Le nom de secret est validé par la regex `[a-zA-Z0-9_.\-]+` (pas de `/`), et le `tenantId` par `[a-zA-Z0-9\-]+` — double protection contre le path traversal, vérifiée à la fois dans `AbstractSecretProvider` et dans `SecretPath`.
 
 **Vault** : chaque secret devient une entrée KV v2 à `<kvMount>/data/<tenantId>/<name>` (écriture/lecture) et `<kvMount>/metadata/<tenantId>/<name>` (describe/delete/list). La valeur est encodée en Base64 sous un champ JSON nommé d'après le secret lui-même (`<name>`), avec un champ `type` associé ; à la lecture, si le contenu n'est pas du Base64 valide, un fallback UTF-8 brut est tenté. `listSecrets` s'appuie sur l'opération Vault `LIST` (premier niveau du namespace uniquement).
+
+#### Hash déterministe (`ISecretProvider.hash`)
+
+Depuis la v2 de ce document, `ISecretProvider` porte une méthode par défaut `hash(String value)` qui renvoie le condensé SHA-256 de `value` en hexadécimal minuscule. Contrairement à toutes les autres méthodes du contrat, elle ne prend pas de `tenantId` et n'est ni scopée à un tenant ni adossée à une clé gérée par le provider : la sortie est purement fonction de l'entrée, identique quel que soit le provider configuré, reproductible en dehors de PayOS avec n'importe quelle implémentation SHA-256 standard. Comme c'est une méthode `default` de l'interface, **filesystem et Vault l'exposent tous les deux sans code spécifique** — aucune entrée `SecretCapability` dédiée n'a été ajoutée, puisqu'il ne s'agit pas d'une capacité qui varie d'un provider à l'autre.
+
+```java
+String digest = provider.hash("stripe-api-key");
+// "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" pour value = "hello"
+```
+
+**Ce que `hash` n'est pas** : ce n'est pas un HMAC ni un hash keyé — n'importe qui connaissant la valeur d'entrée peut reproduire la sortie sans accès au provider ni à un tenant. Ne pas l'utiliser pour dériver un identifiant qui doit rester impossible à deviner à partir d'une valeur candidate (ex. jeton de session, mot de passe) : pour ça, préférer `ICryptoSecretProvider.sign` (§3.4), qui est keyé par un secret géré par le provider. `hash` convient en revanche pour des cas comme la déduplication déterministe, un identifiant de cache, ou la comparaison de deux valeurs sans les exposer dans un log — dans ce dernier cas, voir aussi `SensitiveFieldMasker` pour le masquage de champs sensibles dans l'audit, qui répond à un besoin différent (masquer, pas identifier).
+
+Exposé côté script via le binding `$Secrets` : `$Secrets.hash(value)` — voir [developer/secrets-usage.md](../developer/secrets-usage.md#hashing).
 
 ### 3.2 Historique de versions (`IVersionedSecretProvider` — filesystem uniquement)
 

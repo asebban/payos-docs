@@ -82,11 +82,7 @@ Manage filesystem secrets with [`spm`](../cli-tools/spm.md) (the Secret Package 
 
 ## Rotation
 
-- **Application secrets:** rotate by writing the new value via `spm` (filesystem) or the Vault
-  CLI/API — not from scripts, since `$Secrets` doesn't expose writes (see
-  [developer/secrets-usage.md](../developer/secrets-usage.md)). Both providers track versions
-  (`describe` reports the current version); `filesystem` additionally keeps a readable version
-  history via `IVersionedSecretProvider` (Java API only, not yet exposed by `spm`).
+- **Application secrets:** rotate by writing the new value via `spm` (filesystem) or the Vault CLI/API, as part of a controlled rotation process — not ad hoc from a script's `$Secrets.set` (see [developer/secrets-usage.md](../developer/secrets-usage.md)), even though that call is technically available to scripts too. Both providers track versions (`describe` reports the current version); `filesystem` additionally keeps a readable version history via `IVersionedSecretProvider` (Java API only, not yet exposed by `spm`).
 - **Vault AppRole secret-id:** re-issue the `secret-id` periodically and update
   `${VAULT_SECRET_ID}`; PayOS picks it up on [reload](hot-reload.md) or restart.
 - **Filesystem master key / bundle key:** plan key rotation with re-encryption; coordinate

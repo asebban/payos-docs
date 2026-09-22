@@ -2,7 +2,7 @@
 
 **Audience :** architectes, tech leads, contributeurs au kernel  
 **Périmètre :** modules `payos-secret-api`, `secret-service-filesystem`, `secret-service-vault`, intégration kernel  
-**Dernière mise à jour :** 2026-07-03
+**Dernière mise à jour :** 2026-09-22
 
 ---
 
@@ -97,10 +97,12 @@ public interface ISecretProvider {
     List<String> listSecrets(String tenantId);
     SecretMetadata describeSecret(String tenantId, String name);
     Set<SecretCapability> capabilities();
+
+    default String hash(String value) { /* SHA-256 hex, implémentation fournie par l'interface */ }
 }
 ```
 
-Toutes les opérations prennent `tenantId` en premier paramètre. C'est **l'invariant d'isolation** : aucune opération ne peut être réalisée sans scope tenant.
+Toutes les opérations prennent `tenantId` en premier paramètre — sauf `hash`, seule méthode `default` de l'interface : elle ne dépend ni d'un tenant ni d'une clé gérée par le provider (condensé SHA-256 pur), donc chaque provider l'hérite telle quelle sans avoir à l'implémenter. C'est **l'invariant d'isolation** pour toutes les autres opérations : aucune ne peut être réalisée sans scope tenant.
 
 `capabilities()` permet à un appelant de tester dynamiquement ce qu'un provider sait faire avant d'invoquer une opération non supportée.
 
@@ -118,6 +120,7 @@ classDiagram
         +listSecrets(tenantId) List~String~
         +describeSecret(tenantId, name) SecretMetadata
         +capabilities() Set~SecretCapability~
+        +hash(value) String
     }
     class IVersionedSecretProvider {
         <<interface>>
@@ -567,9 +570,7 @@ public class SecretsBinding {
 }
 ```
 
-`setSecret`, `deleteSecret`, `describeSecret` et `capabilities()` ne sont **pas** exposés par
-`SecretsBinding` — ce sont des opérations Java directes sur `ISecretProvider`, réservées aux
-outils d'administration (`spm`, tests d'intégration) et aux implémentations de providers.
+Extrait simplifié : `SecretsBinding` expose aussi `set`/`delete` (écriture/suppression), `generateKey`/`generateKeyPair` (création de clé nommée symétrique/asymétrique), `encrypt`/`decrypt`/`sign`/`verify`, et `hash` — non montrés ci-dessus par souci de concision. Seuls `describeSecret` et `capabilities()` restent **non exposés** par `SecretsBinding` — ce sont des opérations Java directes sur `ISecretProvider`, réservées aux outils d'administration (`spm`, tests d'intégration) et aux implémentations de providers. Voir [developer/secrets-usage.md](../developer/secrets-usage.md) pour la surface complète et à jour.
 
 Le pattern try-with-resources assure le zeroing du `SecretValue` avant que la méthode retourne.
 
@@ -976,7 +977,7 @@ payos/ (kernel)
     SecretServiceInitializer      ← bootstrap
     SecretProviders               ← SPI loader + cache
   ma.s2m.payos.scripting/
-    SecretsBinding                ← binding $Secrets pour les scripts JS (get/list/tokenize/detokenize)
+    SecretsBinding                ← binding $Secrets pour les scripts JS (get/set/delete/list/tokenize/detokenize/generateKey/generateKeyPair/encrypt/decrypt/sign/verify/hash)
 ```
 
 **Règle de dépendance :**

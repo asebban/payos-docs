@@ -19,14 +19,18 @@ It contains:
 
 This module is API-only and does not ship a concrete secret backend.
 
+### ISecretProvider — core contract
+
+Beyond the tenant-scoped CRUD methods (`getSecret`, `setSecret`, `deleteSecret`, `listSecrets`, `describeSecret`) and `capabilities()`, `ISecretProvider` also declares `hash(String value)` as a `default` method with a built-in implementation (SHA-256, lowercase hex) — every provider gets it for free, with no `SecretCapability` flag and no `tenantId`/key involvement, since the output only depends on the input. See [architecture/secret-provider-architecture.md](secret-provider-architecture.md#isecretprovider--interface-noyau) and [security/secret-providers-capabilities-v2-2026-09-22.md](../security/secret-providers-capabilities-v2-2026-09-22.md#hash-déterministe-isecretproviderhash) for the full usage details.
+
 ## Capability Interfaces
 
 | Interface | Capability flag | Purpose |
 |---|---|---|
 | `IVersionedSecretProvider` | `VERSION` | Secret versioning and rollback |
 | `ICryptoSecretProvider` | `CRYPTO` | Generate a named internal **symmetric** key, then encrypt/decrypt/sign/verify data with it by name |
-| `IAsymmetricCryptoSecretProvider` | `ASYMMETRIC_CRYPTO` | Generate a named internal **key pair**, sign/verify with it by name, or verify against an arbitrary externally-supplied public key. Not implemented by either shipped provider yet — planned: Vault (Transit `rsa`/`ecdsa` key types) and filesystem (Bouncy Castle). See [architecture/secret-provider-architecture.md](../payos-docs/architecture/secret-provider-architecture.md). |
-| `ICertificateSecretProvider` | `CERTIFICATE_AUTHORITY` | Per-tenant CA: issue X.509 certificates (from a CSR, or for an internally-held key pair), fetch the CA certificate, revoke. Not implemented by either shipped provider yet. |
+| `IAsymmetricCryptoSecretProvider` | `ASYMMETRIC_CRYPTO` | Generate a named internal **key pair**, sign/verify with it by name, or verify against an arbitrary externally-supplied public key. Both shipped providers implement it (Vault via the Transit engine, filesystem via Bouncy Castle) — see [architecture/secret-provider-architecture.md](secret-provider-architecture.md). |
+| `ICertificateSecretProvider` | `CERTIFICATE_AUTHORITY` | Per-tenant CA: issue X.509 certificates (from a CSR, or for an internally-held key pair), fetch the CA certificate, revoke. Both shipped providers implement it. |
 | `IWatchableSecretProvider` | — | Live reload on secret changes |
 | `ITokenProvider` | `TOKENIZE` | Store sensitive values behind opaque tokens (UUID v4) |
 

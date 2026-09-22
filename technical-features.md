@@ -643,7 +643,7 @@ const token = $Secrets.get("external-api-token");
 $Response.setJsonBody({ ok: true });
 ```
 
-Les secrets sont scopés au tenant courant : l'accès est isolé par tenant sans configuration supplémentaire. `$Secrets` n'expose pas d'écriture (`set`/`delete`/`describe`) — ces opérations passent par `spm`, l'API Vault, ou l'API Java directe.
+Les secrets sont scopés au tenant courant : l'accès est isolé par tenant sans configuration supplémentaire. `$Secrets` expose aussi `set`/`delete` (écriture/suppression) et la génération de clés nommées (`generateKey`/`generateKeyPair`) ; seule la lecture de métadonnées (`describe`) reste réservée à `spm`, l'API Vault, ou l'API Java directe.
 
 **Intérêt sécurité :** les credentials (clés API, mots de passe, certificats) ne transitent pas dans les fichiers de configuration. Le provider est remplaçable sans modifier les scripts (Vault est déjà livré ; KMS cloud, HSM, etc. peuvent être ajoutés via un connecteur custom).
 

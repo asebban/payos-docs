@@ -65,7 +65,12 @@ services are reinitialized and the previous session factory is retired after
 An application may carry its own `database-service` object to use a different database than
 the global one. See [developer/application-model.md](../developer/application-model.md).
 
+## Reference/master data shared by every tenant
+
+`database-service` is always tenant-scoped — see [Multi-tenancy interaction](#multi-tenancy-interaction) above. For data that must **not** be duplicated per tenant (a country or currency table), see [platform-database-service.md](platform-database-service.md) — a separate, optional database backing `$PlatformDB`.
+
 ## Next
 
 - [developer/data-access.md](../developer/data-access.md)
 - [architecture/data-architecture.md](../architecture/data-architecture.md)
+- [configuration/platform-database-service.md](platform-database-service.md) — the tenant-independent counterpart, for reference/master data.

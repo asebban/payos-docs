@@ -70,6 +70,17 @@ Per-tenant request quotas (`requestsPerMinute`, `enabled`) are configured at the
 
 `multitenancy.tenantSimulator` provides a fallback tenant for **development and testing only**, so a developer can exercise tenant-scoped behavior without sending `X-Tenant-Id`. It must not be enabled in production, where a real tenant id is always required.
 
+## Platform-scoped database (`$PlatformDB`)
+
+Everything above describes `$DB`: every read gets a `tenantId` predicate added, every write gets a `tenantId` column set, automatically (`DynamicDataAccessService.withTenantInEntity`/`applyTenantFilterToReadQuery`/`enforceTenantOnLoadedEntity` in the `database-service` connector). Some data is deliberately **not** tenant-scoped — reference/master data like a country or currency table, identical for every tenant, that would be wasteful and risky to duplicate per tenant. For that case, PayOS supports an optional second, genuinely separate database: [`platform-database-service`](../configuration/platform-database-service.md), reachable from scripts as [`$PlatformDB`](../developer/platform-database-usage.md).
+
+This is a **separate physical connection**, not a flag that suppresses tenant filtering on `$DB` itself, for two concrete reasons:
+
+- **The ambient tenant is process-wide, not per-connection.** `DynamicDataAccessService`'s current-tenant tracking (`CURRENT_TENANT`) is a `static` `ThreadLocal` — shared by every instance of the class running on the same thread. A second `IDatabaseService` instance sharing `$DB`'s connection would still pick up whatever tenant `$DB` set for the request unless it explicitly ignored that ambient state (which is exactly what the platform-scoped constructor does — see `DynamicDataAccessService`'s Javadoc on its `TenantConfig`-only constructor).
+- **A single dedicated database keeps the request's transaction semantics honest.** `$DB` and `$PlatformDB` are independent transactions, each owned by the kernel's own request-scope lifecycle (`beginRequestScope`/`commitRequestScope`/`rollbackRequestScope`/`endRequestScope`, called for both in `ApiResourceHandler`, mirroring the [single-transaction-per-request model](../developer/data-access.md#transactions-and-request-scope) `$DB` already uses). By convention (not platform-enforced), a given request writes through only one of the two — see [developer/platform-database-usage.md](../developer/platform-database-usage.md#db-and-platformdb-are-independent-transactions) for what that does and doesn't guarantee.
+
+Unlike `database-service`, `platform-database-service` has no per-tenant routing at all: one JDBC/Hikari connection pool, one `SessionFactory`, one Hibernate mapping set, built once at startup and reused for the runtime's whole lifetime, regardless of which tenant is making the request.
+
 ## Traceability
 
 The combination of `X-Tenant-Id` and `X-Correlation-Id` is mandatory cross-transport metadata. Both are propagated unchanged through context, logs, responses, and async processing, and both appear in error responses and audit logs to support regulated incident investigation. See [operations/observability.md](../operations/observability.md).
@@ -78,3 +89,5 @@ The combination of `X-Tenant-Id` and `X-Correlation-Id` is mandatory cross-trans
 
 - [Security architecture](security-architecture.md) — how authenticated tenants are derived.
 - [Data architecture](data-architecture.md) — per-tenant schemas and isolation.
+- [Configuration: platform database service](../configuration/platform-database-service.md) — `$PlatformDB`'s configuration.
+- [Developer: platform database usage](../developer/platform-database-usage.md) — `$PlatformDB`'s API surface.

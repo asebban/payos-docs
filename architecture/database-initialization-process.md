@@ -1,6 +1,6 @@
 # Schéma d'initialisation du service de base de données
 
-Dernier alignement: 2026-03-27
+Dernier alignement: 2026-09-22
 
 ```mermaid
 flowchart TD
@@ -35,6 +35,22 @@ flowchart TD
     X --> Y[script calls $DB.*]
     Y --> Z[DynamicDataAccessService.openTenantSession lazy + tx handling]
     Z --> AA[dbService.endRequestScope]
+
+    AB["DatabaseServiceInitializer.initializePlatform(settings)"] --> AC{"platform-database-service\nprésent ?"}
+    AC -->|non| AD["log WARN + PayOSConfig.setPlatformDatabaseService(null)"]
+    AC -->|oui| AE["parse configuration.* + mapping-files\n(échoue si mapping-files vide)"]
+    AE --> AF["buildPlatformDataSource(...) — pool Hikari dédié"]
+    AF --> AG["DatabaseTenantDefinition (sans routage par tenant)"]
+    AG --> AH["ServiceLoader<IDatabaseServiceFactory>.createPlatform(...)"]
+    AH --> AI["DynamicDatabaseServiceFactory.createPlatform(...)"]
+    AI --> AJ["new DynamicDataAccessService(TenantConfig) — mode platformScoped"]
+    AJ --> AK["PayOSConfig.setPlatformDatabaseService(dbService)"]
+
+    AK --> V
+    V --> AL[platformDatabaseService.beginRequestScope]
+    AL --> AM["$PlatformDB injecté dans le moteur de script"]
+    AM --> AN["script appelle $PlatformDB.* — jamais de filtre tenantId"]
+    AN --> AO[platformDatabaseService.endRequestScope]
 ```
 
 # Enchaînement des appels importants
@@ -64,6 +80,18 @@ flowchart TD
   - crée SessionFactory tenant avec propriétés DB + mappings tenant
   - ouvre Session, applique schema si configuré
   - executeInTransaction(...) commit/rollback seulement si la méthode “possède” la transaction.
+- Initialisation Platform DB (optionnelle, backing `$PlatformDB`):
+  - BootServer.main(...) (démarrage) et BootServer.reloadConfiguration(...) (hot reload) appellent DatabaseServiceInitializer.initializePlatform(settings) juste après initialize(settings).
+  - si le bloc `platform-database-service` est absent: log WARN, PayOSConfig.setPlatformDatabaseService(null), retourne null — pas d'échec du démarrage.
+  - si présent: parse `configuration.*` (mêmes clés que `database-service.configuration`) et `mapping-files` (obligatoire — IllegalStateException si vide après résolution).
+  - ferme l'éventuel pool Hikari platform précédent (hot reload), puis construit un nouveau pool dédié (`buildPlatformDataSource`).
+  - construit un DatabaseTenantDefinition unique (pas de boucle par tenant, pas de tenantRegistry) et appelle IDatabaseServiceFactory.createPlatform(...) via ServiceLoader.
+  - DynamicDatabaseServiceFactory.createPlatform(...) → new DynamicDataAccessService(TenantConfig) — le constructeur platform-scoped (pas celui à base de tenantRegistry).
+  - publication globale: PayOSConfig.setPlatformDatabaseService(...).
+- Exécution requête API (Platform DB):
+  - ApiResourceHandler prend aussi PayOSConfig.getPlatformDatabaseService() (indépendamment de databaseService).
+  - beginRequestScope()/commitRequestScope()/rollbackRequestScope()/endRequestScope() appelés en parallèle de ceux de $DB — deux transactions indépendantes, jamais partagées.
+  - `resolveTenantIdForCurrentPolicy()` retourne toujours `null` pour cette instance (court-circuit avant toute lecture du ThreadLocal CURRENT_TENANT — voir §6 de database-service/docs/DynamicDataAccessService.md), donc aucune des 3 mécaniques d'isolation par tenant ne s'applique.
 
 # Structures de données utilisées
 
@@ -88,4 +116,10 @@ flowchart TD
   - requestScopeDepth : ThreadLocal<Integer>
     - profondeur pour gérer les appels imbriqués sans fermer trop tôt.
   - CURRENT_TENANT : ThreadLocal<String> (+ MDC fallback)
-    - résolution automatique du tenant courant.
+    - résolution automatique du tenant courant — statique, partagé par toute instance de DynamicDataAccessService sur le même thread (d'où le besoin du flag platformScoped ci-dessous plutôt que d'une simple absence de tenant ambiant).
+  - platformScoped : boolean (final, posé au constructeur)
+    - si vrai, resolveTenantIdForCurrentPolicy() retourne null immédiatement, sans lire CURRENT_TENANT/MDC ni consulter tenantRegistry.
+- PayOSConfig.platformDatabaseService : IDatabaseService
+  - publié par DatabaseServiceInitializer.initializePlatform(...), consommé par ApiResourceHandler pour injecter $PlatformDB — instance séparée de PayOSConfig.databaseService.
+- DatabaseServiceInitializer.previousPlatformDataSource : DataSource (static)
+  - référence l'ancien pool Hikari platform pour le fermer proprement au prochain appel d'initializePlatform (hot reload).

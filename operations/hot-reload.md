@@ -60,6 +60,8 @@ gracefully**: it is closed after
 This avoids tearing connections out from under active requests. See
 [configuration/database-service.md](../configuration/database-service.md).
 
+**`platform-database-service` does not get the same grace period.** When it changes, the previous connection pool backing `$PlatformDB` is closed immediately and synchronously — there is no delayed-close equivalent yet. Avoid reloading configuration that changes `platform-database-service` while requests actively using `$PlatformDB` are in flight. See [configuration/platform-database-service.md](../configuration/platform-database-service.md).
+
 ## What to expect operationally
 
 - Edits to watched files are picked up automatically — no `/stop` + relaunch needed for

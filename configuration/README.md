@@ -32,6 +32,7 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | `security` | [security-oidc.md](security-oidc.md)<br>[oidc-configuration-guide.md](oidc-configuration-guide.md) | OIDC/pac4j authentication, sessions (including the pluggable `sessionStoreType`/Redis distributed backend), CORS; the second link is the full walkthrough guide (providers, precedence, discovery URI resolution, quickstart). |
 | `multitenancy` | [multi-tenancy.md](multi-tenancy.md) | Tenant policy, quotas, isolation, simulator. |
 | `database-service` | [database-service.md](database-service.md) | JDBC/Hibernate connection and pooling. |
+| `platform-database-service` | [platform-database-service.md](platform-database-service.md) | Optional second, tenant-independent database backing `$PlatformDB` — reference/master data shared by every tenant. |
 | `queue-service` | [queue-service.md](queue-service.md) | MoM connector (e.g. NATS). |
 | `notification-service` | [notification-service.md](notification-service.md) | Publisher-side `$Notification` connector — independent from `queue-service`. |
 | `secret-service` | [secret-service.md](secret-service.md) | Secret provider (`filesystem`/`vault`). |

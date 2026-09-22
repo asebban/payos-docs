@@ -70,3 +70,4 @@ without a configured connector, the binding will be absent. Configure the
 
 - [Configuration: database service](../configuration/database-service.md)
 - [Architecture: data architecture](../architecture/data-architecture.md)
+- [Platform database usage (`$PlatformDB`)](platform-database-usage.md) — the tenant-independent counterpart to `$DB`, for reference/master data shared by every tenant.

@@ -88,7 +88,7 @@ A service adapter is a JAR in `service-adapters-dir`. `ServiceAdapterLoader` bui
 
 | Service | SPI factory | `type()` examples | Script binding |
 | --- | --- | --- | --- |
-| Database | `IDatabaseServiceFactory` | (kernel-managed, no type) | `$DB` |
+| Database | `IDatabaseServiceFactory` | (kernel-managed, no type) | `$DB`, and `$PlatformDB` via the same factory's `createPlatform(...)` method (a `default` that throws `UnsupportedOperationException` unless overridden — see [architecture/database-initialization-process.md](database-initialization-process.md) and [configuration/platform-database-service.md](../configuration/platform-database-service.md)) |
 | Queue | `IQueueClientFactory` | `nats` | `$Queue` |
 | Secrets | `ISecretProviderFactory` | `filesystem`, `vault` | `$Secrets` |
 | Webhooks | `IWebhookDispatcherFactory` | `http` | `$WebHooks` (dispatch) |

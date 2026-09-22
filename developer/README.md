@@ -13,6 +13,7 @@ For developers **building applications on PayOS**. Applications are written prim
 5.1. [Créer une interface utilisateur Vue.js (FR)](writing-vue-uis.md) — building a PayOS Vue UI app: main components, writing/registering a page served at `.../page/...`, async reusable components, and importing normal (non-async) Vue components/libraries.
 6. [Scripting bindings reference](scripting-bindings.md) — every `$` binding and its use.
 7. [Data access](data-access.md) — using `$DB`.
+7.1. [Platform database usage](platform-database-usage.md) — using `$PlatformDB`, the tenant-independent counterpart to `$DB` for reference/master data.
 8. [Secrets usage](secrets-usage.md) — using `$Secrets`.
 9. [Vault secret-id secure injection](vault-secret-id-secure-injection.md) — securely injecting the Vault AppRole `secret-id` used by `$Secrets`.
 10. [Cache usage](cache-usage.md) — using `$Cache` (distributed `memory`/`redis` cache, shared across instances/bundles).

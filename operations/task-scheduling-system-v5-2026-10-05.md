@@ -1,6 +1,6 @@
 Created: 2026-10-02
-Last updated: 2026-10-02
-Version: 3
+Last updated: 2026-10-05
+Version: 5
 
 # Task Scheduling System (`payos-job-scheduler`)
 
@@ -135,6 +135,34 @@ One file per tenant directory under the jobs root. A tenant routinely declares s
 - `trigger.expression` — a standard Quartz cron expression.
 - `parallelizable` — parsed and stored, not yet enforced (every job currently schedules as parallel-safe).
 
+### `jobs/platform-jobs.json` — platform-level jobs
+
+A single file sitting directly under the `jobs/` root — **not** nested in any tenant directory. A platform-level job has no tenant owner; it's identified by `JobDefinition.tenantId() == null`, a plain null check, never a `"platform"` string sentinel (that literal is used only for the Quartz job group/log display — see below — and never flows back into the job's actual tenant field). Same entry schema as a tenant's `jobs.json` (`JobConfigLoader` shares its entry-parsing code between the two), same filtering rules (only `implementation.type: "script"` + `trigger.type: "cron"` loaded today).
+
+```json
+{
+  "jobs": [
+    {
+      "id": "reference-data-refresh",
+      "implementation": {
+        "type": "script",
+        "script": "jobs/refresh-reference-data.js",
+        "mappingFiles": ["/opt/payos-tss/model/Currency.hbm.xml"]
+      },
+      "trigger": {
+        "type": "cron",
+        "expression": "0 0 3 * * ?"
+      },
+      "parallelizable": false
+    }
+  ]
+}
+```
+
+A platform-level job's script gets **no `$DB` global at all** (there is no tenant to open a session for — `typeof $DB === 'undefined'`) and a **read+write** `$PlatformDB` (`PlatformJobDatabaseBinding`): writing its own platform data — a shared reference-data refresh, as above — is exactly what a platform-level job is for. Compare a tenant job's `$PlatformDB`, which is **read-only** (`PlatformDatabaseBinding`, no `save`/`update`/`delete`/`deleteById`/`executeUpdate` method at all) — a tenant job reading cross-tenant platform data is outside its own tenant's scope, so it can look but never write. Scheduled under the Quartz job group `"platform"` (`SchedulerBootstrap`'s `PLATFORM_GROUP` constant) instead of a tenant id, purely so logs/`JobKey` lookups stay readable rather than falling into Quartz's own generic `"DEFAULT"` group.
+
+A `jobs/` root with no `platform-jobs.json` at all is not an error — same as a tenant directory with no `jobs.json`.
+
 ### The shared script pool
 
 `scriptLoader` (the function that turns a `scriptPath` into script source) has no `tenantId` parameter, so script files live in **one shared location**, keyed only by `scriptPath` — not nested under each tenant's own directory. In production this is `FileSystemScriptLoader`, which resolves `scriptPath` against `--scheduler-base-dir` directly: `implementation.script: "jobs/reconciliation.js"` reads `<scheduler-base-dir>/jobs/reconciliation.js`. Different tenants can schedule the exact same `scriptPath` — they read the identical file, just on their own cron schedule and against their own tenant's `$DB` (the `(scriptPath, tenantId)` Quartz `JobKey` is what keeps the two executions independent). A missing script file is not a startup error — it fails that specific job execution with a diagnostic naming the path, the first time it's triggered.
@@ -150,6 +178,27 @@ TSS does **not** duplicate PayOS's tenant/database configuration model — it re
 In both modes, each tenant's connection is resolved via `DatabaseServiceInitializer.resolveTenantDatabaseConnections` — the exact same database-declaration/tenant-reference/default-fallback rules the kernel itself applies at boot (a named `database-service.name` reference, or a fallback to the root default database). Only tenants with at least one job under `jobs/` are resolved into TSS's own registry; a tenant with jobs but no matching `multitenancy.tenants` entry in the PayOS config fails startup with a diagnostic naming the tenant.
 
 `$PlatformDB` is resolved the same way in both modes now — standalone mode calls the kernel's own, unmodified `DatabaseServiceInitializer.initializePlatform(...)`; embedded mode reuses the host's already-initialized platform service. In both cases, a `platform-database-service` block that isn't declared simply means `$PlatformDB` is not bound for that execution — not an error.
+
+Yes — `platform-database-service` is its own top-level block in one of PayOS's `configDir` `*.json` files (the same files `multitenancy`/`database-service` live in, not `tss-config.json`), with a `configuration` sub-block (same key names as a tenant `database-service`'s own `configuration` block) plus a required `mapping-files` array — `initializePlatform` fails startup with a diagnostic if the block is declared but `mapping-files` resolves to zero entries.
+
+```json
+{
+  "platform-database-service": {
+    "configuration": {
+      "url": "jdbc:postgresql://db.internal:5432/payos_platform",
+      "username": "platform_svc",
+      "driver_class": "org.postgresql.Driver",
+      "dialect": "org.hibernate.dialect.PostgreSQLDialect",
+      "ddl-auto": "validate",
+      "schema": "platform",
+      "max-pool-size": 10
+    },
+    "mapping-files": ["model/Currency.hbm.xml", "model/Country.hbm.xml"]
+  }
+}
+```
+
+`password` is omitted here for the same reason as `tss-config.json`'s `dbPassword` above — but this file is read through the kernel's own `ConfigLoader.loadConfigByDirectory`, which (unlike TSS's own `tss-config.json` loader) runs `EnvVarResolver.resolve(...)` on every file it loads, expanding `${VAR}`-style tokens (including the `${VAR:-default}`/`${file:/path}`/etc. forms it supports). A real deployment typically sets `"password": "${PLATFORM_DB_PASSWORD}"` here rather than a literal secret. Every `mapping-files` entry is a Hibernate mapping file for the platform's own reference-data entities (e.g. shared currency/country tables) — see [Known limitation: relative file paths](#known-limitation-relative-file-paths) below if using a relative path here.
 
 TSS never names the concrete database-service implementation anywhere in its own code: `TenantDatabaseRegistryLoader` produces `Map<String, DatabaseTenantDefinition>` (a plain, framework-neutral `payos-foundation` type), and the actual `IDatabaseService` is built from it via `ServiceLoader<IDatabaseServiceFactory>` — the same SPI mechanism, and the same provider (`dynamic-database-service`'s `DynamicDatabaseServiceFactory`), the kernel itself uses.
 

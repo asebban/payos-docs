@@ -1,6 +1,6 @@
 Created: 2026-10-02
 Last updated: 2026-10-05
-Version: 5
+Version: 6
 
 # Task Scheduling System (`payos-job-scheduler`)
 
@@ -135,6 +135,35 @@ One file per tenant directory under the jobs root. A tenant routinely declares s
 - `trigger.expression` — a standard Quartz cron expression.
 - `parallelizable` — parsed and stored, not yet enforced (every job currently schedules as parallel-safe).
 
+### `jobs/<tenantId>/custom-jobs.json` — tenant-scoped overrides and additions
+
+A second, optional file in the same tenant directory as `jobs.json`, for a tenant integrator's own jobs — either a brand-new job, or an override of an editor-provided `jobs.json` entry at the same `scriptPath`. Loaded after `jobs.json` and merged into the same per-tenant job map, so a matching `scriptPath` is replaced; a new one is simply added. Same entry schema and filtering rules as `jobs.json`, with one addition: every entry **must** declare a `tenant` field matching the enclosing directory exactly — a mismatch, or an absent field, causes that entry to be rejected (logged, skipped), never silently trusted or defaulted.
+
+```json
+{
+  "jobs": [
+    {
+      "id": "tenant-override-reconciliation",
+      "implementation": {
+        "type": "script",
+        "script": "jobs/reconciliation.js",
+        "mappingFiles": ["/opt/payos-tss/model/Invoice.hbm.xml"]
+      },
+      "tenant": "acme-corp",
+      "trigger": {
+        "type": "cron",
+        "expression": "0 30 2 * * ?"
+      },
+      "parallelizable": false
+    }
+  ]
+}
+```
+
+In this example, if tenant `acme-corp`'s `jobs.json` already declares a job at `jobs/reconciliation.js`, this entry replaces it entirely (different cron expression, in this case); if it doesn't, this entry is simply added as a new job. A `custom-jobs.json` entry can never reach another tenant's job or a platform-level job, even when it declares the exact same literal `scriptPath` — the merge happens entirely within this one tenant's own job map, and `(tenantId-or-"platform", scriptPath)`, not `scriptPath` alone, is what Quartz actually keys on (see [The shared script pool](#the-shared-script-pool) below).
+
+A tenant directory with no `custom-jobs.json` at all is not an error — same as a missing `jobs.json`.
+
 ### `jobs/platform-jobs.json` — platform-level jobs
 
 A single file sitting directly under the `jobs/` root — **not** nested in any tenant directory. A platform-level job has no tenant owner; it's identified by `JobDefinition.tenantId() == null`, a plain null check, never a `"platform"` string sentinel (that literal is used only for the Quartz job group/log display — see below — and never flows back into the job's actual tenant field). Same entry schema as a tenant's `jobs.json` (`JobConfigLoader` shares its entry-parsing code between the two), same filtering rules (only `implementation.type: "script"` + `trigger.type: "cron"` loaded today).
@@ -159,7 +188,7 @@ A single file sitting directly under the `jobs/` root — **not** nested in any 
 }
 ```
 
-A platform-level job's script gets **no `$DB` global at all** (there is no tenant to open a session for — `typeof $DB === 'undefined'`) and a **read+write** `$PlatformDB` (`PlatformJobDatabaseBinding`): writing its own platform data — a shared reference-data refresh, as above — is exactly what a platform-level job is for. Compare a tenant job's `$PlatformDB`, which is **read-only** (`PlatformDatabaseBinding`, no `save`/`update`/`delete`/`deleteById`/`executeUpdate` method at all) — a tenant job reading cross-tenant platform data is outside its own tenant's scope, so it can look but never write. Scheduled under the Quartz job group `"platform"` (`SchedulerBootstrap`'s `PLATFORM_GROUP` constant) instead of a tenant id, purely so logs/`JobKey` lookups stay readable rather than falling into Quartz's own generic `"DEFAULT"` group.
+A platform-level job's script gets **no `$DB` global at all** (there is no tenant to open a session for — `typeof $DB === 'undefined'`) and a **read+write** `$PlatformDB` (`PlatformJobDatabaseBinding`): writing its own platform data — a shared reference-data refresh, as above — is exactly what a platform-level job is for. Compare a tenant job's `$PlatformDB`, which is **read-only** (`PlatformDatabaseBinding`, no `save`/`update`/`delete`/`deleteById`/`executeUpdate` method at all) — a tenant job reading cross-tenant platform data is outside its own tenant's scope, so it can look but never write. Scheduled under the Quartz job group `"platform"` (`IJobConfigSpec.PLATFORM_LABEL`, the one shared constant `JobConfigLoader` and `SchedulerBootstrap` both reference) instead of a tenant id, purely so logs/`JobKey` lookups stay readable rather than falling into Quartz's own generic `"DEFAULT"` group.
 
 A `jobs/` root with no `platform-jobs.json` at all is not an error — same as a tenant directory with no `jobs.json`.
 

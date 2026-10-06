@@ -8,7 +8,7 @@ For **operators** running PayOS in production: deployment, bundle encryption, se
 | --- | --- |
 | Deploying the runtime and bundles | [deployment.md](deployment.md) |
 | Running the notification service daemon | [notification-service.md](notification-service.md) |
-| Running the Task Scheduling System (TSS) — standalone or embedded | [task-scheduling-system-v6-2026-10-05.md](task-scheduling-system-v6-2026-10-05.md) |
+| Running the Task Scheduling System (TSS) — standalone or embedded | [task-scheduling-system-v7-2026-10-06.md](task-scheduling-system-v7-2026-10-06.md) |
 | Encrypting/packing bundles (`edc`) | [bundle-encryption.md](bundle-encryption.md) |
 | Managing secrets (Vault, rotation, `spm`) | [secrets-management.md](secrets-management.md) |
 | Logging, correlation, tenancy, audit | [observability.md](observability.md) |

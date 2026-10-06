@@ -1,6 +1,6 @@
 Created: 2026-10-02
-Last updated: 2026-10-05
-Version: 6
+Last updated: 2026-10-06
+Version: 7
 
 # Task Scheduling System (`payos-job-scheduler`)
 
@@ -46,7 +46,7 @@ java -jar payos-job-scheduler-<version>.jar --scheduler-base-dir /opt/payos-tss
 
 ### TSS's own database (`tss-config.json`)
 
-This is **TSS's own isolated schema** — the Quartz `QRTZ_*` tables (and `tss_job_execution` in a future story) — never a tenant or platform database. Resolved through `StandaloneConfigLoader`'s three-tier model, in priority order: environment variable → system property of the same name → a field in `tss-config.json`, nested under the matching block below. `TSS_CONFIG_FILE` (env var/system property) locates the JSON file itself; it defaults to `tss-config.json` in the scheduler base directory.
+This is **TSS's own isolated schema** — the Quartz `QRTZ_*` tables and `tss_job_execution` — never a tenant or platform database. Resolved through `StandaloneConfigLoader`'s three-tier model, in priority order: environment variable → system property of the same name → a field in `tss-config.json`, nested under the matching block below. `TSS_CONFIG_FILE` (env var/system property) locates the JSON file itself; it defaults to `tss-config.json` in the scheduler base directory.
 
 | Env var / property | JSON field (under `"database"`) | Default | Purpose |
 | --- | --- | --- | --- |
@@ -234,6 +234,39 @@ TSS never names the concrete database-service implementation anywhere in its own
 ### Known limitation: relative file paths
 
 Two things resolve relative paths against the JVM's **current working directory**, not `--scheduler-base-dir` or any PayOS base directory — a pre-existing kernel behavior TSS inherits unchanged, not something introduced by this module: a relative `jdbc:h2:file:...` URL, and a relative Hibernate mapping-file path declared without an `applications`-style base path (which includes every `implementation.mappingFiles` entry in `jobs.json`, and `platform-database-service.mapping-files`). Use **absolute** paths for both in any deployment where the process's working directory isn't guaranteed to be the scheduler base directory — this is the only reliable option today.
+
+## Execution history (`tss_job_execution`)
+
+TSS records every job execution in a table named `tss_job_execution`, in the same isolated schema as the Quartz `QRTZ_*` tables above (`TSS_DB_URL`/`tss-config.json`'s `database` block) — never a tenant or platform database. It reuses Quartz's own already-running connection pool rather than opening a second one.
+
+Like Quartz's own schema, **TSS never creates this table at runtime.** Apply the checked-in DDL once, before starting TSS against a fresh schema: `src/main/resources/db/migration/tss_job_execution.sql` (shipped in the module's source tree, not in the runnable jar — copy it out, or keep a checkout of `payos-job-scheduler` around for this one file). It is plain, portable ANSI SQL and runs against PostgreSQL, Oracle, or H2 without modification.
+
+Each execution is written in **two phases**, the same row throughout (keyed by `fire_instance_id`, never a second row for the same execution): a row is inserted the instant the execution starts, and updated in place when it completes.
+
+| Column | Meaning |
+| --- | --- |
+| `fire_instance_id` | Primary key — Quartz's own unique id for this one firing. |
+| `job_id` | The job definition's declared `id` (not unique by itself — see `jobs.json`'s own `id` note above). |
+| `tenant_id` | `NULL` for a platform-level job. |
+| `script_path` | The job's script path. |
+| `node` | Which cluster node ran this execution (`Scheduler.getSchedulerInstanceId()` — the per-node id, not the shared `TSS_SCHEDULER_INSTANCE_NAME`). |
+| `started_at` | Set on insert. |
+| `completed_at` | `NULL` while the execution is still in progress — this is what "currently executing" means. |
+| `outcome` | `NULL` until completion; then `SUCCESS` or `SCRIPT_ERROR`. |
+| `failure_message` | Set only when `outcome = 'SCRIPT_ERROR'`. |
+
+TSS has no network API for this (or anything else — see the shared script pool note above): the table itself is the query interface. Two examples an operator or support engineer would run directly against TSS's database:
+
+```sql
+-- Everything currently executing, cluster-wide (not just on the node you happen to be connected through)
+SELECT * FROM tss_job_execution WHERE completed_at IS NULL;
+
+-- A specific job's recent history
+SELECT * FROM tss_job_execution
+WHERE job_id = 'reconciliation-daily'
+ORDER BY started_at DESC
+LIMIT 20;
+```
 
 ## Clustering
 

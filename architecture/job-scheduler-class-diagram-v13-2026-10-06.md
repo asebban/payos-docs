@@ -1,12 +1,13 @@
 Created : 2026-09-30
-Dernière mise à jour : 2026-10-02
-Version : v12
+Dernière mise à jour : 2026-10-06
+Version : v13
 
 # Diagramme de classes — Task Scheduling System (`payos-job-scheduler`)
 
 **Audience :** architectes, tech leads, contributeurs à `payos-job-scheduler`, `database-service`, `payos-foundation` et `payos` (kernel)
-**Périmètre :** toutes les classes de production créées jusqu'ici pour TSS (Stories 1.1 et 1.2, y compris la résolution du gap AC1), plus les classes d'appui touchées dans `database-service`, `payos-foundation` et `payos` (kernel)
-**Document vivant :** ce diagramme sera mis à jour au fil des prochaines stories (1.3 à 1.5, puis Epic 2) — voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour ce qui manque encore.
+**Périmètre :** les Stories 1.1 et 1.2 (§4-8, 10-11, y compris la résolution du gap AC1), **plus les Stories 2.1 et 2.2 de l'Epic 2** (§13 — package `history/`, détection de misfire, quota de concurrence par tenant, requêtes d'historique), plus les classes d'appui touchées dans `database-service`, `payos-foundation` et `payos` (kernel).
+**Trou connu, assumé, pas caché :** les Stories 1.3, 1.4 et 1.5 de l'Epic 1 (jobs de niveau plateforme, `custom-jobs.json`, `ExclusiveScriptJob`/`@DisallowConcurrentExecution`) ne sont **pas encore** couvertes par ce diagramme malgré leur statut `done` — ce document n'a pas été tenu à jour entre la Story 1.2 et la Story 2.1/2.2. Voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour le détail exact de ce qui manque. Les classes citées au §13 qui dépendent de mécanismes introduits par ces stories manquantes (ex. `ExclusiveScriptJob`) sont signalées comme telles plutôt que silencieusement supposées déjà connues.
+**Document vivant :** ce diagramme sera mis à jour au fil des prochaines stories — voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour ce qui manque encore.
 
 ---
 
@@ -24,6 +25,7 @@ Version : v12
 10. [Flux d'exécution complet, pas à pas](#10-flux-dexécution-complet-pas-à-pas)
 11. [Un piège de nommage à connaître](#11-un-piège-de-nommage-à-connaître)
 12. [Références](#12-références)
+13. [Stories 2.1 et 2.2 — le package `history/`, misfire, quota de concurrence](#13-stories-21-et-22--le-package-history-misfire-quota-de-concurrence)
 
 ---
 
@@ -715,16 +717,16 @@ classDiagram
 
 ## 9. État d'avancement — ce qui n'est pas encore construit
 
-Ce diagramme couvre les Stories 1.1 (infrastructure de clustering) et 1.2 (enregistrement + exécution d'un job script sur planification cron), y compris la résolution du gap AC1. Restent, dans l'Epic 1 :
+Les §4-8 et 10-11 couvrent les Stories 1.1 (infrastructure de clustering) et 1.2 (enregistrement + exécution d'un job script sur planification cron), y compris la résolution du gap AC1. Le §13 couvre les Stories 2.1 et 2.2 de l'Epic 2 (ajouté 2026-10-06). **Restent non documentées ici, malgré un statut `done`** — un vrai trou, pas une omission mineure :
 
 - ~~**Câblage `registerScriptJobs` en production.**~~ **Résolu 2026-10-01.** `StandaloneMain`/`RuntimeIntegrationHook` chargent désormais `jobs/`, résolvent le registre tenant (`TenantDatabaseRegistryLoader` + `DatabaseServiceInitializer.resolveTenantDatabaseConnections`, kernel) et appellent `registerScriptJobs(...)` — voir §7 pour le détail complet et la Story 1.2 (note de résolution de la Task 5) pour l'historique de la décision (options considérées, choix hybride de l'utilisateur).
-- **Story 1.3** — enregistrement de niveau plateforme (jobs sans tenant) et accès cross-tenant en lecture seule.
-- **Story 1.4** — `custom-jobs.json`, logique de surcharge tenant-scopée, `RegistrationValidationException` (mentionnée dans architecture.md mais pas encore créée).
-- **Story 1.5** — application réelle du flag `parallelizable` via une deuxième classe de job (`ExclusiveScriptJob`, avec `@DisallowConcurrentExecution`) — `ScriptJob` planifie aujourd'hui **tous** les jobs comme parallélisables, quel que soit ce que dit `jobs.json`.
+- **Story 1.3** — enregistrement de niveau plateforme (jobs sans tenant) et accès cross-tenant en lecture seule (`PlatformDatabaseBinding`/`PlatformJobDatabaseBinding`).
+- **Story 1.4** — `custom-jobs.json`, logique de surcharge tenant-scopée.
+- **Story 1.5** — application réelle du flag `parallelizable` via une deuxième classe de job (`ExclusiveScriptJob`, avec `@DisallowConcurrentExecution`) — **le §13 ci-dessous l'utilise déjà** (`SchedulerBootstrap.registerOne` choisit entre `ScriptJob`/`ExclusiveScriptJob`) sans que cette story elle-même soit détaillée dans ce document ; voir plutôt `payos-job-scheduler/_bmad-output/implementation-artifacts/1-5-concurrency-control-for-non-parallelizable-jobs.md`.
 
-Et dans l'Epic 2 (observabilité) : `history/` (table `tss_job_execution`, `JobExecutionRepository`), émission `PayOSMetrics`, masquage des données sensibles dans les logs/métriques d'exécution.
+Restent aussi, dans l'Epic 2 : émission `PayOSMetrics` (Story 2.3), masquage des données sensibles dans les logs/historique/métriques (Story 2.4).
 
-Ce document sera mis à jour à chaque nouvelle story qui ajoute ou modifie des classes de production.
+Ce document sera mis à jour à chaque nouvelle story qui ajoute ou modifie des classes de production — mais ce trou (1.3-1.5) montre que cette intention n'a pas été suivie de façon fiable entre le 2026-10-02 et le 2026-10-06 ; à garder à l'esprit avant de faire confiance à ce document comme source unique de vérité.
 
 ---
 
@@ -763,9 +765,136 @@ Une troisième source de confusion possible, apparue avec la résolution du gap 
 ## 12. Références
 
 - [ADR-0009 — Task Scheduling System](adr/0009-task-scheduling-system.md)
-- [Operations: Task Scheduling System](../operations/task-scheduling-system-v7-2026-10-06.md) — le pendant opérationnel de ce document : comment configurer et démarrer TSS (standalone ou embarqué), tss-config.json, jobs.json, résolution tenant/plateforme, limitations connues
+- [Operations: Task Scheduling System](../operations/task-scheduling-system-v9-2026-10-06.md) — le pendant opérationnel de ce document : comment configurer et démarrer TSS (standalone ou embarqué), tss-config.json, jobs.json, résolution tenant/plateforme, limitations connues
 - `payos-job-scheduler/_bmad-output/planning-artifacts/architecture.md` — architecture narrative complète du module, tenue par le workflow BMad (décisions, corrections, séquence d'implémentation)
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/1-1-resilient-clustered-scheduling-infrastructure.md` — Story 1.1 (infrastructure de clustering)
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/1-2-register-and-run-a-script-job-on-a-cron-schedule.md` — Story 1.2 (enregistrement + exécution), y compris le journal de correction architecturale (Debug Log) menant à `IDatabaseService.openDedicatedSessionFor`, et la note de résolution de la Task 5 (gap AC1 — choix hybride, extraction kernel, câblage complet)
 - [Data architecture](data-architecture.md) — pour le fonctionnement complet de `DynamicDataAccessService` au-delà de ce que TSS en utilise
 - [Connector framework class diagram](connector-framework-class-diagram-v1-2026-09-02.md) — document frère, même méthodologie, pour un autre sous-système
+
+---
+
+## 13. Stories 2.1 et 2.2 — le package `history/`, misfire, quota de concurrence
+
+**Ajouté 2026-10-06.** Ce paragraphe couvre deux stories ensemble (2.1 puis 2.2, étroitement liées — 2.2 étend directement les classes que 2.1 introduit) plus un suivi same-day sur 2.2 (surcharge par tenant du quota de concurrence, demandée par l'utilisateur après la fin de la story elle-même). **Dépendance non documentée ailleurs dans ce diagramme :** ce paragraphe utilise `ExclusiveScriptJob` (Story 1.5) sans le détailler — voir le trou signalé en [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit).
+
+### 13.1 Vue d'ensemble — le package `history/`
+
+Nouveau package, `ma.s2m.payos.scheduler.history` :
+
+- `JobExecutionEvent` — enregistrement (record) immuable publié par `ScriptJob` à chaque étape d'une exécution.
+- `ExecutionOutcome` — énumération : `SUCCESS`, `SCRIPT_ERROR` (Story 2.1), `MISFIRE`, `QUOTA_REJECTED` (Story 2.2).
+- `JobExecutionListener` — interface d'abonnement (`onEvent(JobExecutionEvent)`), implémentée par `JobExecutionRepository`.
+- `ConnectionSource` — interface fonctionnelle (`Connection getConnection()`), découplant `JobExecutionRepository`/`TenantConcurrencyQuotaGuard` de la façon dont la connexion JDBC est obtenue.
+- `JobExecutionRepository` — DAO JDBC pur pour `tss_job_execution`.
+- `MisfireExecutionListener` — `TriggerListener` Quartz détectant les misfires (Story 2.2).
+- `ExecutionQuotaGuard` / `TenantConcurrencyQuotaGuard` — interface + implémentation du quota de concurrence par tenant (Story 2.2).
+
+**Pourquoi `history/` et pas `execution/` pour `JobExecutionListener`/`MisfireExecutionListener`, contrairement à l'intuition initiale de la story :** `JobExecutionEvent` vit dans `history/` ; si le listener vivait dans `execution/`, `history/` (qui implémente le listener) dépendrait de `execution/`, alors que `execution/` dépend déjà de `history/` pour le type d'événement — une dépendance circulaire entre packages, pour aucun bénéfice. Garder les deux dans `history/` rend la dépendance strictement unidirectionnelle (`execution`/`bootstrap` → `history`, jamais l'inverse) et laisse `JobExecutionRepository` implémenter directement l'interface, sans classe d'adaptation.
+
+### 13.2 `JobExecutionEvent` et `ExecutionOutcome`
+
+```java
+public record JobExecutionEvent(
+        Type type,              // STARTED | COMPLETED | REJECTED
+        String fireInstanceId,  // clé de corrélation — voir plus bas
+        String jobId,
+        String tenantId,        // null pour un job de niveau plateforme
+        String scriptPath,
+        String node,            // Scheduler.getSchedulerInstanceId()
+        Instant timestamp,
+        ExecutionOutcome outcome,     // null sur STARTED
+        String failureMessage         // seulement si outcome == SCRIPT_ERROR
+) {
+    enum Type { STARTED, COMPLETED, REJECTED }
+}
+```
+
+`fireInstanceId` est la clé de corrélation entre l'événement `STARTED` et l'événement `COMPLETED` d'une même exécution — Quartz génère une valeur fraîche et unique à chaque déclenchement (`JobExecutionContext.getFireInstanceId()`), déjà utilisée pour exactement ce besoin par `ConcurrencyControlEndToEndTest` (Story 1.5, non documentée ailleurs dans ce diagramme — voir §9). Deux déclenchements différents du même job ne collisionnent jamais ; les deux événements d'une même exécution partagent toujours la même valeur.
+
+**Pourquoi un troisième type, `REJECTED`, et pas seulement `STARTED`/`COMPLETED` :** un misfire ou un rejet de quota signifie que le script **n'a jamais démarré du tout** — il n'y a ni session à ouvrir, ni paire `fireInstanceId` à corréler. Forcer l'un ou l'autre cas à passer par `recordStarted`+`recordCompleted` aurait soit inséré une ligne que rien ne complète jamais, soit (pire) déclenché la garde anti-perte-silencieuse ajoutée en revue de code de la Story 2.1 elle-même (`recordCompleted` lève désormais une exception si l'`UPDATE` ne touche aucune ligne), puisqu'aucune ligne `STARTED` n'existerait à mettre à jour. `REJECTED` est donc un écrit en un seul coup, déjà terminal (`recordRejected` — §13.4).
+
+### 13.3 `ScriptJob` — extraction de `fireInstanceId`/`node`, publication en deux ou trois phases
+
+`ScriptJob.execute(JobExecutionContext)` extrait désormais deux informations que le `JobDataMap` ne porte jamais (il ne contient que les données de déclaration — `jobId`/`tenantId`/`scriptPath`, posées une fois pour toutes à l'enregistrement) : `fireInstanceId` (ci-dessus) et `node` = `quartzContext.getScheduler().getSchedulerInstanceId()` (l'identité **du nœud**, pas `instanceName`, qui est partagé par tout le cluster — voir §7). Les deux sont transmis à `runJob`, dont la signature gagne donc deux nouveaux paramètres.
+
+Déroulement complet de `runJob` (Story 2.2) :
+
+1. **Garde `dependencies == null`** — inchangée (Story 1.2).
+2. **Quota de concurrence** (Story 2.2, §13.5) — si `tenantId != null` et que le quota du tenant est dépassé : publie directement un événement `REJECTED`/`QUOTA_REJECTED` (avec le **vrai** `fireInstanceId` déjà reçu — contrairement au misfire, Quartz a bel et bien déclenché ce trigger ; TSS a simplement choisi de ne pas continuer, donc réutiliser l'id réel est exact, pas une approximation) puis lève `JobExecutionException`, **sans** jamais ouvrir de session tenant, charger le script, ni publier d'événement `STARTED`. Un job de niveau plateforme (`tenantId == null`) n'est jamais soumis à cette vérification — exemption par construction, pas un cas particulier codé en dur.
+3. **Publication `STARTED`** (Story 2.1) — dès que possible, avant même l'ouverture de la session tenant.
+4. Logique inchangée depuis la Story 1.2/2.1 : ouverture de session, construction du `JobContext`, chargement et exécution du script.
+5. **`catch (Throwable t)`, pas seulement `Exception`** (correctif de revue de code, Story 2.1 round 1) — une `Error` (ex. `StackOverflowError` du moteur GraalVM) est désormais capturée pour que le `finally` calcule le bon `outcome` (`SCRIPT_ERROR`, pas `SUCCESS` par défaut), puis relancée telle quelle (jamais enveloppée) — Quartz gère déjà nativement une `Error` s'échappant d'un thread de travail.
+6. **`finally`** (inconditionnel, AC4 — Story 1.2) : `cleanup(...)` puis publication `COMPLETED` (`SUCCESS` ou `SCRIPT_ERROR`).
+
+Une publication qui échoue (`publishEvent`, interne à `ScriptJob`) est capturée et seulement journalisée — jamais propagée, jamais une cause de régression sur l'exécution elle-même ou sur `cleanup()`, par le même raisonnement que l'échec de fermeture de session (§10, étape 12) est déjà traité ainsi.
+
+### 13.4 `JobExecutionRepository` — le DAO
+
+```java
+public final class JobExecutionRepository implements JobExecutionListener {
+    JobExecutionRepository(ConnectionSource connectionSource) { ... }
+    void recordStarted(JobExecutionEvent event)    // INSERT, completed_at reste NULL
+    void recordCompleted(JobExecutionEvent event)  // UPDATE ... WHERE fire_instance_id = ?
+    void recordRejected(JobExecutionEvent event)   // INSERT en un coup, déjà terminal
+    List<JobExecutionEvent> findCurrentlyExecuting()                      // WHERE completed_at IS NULL
+    List<JobExecutionEvent> findHistory(String tenantId, String scriptPath)  // toutes les lignes, triées
+}
+```
+
+**Correction faite avant d'écrire le moindre code, pas après (point notable de discipline) :** la première intention de la Story 2.1 était de construire un second pool de connexions indépendant (`HikariDataSource` dédié), faute d'avoir trouvé d'objet `DataSource` réutilisable. Une relecture d'`architecture.md` (« `JobExecutionRepository` réutilise le **même** `DataSource` dédié que celui du `JobStore` de Quartz ») a motivé une vérification par `javap` sur le vrai jar Quartz, qui a confirmé que c'est réellement possible : `JobStoreConfigurer` enregistre déjà le pool de Quartz sous le nom `"tssDS"` auprès d'`org.quartz.utils.DBConnectionManager` (registre interne de Quartz) ; `DBConnectionManager.getInstance().getConnection(String)` est `public` et rend une connexion issue de ce pool exact. En production, `ConnectionSource` vaut donc `() -> DBConnectionManager.getInstance().getConnection(JobStoreConfigurer.DATA_SOURCE_NAME)` — jamais un second pool. `JobStoreConfigurer.DATA_SOURCE_NAME` a été rendu `public` pour cette seule raison. **Invariant réel, pas hypothétique :** ce nom n'est enregistré dans `DBConnectionManager` qu'une fois `SchedulerBootstrap.start(...)` déjà exécuté — vérifié sans risque, puisque les deux points d'enregistrement en production (`StandaloneJobRegistration`/`RuntimeIntegrationHook`) appellent toujours `SchedulerBootstrap.start(...)` avant de construire quoi que ce soit côté `history/`.
+
+`findHistory(tenantId, scriptPath)` interroge par `(tenantId, scriptPath)` — la même identité unique que le `JobKey` de Quartz (§7), pas le champ `jobId`, non unique (plusieurs tenants peuvent déclarer un job avec le même `id`).
+
+### 13.5 `MisfireExecutionListener` — détection réelle d'un misfire
+
+`org.quartz.TriggerListener.triggerMisfired(Trigger)` est le vrai point d'entrée Quartz (confirmé par `javap`) : appelé quand l'heure de déclenchement prévue d'un trigger est passée sans que le job démarre (tous les threads occupés, ou cluster brièvement indisponible). Aucun `JobExecutionContext` n'existe à ce stade — le job n'a jamais démarré — d'où la publication d'un événement `REJECTED`/`MISFIRE` directement depuis ce listener, jamais via `ScriptJob`.
+
+`fireInstanceId` n'a ici aucune valeur assignée par Quartz (rien n'a été déclenché) — un UUID est généré, délibérément reconnaissable comme synthétique. Le tenant est retrouvé en inversant le label de groupe Quartz (`trigger.getJobKey().getGroup()` — `"platform"` redevient `null`, jamais l'inverse ; voir §7 `displayTenant`) ; `jobId`/`scriptPath` sont relus depuis le `JobDataMap` du `JobDetail` (`scheduler.getJobDetail(trigger.getJobKey())`), puisque `triggerMisfired` ne reçoit que le `Trigger`, pas le `JobDetail`. Enregistré une fois par bootstrap dans `SchedulerBootstrap.registerScriptJobs`, à côté de `scheduler.setJobFactory(...)`.
+
+### 13.6 Quota de concurrence par tenant — `ExecutionQuotaGuard`/`TenantConcurrencyQuotaGuard`
+
+**Décision explicite de l'utilisateur, pas la recommandation par défaut :** FR21 (« quota rejection ») n'avait aucune conception nulle part — ni dans `architecture.md`, ni dans aucune story antérieure. PayOS dispose déjà d'un mécanisme de quota par tenant pour les requêtes HTTP (`ma.s2m.payos.multitenancy.TenantPolicyService`, bâti sur `ISlidingWindowCounter`, `payos-foundation`) — candidat naturel de réutilisation, présenté à l'utilisateur avec deux alternatives. L'utilisateur a explicitement choisi la plus simple : un plafond global de **concurrence** (combien d'exécutions en cours à la fois pour un tenant), pas une limite de **fréquence**, sans nouvelle dépendance ni modification du kernel partagé.
+
+```java
+public interface ExecutionQuotaGuard {
+    boolean tryAcquire(String tenantId);  // true = dans le quota ; false = rejeté
+}
+
+public final class TenantConcurrencyQuotaGuard implements ExecutionQuotaGuard {
+    TenantConcurrencyQuotaGuard(ConnectionSource cs, int globalDefault, Map<String, Integer> tenantOverrides) { ... }
+    // tryAcquire : SELECT COUNT(*) FROM tss_job_execution WHERE tenant_id = ? AND completed_at IS NULL
+    //              compare au plafond effectif = override du tenant (si > 0), sinon globalDefault
+}
+```
+
+**Suivi same-day, après la fin de la story elle-même, à la demande explicite de l'utilisateur :** une surcharge par tenant, en plus du plafond global. Ajoutée comme nouveau champ racine de `jobs.json` (`maxConcurrentExecutions`, frère de `jobs`) — **jamais** `custom-jobs.json` (politique de niveau tenant, déclarée une seule fois, pas une préoccupation par job), **jamais** centralisée dans `tss-config.json` (lu uniquement en mode standalone — le mode embarqué ne le lit jamais du tout ; `jobs.json`, lui, est chargé de façon identique par les deux modes via `JobConfigLoader`, donc c'est le seul endroit où une surcharge fonctionne pareil dans les deux modes). `TenantConfig` gagne un champ `Integer maxConcurrentExecutionsOverride` nullable (constructeur à 3 arguments, celui à 2 arguments conservé) ; `JobConfigLoader` le lit et normalise absent/non-numérique/`<= 0` en `null` (« pas de surcharge ») ; `TenantJobRegistry.maxConcurrentExecutionsOverrides()` collecte la map `tenantId → surcharge`, partagée par `StandaloneJobRegistration` et `RuntimeIntegrationHook`. Le constructeur de `TenantConcurrencyQuotaGuard` a été changé directement, sans variante rétrocompatible — introduit le même jour, dans la même story, sans appelant externe à préserver.
+
+### 13.7 `SchedulerBootstrap` — récupération après crash
+
+**Trou vérifié dans le code, pas supposé :** `registerOne` n'appelait jamais `.requestRecovery(true)` — la récupération après crash en cluster de Quartz (`JobStoreSupport.recoverJobs()`) ne s'applique qu'aux jobs qui l'ont explicitement demandé ; aucun ne le faisait, donc le scénario même de l'AC3 de la Story 2.2 (« après un crash de nœud et une récupération de cluster ») ne pouvait pas se produire. Ajout d'une ligne : `.requestRecovery(true)` dans la chaîne `JobBuilder` de `registerOne`, pour `ScriptJob` et `ExclusiveScriptJob` (Story 1.5, non documentée ailleurs — §9) indifféremment.
+
+Une fois activée, chaque re-déclenchement de récupération est un déclenchement Quartz authentiquement nouveau — son propre `fireInstanceId` frais, sa propre paire `STARTED`/`COMPLETED` — donc l'AC3 (« chaque tentative visible séparément, jamais fusionnée ») est satisfaite **par construction**, dans le même sens que l'AC2 de la Story 2.1 l'était déjà pour le caractère « cluster-wide » de la vue en direct. La ligne de la tentative qui a crashé reste pour toujours avec `completed_at IS NULL` — reflet exact, pas un bug, de ce qui s'est réellement passé.
+
+**Constat empirique important, pas supposé :** deux tentatives réelles de simuler un crash de nœud via `Scheduler.shutdown(false)` (attentes réelles de 40 s puis 90 s, largement au-delà de la fenêtre de détection de nœud mort par défaut de Quartz, confirmée par `javap` : `clusterCheckinInterval` + 7500 ms, donc bien sous 20 s dans le pire cas) n'ont produit **aucune** récupération. Raison : `Scheduler.shutdown(...)`, quelle que soit la valeur de `waitForJobsToComplete`, reste un arrêt **ordonné** — Quartz nettoie sa propre ligne `SCHEDULER_STATE` en sortant, donc un nœud survivant ne le voit jamais comme mort. Un vrai crash sans nettoyage ne peut pas être simulé via l'API publique de `Scheduler` au sein d'une seule JVM — seules une manipulation SQL directe des tables internes de Quartz, ou un processus réellement séparé tué sans ménagement, le permettraient, toutes deux disproportionnées pour cette story. Le test retenu (`ClusterRecoveryEndToEndTest`) prouve donc honnêtement le mécanisme réel sur lequel repose la garantie de l'AC3 (unicité du `fireInstanceId` par déclenchement) plutôt que de simuler un scénario qu'il n'a pas pu reproduire.
+
+### 13.8 Référence — table `tss_job_execution`
+
+Comme pour les tables `QRTZ_*` de Quartz elles-mêmes, **TSS ne crée jamais cette table au démarrage** — un opérateur applique le DDL fourni (`src/main/resources/db/migration/tss_job_execution.sql`) une fois, avant de démarrer TSS contre un schéma neuf.
+
+| Colonne | Signification |
+| --- | --- |
+| `fire_instance_id` | Clé primaire — id unique Quartz du déclenchement (synthétique pour un misfire). |
+| `job_id`, `tenant_id`, `script_path`, `node` | Identité de l'exécution — `tenant_id` est `NULL` pour un job de niveau plateforme. |
+| `started_at` / `completed_at` | Identiques pour un `MISFIRE`/`QUOTA_REJECTED` (rien n'a mesuré de durée réelle) ; `completed_at` reste `NULL` tant que l'exécution est en cours. |
+| `outcome` | `SUCCESS`, `SCRIPT_ERROR`, `MISFIRE`, ou `QUOTA_REJECTED`. |
+| `failure_message` | Tronqué en Java à 2000 caractères avant l'écriture (correctif de revue de code, Story 2.1 round 1) pour que jamais un message trop long ne fasse échouer l'écriture elle-même. |
+
+Voir [configuration/task-scheduling-system.md](../configuration/task-scheduling-system.md) et [operations/task-scheduling-system-v9-2026-10-06.md](../operations/task-scheduling-system-v9-2026-10-06.md) pour les requêtes directes types.
+
+### 13.9 Références (Stories 2.1/2.2)
+
+- `payos-job-scheduler/_bmad-output/implementation-artifacts/2-1-live-and-point-in-time-view-of-job-executions.md` — Story 2.1, y compris la correction du design de pool de connexions et le déplacement de `JobExecutionListener`.
+- `payos-job-scheduler/_bmad-output/implementation-artifacts/2-2-query-execution-history-and-failure-diagnosis.md` — Story 2.2, y compris la recherche sur le quota (`TenantPolicyService`/`ISlidingWindowCounter` écarté), le constat empirique sur la récupération après crash, et le suivi same-day sur la surcharge par tenant.
+- [Developer: execution outcomes & history](../developer/task-scheduler-execution-outcomes.md) — le même sujet, du point de vue d'un auteur de script.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system.md) — référence de configuration (quota global/par tenant, récupération après crash).

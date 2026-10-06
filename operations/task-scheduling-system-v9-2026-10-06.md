@@ -1,12 +1,12 @@
 Created: 2026-10-02
 Last updated: 2026-10-06
-Version: 7
+Version: 9
 
 # Task Scheduling System (`payos-job-scheduler`)
 
 Operator/developer guidance for running TSS: a Quartz-backed, clustered scheduler that registers and fires tenant JavaScript job scripts on a cron schedule, reading PayOS's own tenant/platform database configuration rather than duplicating it.
 
-Like `payos-service-notification`, this is its **own deployable artifact** with its own entry point — it does not implement `IServer`/`ServerProvider` and is not booted from a bundle's `service-adapters-dir`. Unlike the notification daemon, it can also run **embedded inside `payos-runtime`** instead of as a separate process — see [Deployment modes](#deployment-modes) below. For the class-level design (every class, how they relate, the full execution-flow walkthrough), see the living [class diagram](../architecture/job-scheduler-class-diagram-v12-2026-10-02.md) and [ADR-0009](../architecture/adr/0009-task-scheduling-system.md); this page is the operational "how do I configure and run it" companion.
+Like `payos-service-notification`, this is its **own deployable artifact** with its own entry point — it does not implement `IServer`/`ServerProvider` and is not booted from a bundle's `service-adapters-dir`. Unlike the notification daemon, it can also run **embedded inside `payos-runtime`** instead of as a separate process — see [Deployment modes](#deployment-modes) below. For the class-level design (every class, how they relate, the full execution-flow walkthrough), see the living [class diagram](../architecture/job-scheduler-class-diagram-v13-2026-10-06.md) and [ADR-0009](../architecture/adr/0009-task-scheduling-system.md); this page is the operational "how do I configure and run it" companion.
 
 ## Deployment modes
 
@@ -66,6 +66,7 @@ Same three-tier resolution, under the `"scheduler"` block.
 | --- | --- | --- | --- |
 | `TSS_SCHEDULER_INSTANCE_NAME` | `schedulerInstanceName` | `TSS-Cluster` | Quartz scheduler instance name — every clustered node sharing one `jobs/` registry must use the **same** name. |
 | `TSS_THREAD_COUNT` | `threadCount` | `5` | Quartz worker thread pool size. |
+| `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` | `maxConcurrentExecutionsPerTenant` | `0` (disabled) | Caps how many of one tenant's executions may be in progress at once, cluster-wide — the simplest possible "quota rejection" enforcement (FR21). This is the **global default**, applied to every tenant that doesn't declare its own `maxConcurrentExecutions` in its `jobs.json` (see below) — a tenant that genuinely needs a different number can override it there. A platform-level job is never subject to this (there's no tenant to meter). Exceeding it rejects the execution outright — see [Execution history](#execution-history-tss_job_execution) below for the `QUOTA_REJECTED` outcome this produces. |
 
 ### Jobs location
 
@@ -111,6 +112,7 @@ One file per tenant directory under the jobs root. A tenant routinely declares s
 
 ```json
 {
+  "maxConcurrentExecutions": 3,
   "jobs": [
     {
       "id": "reconciliation-daily",
@@ -129,6 +131,7 @@ One file per tenant directory under the jobs root. A tenant routinely declares s
 }
 ```
 
+- `maxConcurrentExecutions` — optional, top-level, sibling to `jobs`. Overrides `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT`'s global default for this one tenant specifically. Absent, or `0`/negative, means "no override — use the global default." Tenant-level operational policy, not a per-job setting — declared once here, never in `custom-jobs.json`.
 - `id` — the job's declared identifier (used in logs; the job's actual unique key is `(tenantId, scriptPath)`, not `id`).
 - `implementation.script` — the script path, resolved at execution time against the **shared script pool** (see below) — not against this tenant's own directory.
 - `implementation.mappingFiles` — optional array of Hibernate mapping files this job's script needs on its tenant's `$DB` session. The tenant's effective mapping-file set is the **union** across all of that tenant's jobs.
@@ -241,31 +244,38 @@ TSS records every job execution in a table named `tss_job_execution`, in the sam
 
 Like Quartz's own schema, **TSS never creates this table at runtime.** Apply the checked-in DDL once, before starting TSS against a fresh schema: `src/main/resources/db/migration/tss_job_execution.sql` (shipped in the module's source tree, not in the runnable jar — copy it out, or keep a checkout of `payos-job-scheduler` around for this one file). It is plain, portable ANSI SQL and runs against PostgreSQL, Oracle, or H2 without modification.
 
-Each execution is written in **two phases**, the same row throughout (keyed by `fire_instance_id`, never a second row for the same execution): a row is inserted the instant the execution starts, and updated in place when it completes.
+Most executions are written in **two phases**, the same row throughout (keyed by `fire_instance_id`, never a second row for the same execution): a row is inserted the instant the execution starts, and updated in place when it completes. A **misfire** (Quartz detected a trigger whose fire time passed without the job ever starting) or a **quota rejection** (the tenant's `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` limit was already reached) never starts at all, so each is written as a single, already-terminal row instead — `started_at` and `completed_at` are identical, since there is no real duration to measure.
+
+A node crash mid-execution leaves that attempt's row permanently `completed_at IS NULL` — an accurate record that it never finished, not a bug. If the job is picked up by Quartz's own clustered recovery on a surviving node, that is a **separate row** with its own `fire_instance_id`, never merged into the original — querying by `(tenant_id, script_path)` (below) shows every attempt.
 
 | Column | Meaning |
 | --- | --- |
-| `fire_instance_id` | Primary key — Quartz's own unique id for this one firing. |
+| `fire_instance_id` | Primary key — Quartz's own unique id for this one firing (a synthetic id for a misfire, which Quartz never actually fires). |
 | `job_id` | The job definition's declared `id` (not unique by itself — see `jobs.json`'s own `id` note above). |
 | `tenant_id` | `NULL` for a platform-level job. |
 | `script_path` | The job's script path. |
-| `node` | Which cluster node ran this execution (`Scheduler.getSchedulerInstanceId()` — the per-node id, not the shared `TSS_SCHEDULER_INSTANCE_NAME`). |
+| `node` | Which cluster node ran this execution, or detected the misfire (`Scheduler.getSchedulerInstanceId()` — the per-node id, not the shared `TSS_SCHEDULER_INSTANCE_NAME`). |
 | `started_at` | Set on insert. |
-| `completed_at` | `NULL` while the execution is still in progress — this is what "currently executing" means. |
-| `outcome` | `NULL` until completion; then `SUCCESS` or `SCRIPT_ERROR`. |
+| `completed_at` | `NULL` while the execution is still in progress — this is what "currently executing" means. Set immediately (equal to `started_at`) for a misfire/quota rejection. |
+| `outcome` | `NULL` until completion; then `SUCCESS`, `SCRIPT_ERROR`, `MISFIRE`, or `QUOTA_REJECTED`. |
 | `failure_message` | Set only when `outcome = 'SCRIPT_ERROR'`. |
 
-TSS has no network API for this (or anything else — see the shared script pool note above): the table itself is the query interface. Two examples an operator or support engineer would run directly against TSS's database:
+TSS has no network API for this (or anything else — see the shared script pool note above): the table itself is the query interface. Examples an operator or support engineer would run directly against TSS's database:
 
 ```sql
 -- Everything currently executing, cluster-wide (not just on the node you happen to be connected through)
 SELECT * FROM tss_job_execution WHERE completed_at IS NULL;
 
--- A specific job's recent history
+-- A specific job's full history, newest first — (tenant_id, script_path) is the job's real unique
+-- key (the same one Quartz's own JobKey uses), not the non-unique job_id
 SELECT * FROM tss_job_execution
-WHERE job_id = 'reconciliation-daily'
+WHERE tenant_id = 'acme-corp' AND script_path = 'jobs/reconciliation.js'
 ORDER BY started_at DESC
 LIMIT 20;
+
+-- Every misfire or quota rejection in the last day, across all tenants
+SELECT * FROM tss_job_execution
+WHERE outcome IN ('MISFIRE', 'QUOTA_REJECTED') AND started_at > CURRENT_TIMESTAMP - INTERVAL '1' DAY;
 ```
 
 ## Clustering
@@ -278,7 +288,9 @@ The daemon uses slf4j with logback; no `logback.xml` ships by default. Job regis
 
 ## Next
 
-- [Class diagram](../architecture/job-scheduler-class-diagram-v12-2026-10-02.md) — every class, how they relate, and the full execution-flow walkthrough (registration through a fired trigger through script execution through cleanup).
+- [Class diagram](../architecture/job-scheduler-class-diagram-v13-2026-10-06.md) — every class, how they relate, and the full execution-flow walkthrough (registration through a fired trigger through script execution through cleanup).
 - [ADR-0009](../architecture/adr/0009-task-scheduling-system.md) — the architectural decision behind TSS's design.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system.md) — the config-key reference only, for a quick lookup without the full narrative.
+- [Developer: execution outcomes & history](../developer/task-scheduler-execution-outcomes.md) — the same execution-history/misfire/quota model, from a job script author's point of view.
 - [notification-service.md](notification-service.md) — the other standalone-daemon precedent this guide's structure follows.
 - [deployment.md](deployment.md) — `payos-runtime`'s own deployment model, relevant to TSS's embedded mode.

@@ -890,11 +890,11 @@ Comme pour les tables `QRTZ_*` de Quartz elles-mêmes, **TSS ne crée jamais cet
 | `outcome` | `SUCCESS`, `SCRIPT_ERROR`, `MISFIRE`, ou `QUOTA_REJECTED`. |
 | `failure_message` | Tronqué en Java à 2000 caractères avant l'écriture (correctif de revue de code, Story 2.1 round 1) pour que jamais un message trop long ne fasse échouer l'écriture elle-même. |
 
-Voir [configuration/task-scheduling-system.md](../configuration/task-scheduling-system.md) et [operations/task-scheduling-system-v9-2026-10-06.md](../operations/task-scheduling-system-v9-2026-10-06.md) pour les requêtes directes types.
+Voir [configuration/task-scheduling-system-v3-2026-10-07.md](../configuration/task-scheduling-system-v3-2026-10-07.md) et [operations/task-scheduling-system-v9-2026-10-06.md](../operations/task-scheduling-system-v9-2026-10-06.md) pour les requêtes directes types.
 
 ### 13.9 Références (Stories 2.1/2.2)
 
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-1-live-and-point-in-time-view-of-job-executions.md` — Story 2.1, y compris la correction du design de pool de connexions et le déplacement de `JobExecutionListener`.
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-2-query-execution-history-and-failure-diagnosis.md` — Story 2.2, y compris la recherche sur le quota (`TenantPolicyService`/`ISlidingWindowCounter` écarté), le constat empirique sur la récupération après crash, et le suivi same-day sur la surcharge par tenant.
-- [Developer: execution outcomes & history](../developer/task-scheduler-execution-outcomes.md) — le même sujet, du point de vue d'un auteur de script.
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system.md) — référence de configuration (quota global/par tenant, récupération après crash).
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v4-2026-10-07.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v3-2026-10-07.md) — référence de configuration (quota global/par tenant, récupération après crash).

@@ -290,7 +290,7 @@ The daemon uses slf4j with logback; no `logback.xml` ships by default. Job regis
 
 - [Class diagram](../architecture/job-scheduler-class-diagram-v13-2026-10-06.md) — every class, how they relate, and the full execution-flow walkthrough (registration through a fired trigger through script execution through cleanup).
 - [ADR-0009](../architecture/adr/0009-task-scheduling-system.md) — the architectural decision behind TSS's design.
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system.md) — the config-key reference only, for a quick lookup without the full narrative.
-- [Developer: execution outcomes & history](../developer/task-scheduler-execution-outcomes.md) — the same execution-history/misfire/quota model, from a job script author's point of view.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v3-2026-10-07.md) — the config-key reference only, for a quick lookup without the full narrative.
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v4-2026-10-07.md) — the full developer guide: configuring TSS and tenant jobs, writing script jobs, the `context`/`$DB`/`$PlatformDB` surface, and the same execution-history/misfire/quota model from a job script author's point of view.
 - [notification-service.md](notification-service.md) — the other standalone-daemon precedent this guide's structure follows.
 - [deployment.md](deployment.md) — `payos-runtime`'s own deployment model, relevant to TSS's embedded mode.

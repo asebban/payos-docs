@@ -1,6 +1,6 @@
 Created: 2026-10-06
-Last updated: 2026-10-06
-Version: 2
+Last updated: 2026-10-07
+Version: 3
 
 # Task Scheduling System configuration
 
@@ -32,7 +32,7 @@ TSS's own isolated schema (Quartz's `QRTZ_*` tables plus `tss_job_execution`) �
 | --- | --- | --- | --- |
 | `TSS_SCHEDULER_INSTANCE_NAME` | `schedulerInstanceName` | `TSS-Cluster` | Every clustered node sharing one `jobs/` registry must use the **same** name. |
 | `TSS_THREAD_COUNT` | `threadCount` | `5` | Quartz worker thread pool size — how many job executions can run concurrently on this one node. |
-| `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` | `maxConcurrentExecutionsPerTenant` | `0` (disabled) | **Global default** for the per-tenant concurrency quota (how many of one tenant's executions may be in progress at once, cluster-wide, across every node). `0` or negative means no tenant is ever rejected on this basis. A tenant can override this for itself via `jobs.json`'s own `maxConcurrentExecutions` field (below). Platform-level jobs are never subject to it — there's no tenant to meter. Exceeding it produces the `QUOTA_REJECTED` outcome — see [developer/task-scheduler-execution-outcomes.md](../developer/task-scheduler-execution-outcomes.md). |
+| `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` | `maxConcurrentExecutionsPerTenant` | `0` (disabled) | **Global default** for the per-tenant concurrency quota (how many of one tenant's executions may be in progress at once, cluster-wide, across every node). `0` or negative means no tenant is ever rejected on this basis. A tenant can override this for itself via `jobs.json`'s own `maxConcurrentExecutions` field (below). Platform-level jobs are never subject to it — there's no tenant to meter. Exceeding it produces the `QUOTA_REJECTED` outcome — see [developer/task-scheduler-guide-v4-2026-10-07.md](../developer/task-scheduler-guide-v4-2026-10-07.md). |
 
 ## `jobs` block — file locations
 
@@ -182,10 +182,10 @@ A platform-level job's script gets **no `$DB`** (no tenant to open a session for
 
 ## Cluster recovery
 
-Every job is registered with Quartz's `requestRecovery(true)` — if a cluster node dies mid-execution, a surviving node re-fires that job as a new, separate execution. This is not independently configurable; it's always on for every job. See [developer/task-scheduler-execution-outcomes.md#multiple-attempts-for-the-same-trigger-firing](../developer/task-scheduler-execution-outcomes.md#multiple-attempts-for-the-same-trigger-firing) for what you'll observe when it happens.
+Every job is registered with Quartz's `requestRecovery(true)` — if a cluster node dies mid-execution, a surviving node re-fires that job as a new, separate execution. This is not independently configurable; it's always on for every job. The recovery execution also closes out its crashed predecessor's row (outcome `ABANDONED`) the moment it starts — otherwise that row would sit `completed_at IS NULL` forever and keep counting against the tenant's concurrency quota indefinitely. See [developer/task-scheduler-guide-v4-2026-10-07.md#10-multiple-attempts-for-the-same-trigger-firing](../developer/task-scheduler-guide-v4-2026-10-07.md#10-multiple-attempts-for-the-same-trigger-firing) for what you'll observe when it happens.
 
 ## Next
 
 - [Operations: Task Scheduling System](../operations/task-scheduling-system-v9-2026-10-06.md) — deployment modes, clustering, starting/stopping, tenant/platform database resolution, the shared script pool, execution-history table reference and example queries.
-- [Developer: execution outcomes & history](../developer/task-scheduler-execution-outcomes.md) — what a job script author observes for each outcome.
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v4-2026-10-07.md) — the full developer guide: configuring TSS and tenant jobs, writing script jobs, the `context`/`$DB`/`$PlatformDB` surface, and execution outcomes & history.
 - [Architecture: Task Scheduling System class diagram](../architecture/job-scheduler-class-diagram-v13-2026-10-06.md) — internal design (French).

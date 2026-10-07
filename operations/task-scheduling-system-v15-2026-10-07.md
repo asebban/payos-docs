@@ -1,12 +1,12 @@
 Created: 2026-10-02
-Last updated: 2026-10-06
-Version: 9
+Last updated: 2026-10-07
+Version: 15
 
 # Task Scheduling System (`payos-job-scheduler`)
 
 Operator/developer guidance for running TSS: a Quartz-backed, clustered scheduler that registers and fires tenant JavaScript job scripts on a cron schedule, reading PayOS's own tenant/platform database configuration rather than duplicating it.
 
-Like `payos-service-notification`, this is its **own deployable artifact** with its own entry point — it does not implement `IServer`/`ServerProvider` and is not booted from a bundle's `service-adapters-dir`. Unlike the notification daemon, it can also run **embedded inside `payos-runtime`** instead of as a separate process — see [Deployment modes](#deployment-modes) below. For the class-level design (every class, how they relate, the full execution-flow walkthrough), see the living [class diagram](../architecture/job-scheduler-class-diagram-v13-2026-10-06.md) and [ADR-0009](../architecture/adr/0009-task-scheduling-system.md); this page is the operational "how do I configure and run it" companion.
+Like `payos-service-notification`, this is its **own deployable artifact** with its own entry point — it does not implement `IServer`/`ServerProvider` and is not booted from a bundle's `service-adapters-dir`. Unlike the notification daemon, it can also run **embedded inside `payos-runtime`** instead of as a separate process — see [Deployment modes](#deployment-modes) below. For the class-level design (every class, how they relate, the full execution-flow walkthrough), see the living [class diagram](../architecture/job-scheduler-class-diagram-v18-2026-10-07.md) and [ADR-0009](../architecture/adr/0009-task-scheduling-system.md); this page is the operational "how do I configure and run it" companion.
 
 ## Deployment modes
 
@@ -246,7 +246,7 @@ Like Quartz's own schema, **TSS never creates this table at runtime.** Apply the
 
 Most executions are written in **two phases**, the same row throughout (keyed by `fire_instance_id`, never a second row for the same execution): a row is inserted the instant the execution starts, and updated in place when it completes. A **misfire** (Quartz detected a trigger whose fire time passed without the job ever starting) or a **quota rejection** (the tenant's `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` limit was already reached) never starts at all, so each is written as a single, already-terminal row instead — `started_at` and `completed_at` are identical, since there is no real duration to measure.
 
-A node crash mid-execution leaves that attempt's row permanently `completed_at IS NULL` — an accurate record that it never finished, not a bug. If the job is picked up by Quartz's own clustered recovery on a surviving node, that is a **separate row** with its own `fire_instance_id`, never merged into the original — querying by `(tenant_id, script_path)` (below) shows every attempt.
+A node crash mid-execution does **not** leave that attempt's row permanently `completed_at IS NULL`. If the job is picked up by Quartz's own clustered recovery on a surviving node (always on for every job), that recovery execution is a **separate row** with its own `fire_instance_id`, never merged into the original — and the moment it starts, it closes out its crashed predecessor's still-open row with outcome `ABANDONED`, so the predecessor doesn't sit open forever and doesn't keep counting against the tenant's concurrency quota indefinitely. Querying by `(tenant_id, script_path)` (below) shows every attempt, including the `ABANDONED` one.
 
 | Column | Meaning |
 | --- | --- |
@@ -257,7 +257,7 @@ A node crash mid-execution leaves that attempt's row permanently `completed_at I
 | `node` | Which cluster node ran this execution, or detected the misfire (`Scheduler.getSchedulerInstanceId()` — the per-node id, not the shared `TSS_SCHEDULER_INSTANCE_NAME`). |
 | `started_at` | Set on insert. |
 | `completed_at` | `NULL` while the execution is still in progress — this is what "currently executing" means. Set immediately (equal to `started_at`) for a misfire/quota rejection. |
-| `outcome` | `NULL` until completion; then `SUCCESS`, `SCRIPT_ERROR`, `MISFIRE`, or `QUOTA_REJECTED`. |
+| `outcome` | `NULL` until completion; then `SUCCESS`, `SCRIPT_ERROR`, `MISFIRE`, `QUOTA_REJECTED`, or `ABANDONED` (a crashed node's row, closed out by the recovery execution that replaced it). |
 | `failure_message` | Set only when `outcome = 'SCRIPT_ERROR'`. |
 
 TSS has no network API for this (or anything else — see the shared script pool note above): the table itself is the query interface. Examples an operator or support engineer would run directly against TSS's database:
@@ -278,6 +278,22 @@ SELECT * FROM tss_job_execution
 WHERE outcome IN ('MISFIRE', 'QUOTA_REJECTED') AND started_at > CURRENT_TIMESTAMP - INTERVAL '1' DAY;
 ```
 
+## Metrics
+
+Every finished execution also emits into PayOS's existing metrics infrastructure (`PayOSMetrics` — the same `IMetricsRecorder`/Micrometer-backed facade every other PayOS component already uses) — TSS adds no metrics-specific tooling of its own. Query TSS's job-execution metrics (logically `tss.job.execution.count`/`tss.job.execution.duration` — see below for the actual exposed names) through the exact same backend/dashboard you already use for every other PayOS metric, no separate system. Full tag/field shape and worked examples: [developer guide](../developer/task-scheduler-guide-v10-2026-10-07.md#11-metrics).
+
+**Embedded mode:** nothing to configure — the host's own `payos-server-http` `/metrics` endpoint already scrapes TSS's samples (same JVM, same static registry).
+
+**Standalone mode:** set `TSS_METRICS_HTTP_PORT` to a positive port (default `0` = disabled) to start a dedicated Prometheus scrape HTTP server on that port — standalone TSS has no HTTP server of its own otherwise, so without this, job-execution metrics are recorded but genuinely unreachable from outside the process. Point your Prometheus (or compatible) scraper at `http://<standalone-host>:<port>/metrics` as its own target. See the [developer guide §11.1](../developer/task-scheduler-guide-v10-2026-10-07.md#111-how-these-metrics-actually-get-exposed--embedded-vs-standalone) for the full explanation.
+
+**A misconfigured port never stops the scheduler from starting.** If `TSS_METRICS_HTTP_PORT` points at a port already in use (or otherwise fails to bind), TSS logs a warning and continues running with job scheduling fully intact — just without metrics exposure for that run. Check the startup logs for `Failed to start the standalone metrics HTTP server` if `/metrics` isn't reachable and you expected it to be.
+
+**`tenant_id` as a Prometheus label depends on deployment mode.** The underlying setting (`-Dpayos.metrics.tenant-tags-enabled`) is a PayOS-wide JVM flag, off by default for every component.
+- **Standalone:** `StandaloneMain` sets it itself at startup (unless you've already set it yourself, in which case your own choice is respected). Safe to do unconditionally, since standalone TSS owns 100% of its own JVM — this can only ever affect TSS's own metrics.
+- **Embedded:** `RuntimeIntegrationHook` deliberately does **not** touch this flag — in that mode TSS shares `payos-runtime`'s own JVM with the kernel's API metrics, connectors, and audit trail, and deciding that host's metrics-cardinality policy isn't TSS's call to make. `tenant_id` appears on TSS's metrics in embedded mode only if the host has already enabled the flag itself. If you run TSS embedded and want `tenant_id` on your TSS dashboards, set `-Dpayos.metrics.tenant-tags-enabled=true` on `payos-runtime`'s own JVM — the same setting then applies to every PayOS metric in that process, TSS's included.
+
+The exact metric names as they actually appear in `/metrics` (not the logical names used elsewhere in this doc) are shown in the [developer guide's worked example](../developer/task-scheduler-guide-v10-2026-10-07.md#what-youll-actually-see-at-metrics).
+
 ## Clustering
 
 Multiple TSS nodes sharing the same `TSS_SCHEDULER_INSTANCE_NAME` and pointed at the same TSS database form a Quartz cluster: job registration is idempotent (`registerScriptJobs` skips a `JobKey` that's already registered, logging it as expected rather than an error), and only one node fires a given trigger at a time. Point every node's `jobs/` root (standalone) or bundle (embedded) at the same content — a clustered node that registers a *different* `jobs.json` than its peers results in whichever node registers first owning that job's trigger.
@@ -286,11 +302,13 @@ Multiple TSS nodes sharing the same `TSS_SCHEDULER_INSTANCE_NAME` and pointed at
 
 The daemon uses slf4j with logback; no `logback.xml` ships by default. Job registration logs the number of jobs and tenants registered at startup; each execution logs its `jobId`/`tenantId`/`scriptPath` on both success and failure paths.
 
+**Sensitive-data masking — always on, nothing to configure.** Before a script error's message reaches `tss_job_execution.failure_message` or a log line, TSS masks sensitive-looking `key: value`/`key=value` fragments inside it (the same canonical denylist — `password`, `token`, `ssn`, `cardNumber`, etc. — every other PayOS component uses). This is deliberately best-effort, not a guarantee: a message with no recognizable key prefix at all (an unlabeled bare secret) passes through unmasked. Full behavior and worked examples: [developer guide §12](../developer/task-scheduler-guide-v10-2026-10-07.md#12-sensitive-data-masking).
+
 ## Next
 
-- [Class diagram](../architecture/job-scheduler-class-diagram-v13-2026-10-06.md) — every class, how they relate, and the full execution-flow walkthrough (registration through a fired trigger through script execution through cleanup).
+- [Class diagram](../architecture/job-scheduler-class-diagram-v18-2026-10-07.md) — every class, how they relate, and the full execution-flow walkthrough (registration through a fired trigger through script execution through cleanup).
 - [ADR-0009](../architecture/adr/0009-task-scheduling-system.md) — the architectural decision behind TSS's design.
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v3-2026-10-07.md) — the config-key reference only, for a quick lookup without the full narrative.
-- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v4-2026-10-07.md) — the full developer guide: configuring TSS and tenant jobs, writing script jobs, the `context`/`$DB`/`$PlatformDB` surface, and the same execution-history/misfire/quota model from a job script author's point of view.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v4-2026-10-07.md) — the config-key reference only, for a quick lookup without the full narrative.
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v10-2026-10-07.md) — the full developer guide: configuring TSS and tenant jobs, writing script jobs, the `context`/`$DB`/`$PlatformDB` surface, and the same execution-history/misfire/quota model from a job script author's point of view.
 - [notification-service.md](notification-service.md) — the other standalone-daemon precedent this guide's structure follows.
 - [deployment.md](deployment.md) — `payos-runtime`'s own deployment model, relevant to TSS's embedded mode.

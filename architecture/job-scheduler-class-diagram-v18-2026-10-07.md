@@ -1,11 +1,11 @@
 Created : 2026-09-30
-Dernière mise à jour : 2026-10-06
-Version : v13
+Dernière mise à jour : 2026-10-07
+Version : v18
 
 # Diagramme de classes — Task Scheduling System (`payos-job-scheduler`)
 
-**Audience :** architectes, tech leads, contributeurs à `payos-job-scheduler`, `database-service`, `payos-foundation` et `payos` (kernel)
-**Périmètre :** les Stories 1.1 et 1.2 (§4-8, 10-11, y compris la résolution du gap AC1), **plus les Stories 2.1 et 2.2 de l'Epic 2** (§13 — package `history/`, détection de misfire, quota de concurrence par tenant, requêtes d'historique), plus les classes d'appui touchées dans `database-service`, `payos-foundation` et `payos` (kernel).
+**Audience :** architectes, tech leads, contributeurs à `payos-job-scheduler`, `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`
+**Périmètre :** les Stories 1.1 et 1.2 (§4-8, 10-11, y compris la résolution du gap AC1), **plus les Stories 2.1 et 2.2 de l'Epic 2** (§13 — package `history/`, détection de misfire, quota de concurrence par tenant, requêtes d'historique), **plus la Story 2.3** (§14 — package `metrics/`, émission `PayOSMetrics`, exposition HTTP Prometheus en mode standalone), **plus la Story 2.4** (§15 — masquage des données sensibles via `history/SensitiveDataScrubber`, réutilisation de `SensitiveFieldMasker`), plus les classes d'appui touchées dans `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`.
 **Trou connu, assumé, pas caché :** les Stories 1.3, 1.4 et 1.5 de l'Epic 1 (jobs de niveau plateforme, `custom-jobs.json`, `ExclusiveScriptJob`/`@DisallowConcurrentExecution`) ne sont **pas encore** couvertes par ce diagramme malgré leur statut `done` — ce document n'a pas été tenu à jour entre la Story 1.2 et la Story 2.1/2.2. Voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour le détail exact de ce qui manque. Les classes citées au §13 qui dépendent de mécanismes introduits par ces stories manquantes (ex. `ExclusiveScriptJob`) sont signalées comme telles plutôt que silencieusement supposées déjà connues.
 **Document vivant :** ce diagramme sera mis à jour au fil des prochaines stories — voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour ce qui manque encore.
 
@@ -26,6 +26,8 @@ Version : v13
 11. [Un piège de nommage à connaître](#11-un-piège-de-nommage-à-connaître)
 12. [Références](#12-références)
 13. [Stories 2.1 et 2.2 — le package `history/`, misfire, quota de concurrence](#13-stories-21-et-22--le-package-history-misfire-quota-de-concurrence)
+14. [Story 2.3 — métriques (`metrics/`) et exposition HTTP standalone](#14-story-23--métriques-metrics-et-exposition-http-standalone)
+15. [Story 2.4 — masquage des données sensibles (`history/SensitiveDataScrubber`)](#15-story-24--masquage-des-données-sensibles-historysensitivedatascrubber)
 
 ---
 
@@ -765,7 +767,7 @@ Une troisième source de confusion possible, apparue avec la résolution du gap 
 ## 12. Références
 
 - [ADR-0009 — Task Scheduling System](adr/0009-task-scheduling-system.md)
-- [Operations: Task Scheduling System](../operations/task-scheduling-system-v9-2026-10-06.md) — le pendant opérationnel de ce document : comment configurer et démarrer TSS (standalone ou embarqué), tss-config.json, jobs.json, résolution tenant/plateforme, limitations connues
+- [Operations: Task Scheduling System](../operations/task-scheduling-system-v15-2026-10-07.md) — le pendant opérationnel de ce document : comment configurer et démarrer TSS (standalone ou embarqué), tss-config.json, jobs.json, résolution tenant/plateforme, limitations connues
 - `payos-job-scheduler/_bmad-output/planning-artifacts/architecture.md` — architecture narrative complète du module, tenue par le workflow BMad (décisions, corrections, séquence d'implémentation)
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/1-1-resilient-clustered-scheduling-infrastructure.md` — Story 1.1 (infrastructure de clustering)
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/1-2-register-and-run-a-script-job-on-a-cron-schedule.md` — Story 1.2 (enregistrement + exécution), y compris le journal de correction architecturale (Debug Log) menant à `IDatabaseService.openDedicatedSessionFor`, et la note de résolution de la Task 5 (gap AC1 — choix hybride, extraction kernel, câblage complet)
@@ -887,14 +889,198 @@ Comme pour les tables `QRTZ_*` de Quartz elles-mêmes, **TSS ne crée jamais cet
 | `fire_instance_id` | Clé primaire — id unique Quartz du déclenchement (synthétique pour un misfire). |
 | `job_id`, `tenant_id`, `script_path`, `node` | Identité de l'exécution — `tenant_id` est `NULL` pour un job de niveau plateforme. |
 | `started_at` / `completed_at` | Identiques pour un `MISFIRE`/`QUOTA_REJECTED` (rien n'a mesuré de durée réelle) ; `completed_at` reste `NULL` tant que l'exécution est en cours. |
-| `outcome` | `SUCCESS`, `SCRIPT_ERROR`, `MISFIRE`, ou `QUOTA_REJECTED`. |
+| `outcome` | `SUCCESS`, `SCRIPT_ERROR`, `MISFIRE`, `QUOTA_REJECTED`, ou `ABANDONED` (ligne d'un nœud crashé, clôturée par l'exécution de récupération qui l'a remplacée — Story 2.2, suivi de revue round 1, `JobExecutionListener.onRecoveryStarted`). |
 | `failure_message` | Tronqué en Java à 2000 caractères avant l'écriture (correctif de revue de code, Story 2.1 round 1) pour que jamais un message trop long ne fasse échouer l'écriture elle-même. |
 
-Voir [configuration/task-scheduling-system-v3-2026-10-07.md](../configuration/task-scheduling-system-v3-2026-10-07.md) et [operations/task-scheduling-system-v9-2026-10-06.md](../operations/task-scheduling-system-v9-2026-10-06.md) pour les requêtes directes types.
+Voir [configuration/task-scheduling-system-v4-2026-10-07.md](../configuration/task-scheduling-system-v4-2026-10-07.md) et [operations/task-scheduling-system-v15-2026-10-07.md](../operations/task-scheduling-system-v15-2026-10-07.md) pour les requêtes directes types.
 
 ### 13.9 Références (Stories 2.1/2.2)
 
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-1-live-and-point-in-time-view-of-job-executions.md` — Story 2.1, y compris la correction du design de pool de connexions et le déplacement de `JobExecutionListener`.
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-2-query-execution-history-and-failure-diagnosis.md` — Story 2.2, y compris la recherche sur le quota (`TenantPolicyService`/`ISlidingWindowCounter` écarté), le constat empirique sur la récupération après crash, et le suivi same-day sur la surcharge par tenant.
-- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v4-2026-10-07.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v3-2026-10-07.md) — référence de configuration (quota global/par tenant, récupération après crash).
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v10-2026-10-07.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v4-2026-10-07.md) — référence de configuration (quota global/par tenant, récupération après crash).
+
+## 14. Story 2.3 — métriques (`metrics/`) et exposition HTTP standalone
+
+**Ajouté 2026-10-07.** Couvre la Story 2.3 (FR23, émission de métriques) et son suivi same-day (Task 7, demandé par l'utilisateur après avoir fait remarquer que TSS n'a aucun serveur HTTP) — les deux ensemble, comme pour §13.
+
+### 14.1 Vue d'ensemble — nouveau package `metrics/`
+
+Nouveau package, `ma.s2m.payos.scheduler.metrics` : une seule classe, `JobMetricsEmitter implements JobExecutionListener`. Second abonné au même flux `JobExecutionEvent` que `JobExecutionRepository` (`history/`) consomme déjà — exactement ce que le Javadoc de `JobExecutionListener` anticipait depuis la Story 2.1 (« a future `metrics.JobMetricsEmitter` »).
+
+**Aucune nouvelle abstraction.** `JobMetricsEmitter` appelle directement la façade déjà existante de `payos-kernel`/`payos-foundation` : `ma.s2m.payos.events.metrics.MetricsRecorder.record(MetricSample)`, résolue statiquement vers `MicrometerMetricsRecorder` (backend Micrometer/Prometheus par défaut, remplaçable via SPI). Ni nouvelle interface, ni nouvelle dépendance pour cette seule partie — réutilisation pure, conforme au principe déjà énoncé dans `architecture.md` (« Reuses PayOS's existing... `PayOSMetrics`... no parallel implementations »).
+
+### 14.2 `JobExecutionEvent` — nouveau champ `durationMillis`
+
+```java
+public record JobExecutionEvent(
+        Type type, String fireInstanceId, String jobId, String tenantId, String scriptPath,
+        String node, Instant timestamp, ExecutionOutcome outcome, String failureMessage,
+        long durationMillis   // nouveau — toujours 0 sur STARTED/REJECTED
+) { ... }
+```
+
+**Rétrocompatible, même précédent que chaque ajout antérieur à cet enregistrement** (Stories 2.1/2.2) : les usines `started(...)`/`rejected(...)` fixent toujours `0` ; l'ancienne surcharge `completed(...)` à 8 arguments garde `0` par défaut (tous les sites d'appel préexistants compilent sans changement) ; une nouvelle surcharge à 9 arguments porte la vraie valeur.
+
+**Calculée une seule fois, par le publieur (`ScriptJob`), jamais par une corrélation d'événements séparée.** `runJob` capture désormais son `Instant` de départ dans une variable locale avant de publier `STARTED`, puis calcule `Duration.between(startedAt, Instant.now())` juste avant de publier `COMPLETED` — les deux instants sont déjà dans la même pile d'appel, le même thread. **Rejet délibéré de l'alternative plus évidente** (une map `fireInstanceId → startInstant` tenue par `JobMetricsEmitter` lui-même, à l'image de ce qu'un DAO peut faire via ses propres lignes de base) : une telle map fuirait une entrée par exécution crashée, puisque `onRecoveryStarted` (§13, le seul point d'entrée notifié pour un prédécesseur crashé) ne reçoit jamais le `fireInstanceId` de ce prédécesseur — seulement celui, nouveau, de la récupération. Calculer la durée une seule fois, avec les deux horodatages déjà en main, élimine ce risque sans aucun état supplémentaire.
+
+`JobExecutionRepository.mapHistoryRow` (§13.4) calcule aussi désormais une vraie `durationMillis` à partir de ses propres colonnes `started_at`/`completed_at` lors de la reconstruction d'un événement `COMPLETED` pour `findHistory` — complétude directement dans le périmètre (le champ existe maintenant sur l'enregistrement ; toute reconstruction d'un événement `COMPLETED` doit le renseigner correctement), pas une extension de périmètre.
+
+### 14.3 `JobMetricsEmitter` — forme des échantillons émis
+
+Deux échantillons par événement terminal, jamais un seul :
+
+| Échantillon | Type | Valeur/unité | Émis pour | Tags/champs |
+| --- | --- | --- | --- | --- |
+| `tss.job.execution.count` | `COUNTER` | `1.0` / `count` | `COMPLETED` et `REJECTED` (y compris `MISFIRE`/`QUOTA_REJECTED`) | `tenantId` (champ propre de `MetricSample`), `correlationId` = `fireInstanceId`, tags : `outcome`, `scriptPath`, `triggerType` |
+| `tss.job.execution.duration` | `HISTOGRAM` | `durationMillis` / `ms` | `COMPLETED` seulement — un `REJECTED` n'a jamais démarré, rien à chronométrer | mêmes tags |
+
+`onRecoveryStarted` (§13.6) est aussi surchargé — émet un `COUNTER` seul, `outcome=ABANDONED`, `correlationId` = le **nouveau** `fireInstanceId` de la récupération (celui du prédécesseur crashé n'est jamais connu à ce point d'entrée, même contrainte que `JobExecutionRepository`) — pour que les métriques restent symétriques avec la table d'historique, y compris pour la récupération après crash.
+
+`triggerType` est une **constante littérale `"cron"`**, pas une valeur lue nulle part — `JobConfigLoader` ne charge aujourd'hui que `trigger.type: "cron"` (§8), et `JobDefinition` n'a aucun champ `triggerType` du tout (seulement `cronExpression`, puisque cron est la seule valeur jamais chargée). Une vraie consultation par job serait de la tuyauterie inventée pour une fonctionnalité qui n'existe pas encore — à remplacer par un vrai champ le jour où un second type de trigger existera.
+
+**Correction, vérifiée par un vrai scrape et pas supposée : `tenantId`/`correlationId` sont portés par chaque `MetricSample`, mais aucun des deux n'atteint le texte Prometheus exposé par défaut.** Lecture directe de `MicrometerMetricsRecorder.record`/`MeterKey.from` (`payos` kernel) :
+
+```java
+private static final boolean TENANT_TAGS_ENABLED = Boolean.getBoolean("payos.metrics.tenant-tags-enabled");  // false par défaut
+...
+static MeterKey from(MetricSample sample) {
+    if (TENANT_TAGS_ENABLED && sample.tenantId() != null) {
+        tags.add(Tag.of("tenant_id", sample.tenantId()));   // jamais ajouté par défaut
+    }
+    sample.tags().entrySet()... // correlationId n'est lu nulle part dans cette méthode
+}
+```
+
+`tenant_id` ne devient un tag que si la propriété système JVM `-Dpayos.metrics.tenant-tags-enabled=true` est positionnée — un réglage PayOS global, pas spécifique à TSS, désactivé par défaut. `correlationId` (`fireInstanceId`) n'est tout simplement jamais lu par cette implémentation — il reste disponible pour toute autre implémentation `IMetricsRecorder` enregistrée via SPI (ex. un transfert vers un backend de tracing), mais absent du texte Prometheus. Un vrai scrape (`JobMetricsEmitter` + `MicrometerMetricsRecorder` réels, pas un faux d'enregistrement) après une réussite et un rejet de quota sur `jobs/reconciliation.js` (tenant `acme-corp`, tags de tenant désactivés — le défaut) :
+
+```
+# TYPE payos_tss_job_execution_count_total counter
+payos_tss_job_execution_count_total{outcome="QUOTA_REJECTED",scriptPath="jobs/reconciliation.js",triggerType="cron"} 1.0
+payos_tss_job_execution_count_total{outcome="SUCCESS",scriptPath="jobs/reconciliation.js",triggerType="cron"} 1.0
+# TYPE payos_tss_job_execution_duration_seconds summary
+payos_tss_job_execution_duration_seconds_count{outcome="SUCCESS",scriptPath="jobs/reconciliation.js",triggerType="cron"} 1
+payos_tss_job_execution_duration_seconds_sum{outcome="SUCCESS",scriptPath="jobs/reconciliation.js",triggerType="cron"} 3.421
+# TYPE payos_tss_job_execution_duration_seconds_max gauge
+payos_tss_job_execution_duration_seconds_max{outcome="SUCCESS",scriptPath="jobs/reconciliation.js",triggerType="cron"} 3.421
+```
+
+Aucun `tenant_id`, aucun `acme-corp`, aucun `fire-inspect-*` nulle part — confirme les deux points ci-dessus empiriquement. Note au passage, également visible ci-dessus : les noms logiques `tss.job.execution.count`/`tss.job.execution.duration` ne sont pas les noms littéralement exposés — préfixe `payos_`, points remplacés par des underscores, suffixe `_total` pour un `COUNTER`, et un `HISTOGRAM` à unité de durée (`ms`) devient un `Timer` Micrometer toujours exposé en **secondes**, en trois séries (`_seconds_count`, `_seconds_sum`, `_seconds_max`), jamais une série unique en millisecondes.
+
+**Mise à jour (revue de code round 1, Story 2.3, 2026-10-07) : `tenant_id` est désormais présent par défaut — mais en mode standalone seulement.** La trouvaille ci-dessus était exacte au moment où elle a été écrite. Une décision prise plus tard dans la même revue (voir le fichier de la Story 2.3, section Review Findings) a d'abord fait positionner `System.setProperty("payos.metrics.tenant-tags-enabled", "true")` au démarrage dans **les deux** points d'entrée, `StandaloneMain` **et** `RuntimeIntegrationHook` — puis une seconde correction (discutée directement par l'utilisateur, hors cycle de revue formel, le même jour) a retiré cet appel de `RuntimeIntegrationHook` : en mode embarqué, cette classe est invitée dans la JVM de `payos-runtime`, partagée avec les métriques du kernel, des connecteurs et de l'audit trail — décider de la politique de cardinalité de métriques de tout l'hôte n'est pas de son ressort. Le flag ne reste positionné automatiquement qu'en mode standalone (`StandaloneMain`), où TSS possède 100% de sa propre JVM. En mode embarqué, `tenant_id` n'apparaît que si l'hôte (`payos-runtime`) a lui-même déjà activé ce flag. Un vrai scrape refait après ce correctif, en mode standalone, avec le flag ainsi activé :
+
+```
+payos_tss_job_execution_count_total{outcome="SUCCESS",scriptPath="jobs/reconciliation.js",tenant_id="acme-corp",triggerType="cron"} 1.0
+```
+
+`correlationId`/`fireInstanceId` reste, lui, absent du texte Prometheus dans tous les cas — ce point-là n'a pas changé, `MicrometerMetricsRecorder` ne lit toujours jamais ce champ.
+
+### 14.4 `CompositeJobExecutionListener` — diffusion vers plusieurs abonnés
+
+**Le vrai problème que cette classe résout :** `ScriptExecutionDependencies` n'a qu'un seul emplacement `executionListener`, et `MisfireExecutionListener` (§13.5) reçoit ce même listener directement à la construction. La Story 2.3 a besoin d'un second abonné (`JobMetricsEmitter`) sans ajouter un second paramètre à faire traverser `ScriptJob`, `MisfireExecutionListener` et chaque site de bootstrap.
+
+Nouvelle classe, `history/CompositeJobExecutionListener implements JobExecutionListener`, construite à partir d'une `List<JobExecutionListener>` ordonnée. `onEvent`/`onRecoveryStarted` appellent chaque délégué dans un `try`/`catch` **propre à chaque délégué** — un délégué qui échoue n'empêche jamais les suivants d'être appelés (garantie plus forte que le `catch` déjà existant de `ScriptJob` autour de l'appel au listener composite dans son ensemble).
+
+`StandaloneJobRegistration.registerJobs` et `RuntimeIntegrationHook.registerJobs` construisent désormais chacun un `JobMetricsEmitter` à côté du `JobExecutionRepository` existant, les enveloppent dans un seul `CompositeJobExecutionListener`, et passent celui-ci comme unique `executionListener` de `ScriptExecutionDependencies`. Aucun changement dans `MisfireExecutionListener`/`SchedulerBootstrap` — ils lisent déjà `dependencies.executionListener()`, qui atteint désormais les deux abonnés de façon transparente.
+
+### 14.5 Task 7 — exposition HTTP en mode standalone
+
+**Question posée par l'utilisateur après la fin des Tasks 1-6 : « comment les métriques sortent-elles, puisque TSS n'a aucun serveur HTTP ? » — un vrai trou a été trouvé, pas supposé.**
+
+Enregistrer un échantillon et l'exposer en HTTP sont deux choses distinctes. `MetricsRecorder.record(...)` écrit dans un registre `PrometheusMeterRegistry` **statique, en mémoire du processus** (`MicrometerMetricsRecorder`) — rien dans cet appel ne démarre de serveur ni ne pousse quoi que ce soit.
+
+- **Mode embarqué** (TSS dans `payos-runtime`) : rien à faire. `payos-server-http`'s own `HttpServer.handleMetrics()` (confirmé en lisant directement cette classe) scrute déjà exactement ce même registre statique — TSS partage la JVM de l'hôte, donc ses échantillons apparaissent automatiquement sur le même `/metrics`.
+- **Mode standalone** : **vérifié, pas supposé** — `payos-job-scheduler` n'a aucune dépendance vers `payos-server-http`, et `StandaloneMain` ne démarre aucun serveur HTTP. Les échantillons de ce processus restaient donc enregistrés mais réellement inatteignables depuis l'extérieur. L'AC2 de la Story 2.3 (« apparaît aux côtés des autres métriques PayOS, pas dans un système séparé ») ne tenait donc pas réellement pour ce mode de déploiement tel que les Tasks 1-6 l'avaient laissé.
+
+**Décision explicite de l'utilisateur, parmi trois options présentées** (documenter comme limitation ; ajouter un petit point de collecte HTTP ; reporter à une story séparée) : ajouter un petit serveur HTTP Prometheus en mode standalone uniquement, en gardant `PayOSMetrics`/`MetricsRecorder`/`MicrometerMetricsRecorder` entièrement inchangés.
+
+**Changement cross-repo dans `payos` (kernel), confirmé nécessaire par `javap` :** le constructeur à un argument de `PrometheusMeterRegistry` crée son **propre** `PrometheusRegistry` privé (`new PrometheusRegistry()`), jamais le singleton global `PrometheusRegistry.defaultRegistry` — un vrai nouvel accesseur était donc indispensable, pas une simplification de confort :
+
+```java
+// payos-kernel, MicrometerMetricsRecorder — nouvelle méthode
+public static PrometheusRegistry prometheusRegistry() {
+    return PROMETHEUS_REGISTRY.getPrometheusRegistry();  // exactement le registre que scrapePrometheus() lit déjà
+}
+```
+
+`payos-kernel` passé de `2.3.0-RELEASE` à `2.4.0-RELEASE`, installé localement (pas publié) — suite complète du kernel 583/583 verte après l'ajout.
+
+**Nouvelle classe, `bootstrap.StandaloneMetricsServer` (ce module), `Closeable` :**
+
+```java
+public final class StandaloneMetricsServer implements Closeable {
+    public static StandaloneMetricsServer start(int port) throws IOException {
+        HTTPServer httpServer = HTTPServer.builder()
+                .port(port)
+                .registry(MicrometerMetricsRecorder.prometheusRegistry())
+                .buildAndStart();
+        return new StandaloneMetricsServer(httpServer);
+    }
+    public int port() { ... }     // le port réel, même si start(0) a laissé l'OS choisir
+    public void close() { ... }   // arrête le serveur
+}
+```
+
+`HTTPServer` vient d'une **nouvelle dépendance**, `io.prometheus:prometheus-metrics-exporter-httpserver:1.2.1` (le module d'export seul — pas une seconde copie de `micrometer-registry-prometheus`, déjà présent transitivement via `payos-kernel`). Nouvelle clé de configuration, `IJobConfigSpec.Scheduler.METRICS_HTTP_PORT` (`TSS_METRICS_HTTP_PORT`/`metricsHttpPort`, défaut `0` = désactivé — opt-in, même précédent que `MAX_CONCURRENT_EXECUTIONS_PER_TENANT`). Câblée **uniquement** dans `StandaloneMain` : démarrée si `metricsHttpPort > 0`, fermée dans le hook d'arrêt existant à côté de `bootstrap.shutdown(true)`. **`RuntimeIntegrationHook` n'est jamais touché** — garantie structurelle, pas une simple convention, que le mode embarqué ne peut jamais démarrer un second serveur redondant dans un processus hôte déjà servant.
+
+**Correctif de revue de code (round 1) : un échec de bind n'arrête plus tout le processus.** La première version laissait l'`IOException` de `StandaloneMetricsServer.start(...)` se propager hors de `main()` sans aucun `try`/`catch` — un simple port déjà utilisé pour cette fonctionnalité secondaire et opt-in aurait fait planter la planification de jobs tout entière, et pire : si l'échec survenait *après* que `SchedulerBootstrap.start(...)` ait déjà réussi, le scheduler déjà démarré et ses connexions BD fuyaient, puisqu'aucun hook d'arrêt n'avait encore été enregistré. Corrigé en encadrant l'appel d'un `try`/`catch` qui journalise un `WARN` et continue sans exposition de métriques — même philosophie "fail-open" déjà appliquée partout ailleurs dans ce module (un `JobExecutionListener` qui échoue, un contrôle de quota qui échoue). Le hook d'arrêt lui-même enveloppe désormais aussi `metricsServerForShutdown.close()` dans son propre `try`/`catch`, au même titre que l'appel `bootstrap.shutdown(true)` juste à côté.
+
+### 14.6 Référence
+
+Voir [configuration/task-scheduling-system-v4-2026-10-07.md](../configuration/task-scheduling-system-v4-2026-10-07.md), [developer guide §11](../developer/task-scheduler-guide-v10-2026-10-07.md#11-metrics) et [operations guide](../operations/task-scheduling-system-v15-2026-10-07.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
+
+### 14.7 Références (Story 2.3)
+
+- `payos-job-scheduler/_bmad-output/implementation-artifacts/2-3-metrics-emission-to-payosmetrics.md` — Story 2.3 complète, y compris Task 7 (suivi same-day sur l'exposition standalone) et la recherche sur `IMetricsRecorder`/`MetricSample`/`MetricsRecorder`.
+- `payos/src/main/java/ma/s2m/payos/events/metrics/MicrometerMetricsRecorder.java` — façade Micrometer/Prometheus réutilisée directement ; nouvel accesseur `prometheusRegistry()` (Task 7).
+- `payos-server-http/src/main/java/ma/s2m/payos/servers/impl/HttpServer.java` — confirme l'existence et le fonctionnement réel de `/metrics` en mode embarqué (`handleMetrics`, `isMetricsEnabled`, `isMetricsLocalOnly`).
+
+## 15. Story 2.4 — masquage des données sensibles (`history/SensitiveDataScrubber`)
+
+**Ajouté 2026-10-07.** FR24 : empêcher toute donnée tenant sensible d'atteindre `tss_job_execution.failure_message`, les lignes de log d'exécution, ou `PayOSMetrics`.
+
+### 15.1 La tension centrale : `SensitiveFieldMasker` ne masque que des données structurées
+
+**Recherche effectuée avant d'écrire la moindre Task — la convention standing « `SensitiveFieldMasker` est canonique » entre en collision avec un vrai décalage de forme.** Lecture complète de `SensitiveFieldMasker` (`payos-connector-api`) et de ses quatre sites d'appel existants (`AuditEvent`, `ApiProxy`, `ConnectorScriptHandle`, `ConnectorConfigurationEntry`) : les deux méthodes publiques, `mask(Map<String,Object>)` et `isSensitiveKey(String)`, sont **entièrement pilotées par le nom de clé** d'une structure `Map` — aucun scan du *contenu* d'une valeur, aucune regex, aucune heuristique. Cela fonctionne directement pour une donnée déjà structurée (ex. la map de tags de `JobMetricsEmitter`), mais pas du tout pour une chaîne libre sans aucune structure clé/valeur — exactement la forme de `tss_job_execution.failure_message` (un `Throwable#getMessage()` brut). Aucun précédent PayOS pour le scrubbing de texte libre n'existe ailleurs dans le code (confirmé : le masquage d'`AuditEvent` porte uniquement sur sa map `extra`, jamais sur le contenu de texte libre).
+
+**Trois options présentées à l'utilisateur, décision explicite, pas la plus simple :** tronquer/généraliser les erreurs de script plutôt qu'une rédaction au niveau du contenu ; masquer uniquement les données structurées et documenter l'écart texte-libre comme une limitation acceptée ; un hybride — masquer intégralement les données structurées via `SensitiveFieldMasker` directement, et scruter le texte libre au mieux via un nouveau scanner réutilisant `isSensitiveKey` comme unique liste. L'utilisateur a choisi l'hybride.
+
+### 15.2 `history/SensitiveDataScrubber` — scanner de texte libre, best-effort, assumé comme tel
+
+```java
+public final class SensitiveDataScrubber {
+    // Réutilise SensitiveFieldMasker.isSensitiveKey(...) comme unique liste — jamais une seconde
+    // liste parallèle, conformément à la convention standing.
+    public static String scrub(String text) { ... }
+}
+```
+
+Repère les fragments `key: value`/`key=value` dont la clé correspond à `SensitiveFieldMasker.isSensitiveKey(...)` ; seule la *valeur* est remplacée par `SensitiveFieldMasker.MASK`, jamais la clé ni le reste du message. Un message sans forme `key:`/`key=` du tout traverse inchangé, octet pour octet.
+
+**Détail d'implémentation non trivial, découvert empiriquement, pas en théorie :** une première version de la regex (quantificateur glouton `+` suivi d'un lookahead négatif `(?![:=])` pour éviter qu'une « fausse » clé non sensible — par ex. le préfixe `"Error: "` que GraalVM ajoute systématiquement à tout message d'erreur de script, exactement le cas le plus fréquent que cette classe doit traiter — n'avale la vraie paire `key=value` qui la suit) a échoué silencieusement : le moteur de regex Java fait du *backtracking* sur un `+` glouton pour trouver une correspondance plus courte satisfaisant le lookahead (ex. `"passwor"` au lieu de `"password"`), produisant une correspondance tronquée et absurde plutôt que de rejeter la position entièrement. Corrigé en remplaçant le quantificateur glouton par un quantificateur **possessif** (`++`), qui interdit ce backtracking — une valeur candidate qui échoue au lookahead fait échouer tout le match à cette position, ce qui permet au scan de reprendre et de réussir sur la vraie clé un token plus loin. Vérifié par test : `scrub("Error: password=hunter2 invalid")` → `"Error: password=*** invalid"`.
+
+**Limite assumée, documentée, jamais présentée comme une garantie :** un secret brut sans étiquette (`cardNumber:` ou équivalent absent) ne peut pas être détecté — limite inhérente à toute approche par motif sur texte libre, pas un bug à corriger plus tard.
+
+**Écart résiduel assumé, découvert et documenté, pas corrigé :** masquer l'argument `{}` formaté d'un `logger.warn("...{}", ..., scrub(e.getMessage()), e)` ne masque pas la stack trace que SLF4J imprime à partir de l'argument `Throwable` brut final — cette stack trace affiche toujours le `getMessage()` original non masqué en première ligne. Les 6 sites d'appel concernés (`ScriptJob` ×4, `MisfireExecutionListener`, `CompositeJobExecutionListener`) journalisent tous des exceptions de la couche infrastructure/BD, pas du contenu auteuré par un script — le seul chemin vraiment à risque (une erreur levée par le script lui-même) est traité séparément, au point de capture unique de la §15.3, qui ne re-journalise jamais le `Throwable` original ensuite.
+
+### 15.3 Masquage à la source — un seul point de capture, pas un par destination
+
+**« Masqué avant persistance, pas après » (AC1) signifie un seul masquage, pas un recalcul indépendant à chaque consommateur.** `ScriptJob.runJob` capturait auparavant `t.getMessage()` deux fois indépendamment : une fois en ligne pour le message de la `JobExecutionException` levée, une fois dans le bloc `finally` pour `failureMessage`. Refactorisé pour calculer `String maskedFailureMessage = SensitiveDataScrubber.scrub(t.getMessage())` une seule fois dans le bloc `catch` (après `failure = t`, avant le court-circuit `Error` — une `Error` n'est jamais masquée ni persistée du tout, puisqu'elle est relancée telle quelle et n'atteint jamais le `finally`), réutilisé dans les deux endroits. Chemin le plus à risque, confirmé par les numéros de ligne exacts : `invokeScript`'s `PolyglotException` (lignes 275-280) enveloppe le texte d'erreur du script lui-même — contenu auteuré par le tenant, pas par PayOS — avant de devenir `t` dans le catch externe, confirmant que ce point de capture unique le couvre bien.
+
+`JobExecutionRepository.recordCompleted`/`recordRejected` n'ont nécessité **aucun changement** — ils écrivent déjà tel quel ce que `JobExecutionEvent.failureMessage()` leur donne (plus le plafonnement de longueur existant, Story 2.1) ; une fois le point de capture de la §15.3 masqué, chaque chemin d'écriture en aval est masqué par construction, sans logique de masquage dupliquée dans `history/`.
+
+### 15.4 Masquage défensif dans `JobMetricsEmitter`
+
+`JobMetricsEmitter.tags(...)` passe désormais sa map par une nouvelle méthode `static Map<String,String> maskTags(Map<String,String>)` (package-private, délibérément testable directement — aucun des trois tags réels d'aujourd'hui, `scriptPath`/`outcome`/`triggerType`, n'est jamais sensible, donc un test passant uniquement par `tags(...)` ne pourrait jamais prouver que ce filet de sécurité est réellement actif plutôt que du code mort). `maskTags` appelle `SensitiveFieldMasker.mask(Map<String,Object>)` directement — le même appel en masse que `ConnectorScriptHandle.recordAuditEvent` utilise déjà pour un payload connecteur — après une conversion de type triviale (`Map<String,String>` → `Map<String,Object>` → retour, sûre car `mask()` ne change jamais le type `String` d'une valeur, seulement son contenu). Avec le jeu de tags réel d'aujourd'hui, c'est un no-op prouvé par test — couverture défensive pour AC2, pas une correction de bug actuelle.
+
+### 15.5 Référence
+
+Voir [developer guide §12](../developer/task-scheduler-guide-v10-2026-10-07.md#12-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v15-2026-10-07.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
+
+### 15.6 Références (Story 2.4)
+
+- `payos-job-scheduler/_bmad-output/implementation-artifacts/2-4-sensitive-data-masking-in-execution-logs-history-and-metrics.md` — Story 2.4 complète, y compris les trois options présentées à l'utilisateur et la découverte empirique du bug de backtracking regex.
+- `payos-connector-api/src/main/java/ma/s2m/payos/connector/util/SensitiveFieldMasker.java` — le masqueur canonique réutilisé ; confirmé piloté uniquement par nom de clé, sans scan de contenu.
+- `payos-foundation/src/main/java/ma/s2m/payos/events/audit/AuditEvent.java` lignes 439-487 — précédent `isSensitiveKeyName`/`Builder.field(...)` pour un masquage par champ avec échappatoire.
+- `payos/src/main/java/ma/s2m/payos/scripting/ConnectorScriptHandle.java` ligne 343 — précédent le plus proche pour l'appel `mask(Map)` en masse de `JobMetricsEmitter`.

@@ -9,6 +9,7 @@ For **operators** running PayOS in production: deployment, bundle encryption, se
 | Deploying the runtime and bundles | [deployment.md](deployment.md) |
 | Running the notification service daemon | [notification-service.md](notification-service.md) |
 | Running the Task Scheduling System (TSS) — standalone or embedded | [task-scheduling-system-v15-2026-10-07.md](task-scheduling-system-v15-2026-10-07.md) |
+| TSS standalone smoke-test walkthrough — one worked example against a real bundle, plus 3 findings a real run surfaced (one fixed) | [tss-standalone-smoke-test-walkthrough-v2-2026-10-08.md](tss-standalone-smoke-test-walkthrough-v2-2026-10-08.md) |
 | Encrypting/packing bundles (`edc`) | [bundle-encryption.md](bundle-encryption.md) |
 | Managing secrets (Vault, rotation, `spm`) | [secrets-management.md](secrets-management.md) |
 | Logging, correlation, tenancy, audit | [observability.md](observability.md) |

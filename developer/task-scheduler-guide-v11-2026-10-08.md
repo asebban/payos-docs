@@ -1,6 +1,6 @@
 Created: 2026-10-06
-Last updated: 2026-10-07
-Version: 10
+Last updated: 2026-10-08
+Version: 11
 
 # Task Scheduling System: developer guide
 
@@ -199,6 +199,16 @@ Both are bound as globals, exactly like an API script — but which one(s) are b
 - **Platform-level job:** **read + write** — everything above, plus `save`/`update`/`delete`/`deleteById`/`executeUpdate`. No transaction-control methods, though (no `beginTransaction`/etc.) — each write auto-commits the moment it returns. **No cross-write atomicity**: several writes in sequence get no rollback across them if the script later throws — a partial sequence of commits stays committed. If you need all-or-nothing across multiple platform writes, use idempotent upserts or explicit cleanup in a `catch`, not an assumed rollback.
 
 `$DB`/`$PlatformDB` are simply absent (`typeof $DB === 'undefined'`) rather than bound-but-empty when not applicable — check with `typeof` if a script might run in either context, though in practice a given script is written for one or the other, not both.
+
+### `$Logger`
+
+Always bound, for every job, tenant-scoped or platform-level alike — the raw SLF4J `Logger`, exactly the same convention `$Logger` already follows everywhere else in PayOS (API scripts via `ApiResourceHandler`, hook scripts via `HookEngine`). No TSS-specific wrapper, no extra methods beyond what SLF4J itself gives you: `info(message)`, `warn(message)`, `error(message)`, `debug(message)`, each with the `{}`-placeholder overload for one or more arguments (e.g. `$Logger.warn("skipped {} of {} rows", skipped, total)`). Lines land in TSS's own process log under the executing class's logger name — there's no per-job or per-tenant log file, and `$Logger` does not auto-tag lines with `jobId`/`tenantId`/`fireInstanceId`; include those yourself if a line needs to be traced back to one specific execution.
+
+```javascript
+function execute(context) {
+    $Logger.info("starting reconciliation for tenant {}", context.getTenantId());
+}
+```
 
 ## 4. A realistic batch job
 

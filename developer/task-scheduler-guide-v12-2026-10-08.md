@@ -1,6 +1,6 @@
 Created: 2026-10-06
 Last updated: 2026-10-08
-Version: 11
+Version: 12
 
 # Task Scheduling System: developer guide
 
@@ -202,11 +202,11 @@ Both are bound as globals, exactly like an API script — but which one(s) are b
 
 ### `$Logger`
 
-Always bound, for every job, tenant-scoped or platform-level alike — the raw SLF4J `Logger`, exactly the same convention `$Logger` already follows everywhere else in PayOS (API scripts via `ApiResourceHandler`, hook scripts via `HookEngine`). No TSS-specific wrapper, no extra methods beyond what SLF4J itself gives you: `info(message)`, `warn(message)`, `error(message)`, `debug(message)`, each with the `{}`-placeholder overload for one or more arguments (e.g. `$Logger.warn("skipped {} of {} rows", skipped, total)`). Lines land in TSS's own process log under the executing class's logger name — there's no per-job or per-tenant log file, and `$Logger` does not auto-tag lines with `jobId`/`tenantId`/`fireInstanceId`; include those yourself if a line needs to be traced back to one specific execution.
+Always bound, for every job, tenant-scoped or platform-level alike. Same `info(message)`/`warn(message)`/`error(message)`/`debug(message)` surface $Logger already follows everywhere else in PayOS (API scripts via `ApiResourceHandler`, hook scripts via `HookEngine`), each with the `{}`-placeholder overload for one or more arguments (e.g. `$Logger.warn("skipped {} of {} rows", skipped, total)`) — but unlike those, TSS's `$Logger` is **not** a bare SLF4J `Logger`: it's wrapped (`JobLoggerBinding`) specifically so every line a tenant-scoped job logs is automatically prefixed with `[tenant:<id>] `, with no need to interpolate `context.getTenantId()` yourself just to make a line traceable back to one tenant. A platform-level job (no owning tenant) gets lines unprefixed, exactly like the bare-`Logger` behavior this replaced. Lines still land in TSS's own process log under the executing class's logger name — there's no per-job or per-tenant log file, and `jobId`/`fireInstanceId` are still not auto-tagged; include those yourself if a line needs to be traced back to one specific execution, not just one tenant.
 
 ```javascript
 function execute(context) {
-    $Logger.info("starting reconciliation for tenant {}", context.getTenantId());
+    $Logger.info("starting reconciliation"); // -> "[tenant:acme-corp] starting reconciliation"
 }
 ```
 

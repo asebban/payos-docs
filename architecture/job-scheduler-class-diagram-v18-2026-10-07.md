@@ -898,7 +898,7 @@ Voir [configuration/task-scheduling-system-v4-2026-10-07.md](../configuration/ta
 
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-1-live-and-point-in-time-view-of-job-executions.md` — Story 2.1, y compris la correction du design de pool de connexions et le déplacement de `JobExecutionListener`.
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-2-query-execution-history-and-failure-diagnosis.md` — Story 2.2, y compris la recherche sur le quota (`TenantPolicyService`/`ISlidingWindowCounter` écarté), le constat empirique sur la récupération après crash, et le suivi same-day sur la surcharge par tenant.
-- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v11-2026-10-08.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v12-2026-10-08.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
 - [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v4-2026-10-07.md) — référence de configuration (quota global/par tenant, récupération après crash).
 
 ## 14. Story 2.3 — métriques (`metrics/`) et exposition HTTP standalone
@@ -1028,7 +1028,7 @@ public final class StandaloneMetricsServer implements Closeable {
 
 ### 14.6 Référence
 
-Voir [configuration/task-scheduling-system-v4-2026-10-07.md](../configuration/task-scheduling-system-v4-2026-10-07.md), [developer guide §11](../developer/task-scheduler-guide-v11-2026-10-08.md#11-metrics) et [operations guide](../operations/task-scheduling-system-v15-2026-10-07.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
+Voir [configuration/task-scheduling-system-v4-2026-10-07.md](../configuration/task-scheduling-system-v4-2026-10-07.md), [developer guide §11](../developer/task-scheduler-guide-v12-2026-10-08.md#11-metrics) et [operations guide](../operations/task-scheduling-system-v15-2026-10-07.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
 
 ### 14.7 Références (Story 2.3)
 
@@ -1076,7 +1076,7 @@ Repère les fragments `key: value`/`key=value` dont la clé correspond à `Sensi
 
 ### 15.5 Référence
 
-Voir [developer guide §12](../developer/task-scheduler-guide-v11-2026-10-08.md#12-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v15-2026-10-07.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
+Voir [developer guide §12](../developer/task-scheduler-guide-v12-2026-10-08.md#12-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v15-2026-10-07.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
 
 ### 15.6 Références (Story 2.4)
 

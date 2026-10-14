@@ -228,6 +228,7 @@ A tenant-scoped job can fan a batch of items out across a small, bounded pool of
 
 ```javascript
 var results = $Parallel.forEach([101, 102, 103], function(orderId, $DB) {
+    $Logger.info("processing order " + orderId);
     var order = $DB.get("Order", orderId);
     order.put("status", "processed");
     $DB.update("Order", order);
@@ -235,6 +236,8 @@ var results = $Parallel.forEach([101, 102, 103], function(orderId, $DB) {
 });
 // results: [ { item: 101, result: 101 }, { item: 102, result: 102 }, { item: 103, result: 103 } ]
 ```
+
+**`$Logger` works inside `fn` too — it's the one binding that doesn't need to be a parameter.** Unlike `$DB`, `$Logger` is bound as the same kind of ambient global inside every worker's own isolated script as it is in the rest of your job — call it exactly as you already do elsewhere (`$Logger.info(...)`/`warn`/`error`/`debug`), no need to receive it through `fn`'s parameter list. This is deliberately safe to do, unlike exposing `$DB` this way: `$Logger` holds no per-execution state (no session, no transaction) that two threads could step on, just a constant tenant-prefix string and a delegate SLF4J logger — fine to reuse the exact same instance across every concurrently-running worker. If you see "`$Logger is not defined`" (or any other binding) inside a worker function, it means that binding genuinely isn't exposed there — only `$Logger` gets this treatment; `$DB`/`$PlatformDB` must come in through `fn`'s own parameters (`$DB`) or aren't available at all (`$PlatformDB` — see "Tenant-scoped jobs only" below).
 
 ### Each worker runs `fn` in its own isolated script — no closures over your outer variables
 
@@ -265,7 +268,7 @@ Your job's own `$DB` is backed by one database session, opened for that one exec
 
 ### Error handling — `failFast`
 
-By default, one item failing does not stop the others — the point is to get through the whole batch, not to treat the first bad row as fatal to every other row:
+By default, one item failing does not stop the others — the point is to get through the whole batch, not to treat the first bad row as fatal to every other row. **This also means a failing item is otherwise completely silent**: it doesn't throw, doesn't appear in your job's own log output on its own, and doesn't affect your job's `SUCCESS` outcome (§7) — the only place it shows up is the `error` field on that item's own entry in the returned array. Always inspect `results` for `error` entries if you care whether every item actually succeeded; don't assume "the call returned" means "every item worked":
 
 ```javascript
 var results = $Parallel.forEach(orderIds, function(orderId, $DB) {

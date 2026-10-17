@@ -139,25 +139,28 @@ For a more detailed explanation about Queue servers, see [Queue server documenta
 For `api` resources, `ApiResourceHandler.handle(application, request)` runs the full pipeline:
 
 ```
-1. ResourceLocator.locate(...)                → ApiResource (script body, roles, sourceUri)
+1. ResourceLocator.locate(...)                → ApiResource (script body, roles, atomicityScope, sourceUri)
 2. Security (if roles defined):
      SecurityServiceFactory.create(application, request)
      authenticate(request)  → non-null Response means stop (e.g. redirect to login)
      check(request, roles)  → non-null Response means forbidden
 3. Idempotency: IdempotencyService.checkIdempotency(request) → reject missing/blank keys (unless failOnAbsenceOfIdempotencyKey=false), or return cached Response if present
-4. Create scripting engine + inject bindings (see below) — `$DB` is bound here already, so hooks can see it
+4. Create scripting engine + inject most bindings (see below) — `$DB`/`$PlatformDB`/`$Audit`/`$Queue` are deliberately NOT bound yet at this point, so hooks cannot see them
 5. Hook API_PRE_SCRIPT  + dispatch native webhook "api.pre-request"
-6. Request scope: databaseService.setCurrentTenant(tenant); beginRequestScope() — activated **after** the pre-hook, deliberately (preserves original behavior)
-7. response = scriptingEngine.executeScript(apiScript, sourceUri, request)
-8. On success:
+6. Request scope: databaseService.setCurrentTenant(tenant); beginRequestScope(); platformDatabaseService.beginRequestScope() — activated **after** the pre-hook, deliberately (preserves original behavior)
+7. Resolve atomicityScope (default "tenant") → bind `$DB` (full, only if atomicityScope ≠ "platform"), `$PlatformDB` (full if atomicityScope == "platform", else read-only), `$Audit`/`$Queue` (through whichever of the two sessions atomicityScope names)
+8. response = scriptingEngine.executeScript(apiScript, sourceUri, request)
+9. On success:
      Hook API_POST_SCRIPT + dispatch native webhook "api.post-request"
     IdempotencyService.storeResponse(request, response)
    On exception:
      Hook API_ON_ERROR + dispatch native webhook "api.on-error"
      unwrap BusinessException if present
-9. finally: AuditLogger.logApiExecution(userId, tenantId, correlationId, path, status)
-            databaseService.endRequestScope(); clearCurrentTenant()
+10. finally: AuditLogger.logApiExecution(userId, tenantId, correlationId, path, status)
+             databaseService.endRequestScope(); clearCurrentTenant(); platformDatabaseService.endRequestScope()
 ```
+
+`$DB`/`$PlatformDB`/`$Audit`/`$Queue` all move together with step 7, not step 4, for the same reason: a pre-hook's use of any of them would silently run outside the request's transaction (or, for `$Audit`/`$Queue`, through a session that isn't open yet) — leaving them undefined during the pre-hook turns that into an immediate `"... is not defined"` rather than a silent semantic gap. See [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](atomicity-db-audit-queue-v1-2026-10-16.md) for the full `atomicityScope` mechanism.
 
 Hooks and native webhooks are detailed in [eventing-webhooks.md](eventing-webhooks.md);
 idempotency and audit logging in [security-architecture.md](security-architecture.md).
@@ -177,8 +180,10 @@ corresponding service is configured:
 | `$Library` | yes | `LibraryProxy` over `lib/` |
 | `$I18n` | yes | `I18nProxy` |
 | `$Errors` | yes | `ErrorsProxy` |
-| `$DB` | only if a database service is configured | `IDatabaseService` |
-| `$Queue` | only if a queue client is configured | `QueueBinding(queueClient)` — publish-only, no `subscribe` |
+| `$DB` | only if a database service is configured **and** `atomicityScope` ≠ `"platform"` | `DatabaseBinding(databaseService)` — full read/write |
+| `$PlatformDB` | only if a platform database service is configured | `DatabaseBinding` (full) if `atomicityScope == "platform"`, otherwise `ReadOnlyDatabaseBinding` — see [atomicity-db-audit-queue-v1-2026-10-16.md §2.2](atomicity-db-audit-queue-v1-2026-10-16.md#22-locking-out-the-database-atomicityscope-doesnt-cover) |
+| `$Audit` | always | `AuditBinding(atomicitySession, tenant, correlationId, appId, path, userId)` — writes `payos_audit_event` directly through whichever of `$DB`/`$PlatformDB` `atomicityScope` names; `logEvent(...)` throws if that session isn't configured |
+| `$Queue` | only if a queue client is configured | `QueueBinding(queueClient, atomicitySession, tenant)` — exposes `publish(destination, message[, replyTo])` (`message` a plain `Map` or a `QueueMessage`; writes a Transactional Outbox row through the same session as `$Audit`) and `isConnected()`; the two legacy, implicit-default-topic overloads are not exposed on this binding at all |
 | `$Secrets` | only if a secret provider is configured | `SecretsBinding(provider, tenant)` |
 | `$WebHooks` | only if a dispatcher is configured | `WebhookHooksProxy` |
 | `$Connector` | only if `PayOSConfig.getConnectorRegistry()` is set (never true today — `BootServer` doesn't wire it) | `ConnectorBinding` |

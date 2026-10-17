@@ -1,3 +1,7 @@
+Created: 2026-10-16
+Last updated: 2026-10-17
+Version: 4 — supersedes v3 : `publish(...)` accepte désormais un objet/map JS ordinaire (sans construire de `QueueMessage`) et un paramètre `replyTo` optionnel (§3.2/§3.4/§4.4) ; correction de l'ordre des sous-sections 3.3/3.4 (une erreur de la v3 plaçait 3.4 avant 3.3).
+
 # Guide développeur — Queues PayOS : configurer et utiliser publisher et consumer (de A à Z)
 
 Ce guide couvre la messagerie par file (queue) PayOS de bout en bout pour un développeur : configuration du côté **publisher** (publier des messages depuis un script via `$Queue`) et du côté **consumer** (recevoir des messages via le transport `queue` et les traiter comme une requête normale), avec un exemple complet pour chaque côté. Il consolide en un seul parcours ce qui est autrement réparti entre [architecture/queue-architecture.md](../architecture/queue-architecture.md) (architecture interne, deux instances `NatsQueueClient` distinctes, traces de code), [configuration/queue-service.md](../configuration/queue-service.md) et [configuration/servers.md](../configuration/servers.md) (référence de configuration), et [queue-messaging.md](queue-messaging.md) (référence de l'API `$Queue`) — ces pages restent les références détaillées ; ce guide en est le fil conducteur pratique.
@@ -17,7 +21,7 @@ flowchart LR
     end
     NATS[("Broker NATS<br/>(JetStream)")]
 
-    Script -->|"publish(destination, QueueMessage)"| NATS
+    Script -->|"publish(destination, message)"| NATS
     NATS -->|"consommation"| QS
     QS -->|"routage via Server.processRequest,<br/>même pipeline que HTTP/TCP"| Handler
 ```
@@ -64,13 +68,13 @@ Ajoutez le bloc `queue-service` dans le `bootstrap.json` de votre bundle :
 | `type` | — | Type de connecteur (`nats`), résolu via `IQueueClientFactory`/`ServiceLoader`. |
 | `host` | — | Hôte du broker. **Obligatoire** — son absence lève une `IllegalStateException` au démarrage. |
 | `port` | — | Port du broker. **Obligatoire** au même titre que `host`. |
-| `publisher-topic` | — | Sujet legacy fixé à la connexion, utilisé par `publish(message)`/`publish(message, replyTopic)`. **Obligatoire** même si vous n'utilisez que l'API broker-agnostique par destination — son absence lève aussi une `IllegalStateException`. |
+| `publisher-topic` | — | Sujet legacy fixé à la connexion du client `$Queue`. Depuis 2026-10-16, plus aucune méthode de `$Queue` ne publie sur ce sujet (`publish(message)`/`publish(message, replyTopic)` ont été retirées du binding, voir §3.2) — seul le mécanisme interne d'auto-publication d'insight du noyau (`publishInsightToQueue`, hors script) l'utilise encore. **Obligatoire** même si vous n'utilisez que l'API broker-agnostique par destination côté script — son absence lève aussi une `IllegalStateException`. |
 
 Sans ce bloc (ou avec `enabled: false`), `$Queue` est simplement absent des scripts — aucune erreur de démarrage n'est levée dans ce cas.
 
 ### 3.2 Publier un message
 
-Deux familles d'API coexistent sur `$Queue` (voir [queue-messaging.md](queue-messaging.md) pour la référence complète) :
+`$Queue` expose quatre surcharges `publish(destination, message[, replyTo])`, `message` étant soit un objet/map JS ordinaire, soit un `QueueMessage` déjà construit (voir [queue-messaging.md](queue-messaging.md) pour la référence complète). La forme la plus simple — un objet JS ordinaire — suffit pour la plupart des usages :
 
 ```javascript
 function execute(request, controlData) {
@@ -81,13 +85,10 @@ function execute(request, controlData) {
         correlationId: $Request.getContextData().get("correlationId")
     };
 
-    // API broker-agnostique par destination — celle à privilégier : cible une destination
-    // explicite, indépendante du sujet fixé à la connexion, et retourne un MessageHandle.
-    var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
-        controlData.orderId, JSON.stringify(event), {}, "orders-created");
-    $Queue.publish("orders-created", message);
+    // Forme la plus simple : un objet JS ordinaire, aucune construction de QueueMessage.
+    var handle = $Queue.publish("orders-created", event);
 
-    return { orderId: controlData.orderId, status: "queued" };
+    return { orderId: controlData.orderId, status: "queued", outboxId: handle.getId() };
 }
 
 function loadControlData(request) {
@@ -98,9 +99,10 @@ function loadControlData(request) {
 function emitInsight(request, response, payload) { return null; }
 ```
 
-- `publish(destination, QueueMessage)` est **asynchrone du point de vue métier** (aucune réponse du consommateur n'est attendue) mais l'appel lui-même bloque jusqu'à l'acquittement de la publication par le broker.
+- `publish(destination, message)` **n'appelle plus le broker pendant la requête** — voir §3.4. L'appel écrit une ligne dans `payos_queue_outbox` via la transaction `$DB`/`$PlatformDB` (selon `atomicityScope`, voir [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md)) et retourne rapidement ; la publication réelle sur le broker a lieu après coup, de façon asynchrone, par un dispatcher séparé.
 - Toujours propager `tenantId`/`correlationId` dans le payload publié — un consommateur asynchrone n'a aucun autre moyen de les retrouver (voir [operations/observability.md](../operations/observability.md)).
-- `publish(message)` (un seul argument, sujet legacy) reste disponible pour des usages plus simples, mais ne permet pas de cibler une destination arbitraire — préférez la forme par destination pour tout nouveau code.
+- Les quatre surcharges destination-based sont les **seules** que `$Queue` expose aux scripts depuis 2026-10-16/17 — `publish(message)`/`publish(message, replyTopic)` (sujet legacy fixé à la connexion, un seul argument) ont été retirées du binding `$Queue` : sans destination explicite à associer à une ligne d'outbox, elles ne pouvaient jamais porter la garantie transactionnelle du §3.4, donc plutôt que de les laisser accessibles sans cette garantie, elles ont été supprimées du binding. `IQueueClient` conserve ces deux méthodes — seul `$Queue` côté script ne les expose plus.
+- Besoin d'un id explicite ou de métadonnées au-delà de `replyTo` ? Construisez un `QueueMessage` à la place — voir le message `envelope` du §3.3, qui l'utilise justement pour ça — et passez-le à `publish(destination, message)`/`publish(destination, message, replyTo)` (mêmes surcharges, mais `message` est alors un `QueueMessage`).
 
 ### 3.3 Publier un message consommé par un `payos-server-queue` (QueueServer)
 
@@ -138,7 +140,32 @@ function execute(request, controlData) {
 function emitInsight(request, response, payload) { return null; }
 ```
 
-Notez que c'est le **payload JSON** (`envelope`) qui porte `method`/`path`/`appId`/etc. — pas les métadonnées du `QueueMessage` (4ᵉ position du constructeur, réservées à des clés techniques comme `replyTo`, voir §4.4).
+Notez que c'est le **payload JSON** (`envelope`) qui porte `method`/`path`/`appId`/etc. — pas les métadonnées du `QueueMessage` (4ᵉ position du constructeur, réservées à des clés techniques comme `replyTo` ; `publish(destination, message, replyTo)` positionne cette entrée pour vous, voir §4.4).
+
+### 3.4 Le pattern Transactional Outbox et son dispatcher
+
+`publish(destination, message)` garantit : rien n'est publié si la transaction de la requête n'a pas committé ; tout ce qui a committé sera publié, éventuellement, avec retry jusqu'au succès. Un composant séparé, `QueueOutboxDispatcher`, démarré et arrêté aux côtés de `QueueServer` (§4.1) — pas une entrée `servers[]` à part — lit périodiquement les lignes `PENDING` de `payos_queue_outbox` (tous les tenants connus, puis la base plateforme) et appelle réellement `IQueueClient.publish(destination, message)` pour chacune. Il réutilise la connexion broker déjà établie par `QueueServer`, sans en ouvrir une seconde.
+
+**Aucun message n'est jamais abandonné.** `maxAttempts` ne sert qu'à faire passer le log en `ERROR` (au lieu de `WARN`) une fois ce seuil dépassé, pour attirer l'attention d'un opérateur — le message reste `PENDING` et continue d'être retenté indéfiniment. Il n'existe ni statut `FAILED` ni file morte (DLQ).
+
+Ce dispatcher se configure avec deux clés optionnelles, sur la **même** entrée `servers[]` que celle du §4.1 (pas une entrée séparée) :
+
+```json
+{
+  "servers": [
+    { "protocol": "queue", "host": "localhost", "port": 4222,
+      "type": "nats", "consumer-topic": "orders.created",
+      "maxAttempts": 10, "pollIntervalSeconds": 10 }
+  ]
+}
+```
+
+| Clé | Défaut | Rôle |
+| --- | --- | --- |
+| `maxAttempts` | `10` | Seuil de signalement uniquement (voir ci-dessus) — jamais un seuil d'abandon. |
+| `pollIntervalSeconds` | `10` | Fréquence (en secondes) à laquelle le dispatcher vérifie `payos_queue_outbox`. |
+
+Détail complet : [architecture/atomicity-db-audit-queue-v1-2026-10-16.md §4](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md#4-queue--the-transactional-outbox-pattern).
 
 ## 4. Configurer et utiliser le côté consumer
 
@@ -159,8 +186,9 @@ Ajoutez une entrée `protocol: "queue"` dans `servers[]` du `bootstrap.json` :
 | --- | --- |
 | `type` | Type de connecteur queue (`nats`), résolu via `IQueueClientFactory`. |
 | `consumer-topic` | Destination(s) consommée(s). Accepte **une chaîne unique ou une liste** (`["orders.created", "orders.updated"]`) — dans ce dernier cas, un seul listener est abonné à toutes les destinations, et `QueueMessage.getDestination()` permet de savoir laquelle a livré un message donné. Par défaut `default-topic` si absent. |
+| `maxAttempts`, `pollIntervalSeconds` | Configuration du dispatcher d'outbox démarré aux côtés de cette même instance `QueueServer` — voir §3.4. Sans rapport avec la consommation de requêtes elle-même. |
 
-Cette entrée démarre une instance `QueueServer` **indépendante** du client publisher du §3 — même broker, connexion et sujet différents.
+Cette entrée démarre une instance `QueueServer` **indépendante** du client publisher du §3 — même broker, connexion et sujet différents. Elle démarre aussi, automatiquement, le dispatcher d'outbox du §3.4, qui réutilise cette même connexion.
 
 ### 4.2 Ce qui arrive quand un message est reçu
 
@@ -228,13 +256,18 @@ function emitInsight(request, response, payload) { return null; }
 
 ### 4.4 Réponse et pattern requête/réponse (optionnel)
 
-Si le message entrant porte une métadonnée `replyTo` non vide, `QueueServer` publie automatiquement la réponse du handler (sérialisée en JSON : `statusCode`, `message`, `body`, `headers`, `tenantId`, `correlationId`) sur ce sujet, via `publish(replyTo, ...)`. Ce n'est **pas** calculé — c'est à l'émetteur de la définir explicitement dans les métadonnées du `QueueMessage` publié :
+Si le message entrant porte une métadonnée `replyTo` non vide, `QueueServer` publie automatiquement la réponse du handler (sérialisée en JSON : `statusCode`, `message`, `body`, `headers`, `tenantId`, `correlationId`) sur ce sujet, via `publish(replyTo, ...)`. Ce n'est **pas** calculé — c'est à l'émetteur de la définir explicitement. Le plus simple : le troisième paramètre `replyTo` de `publish(destination, message, replyTo)`, disponible aussi bien avec un objet JS ordinaire qu'avec un `QueueMessage` :
+
+```javascript
+$Queue.publish("orders.created", envelope, "orders.created.replies");
+```
+
+Équivalent avec un `QueueMessage` construit à la main (utile si vous avez aussi besoin d'un id explicite) :
 
 ```javascript
 var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
-    controlData.orderId, JSON.stringify(envelope),
-    { "replyTo": "orders.created.replies" }, "orders.created");
-$Queue.publish("orders.created", message);
+    controlData.orderId, JSON.stringify(envelope), {}, "orders.created");
+$Queue.publish("orders.created", message, "orders.created.replies");
 ```
 
 > ⚠️ **`$Queue.subscribe(...)` n'existe plus — ce n'est pas qu'une question de style, c'est structurel.** Une version antérieure de ce guide montrait un script s'abonnant lui-même via `$Queue.subscribe(...)` pour récupérer la réponse ; c'était incorrect, pas juste déconseillé, donc `$Queue` (`QueueBinding`, repo `payos`) n'expose plus que `publish(...)`/`isConnected()` — `subscribe(...)`/`connect(...)`/`disconnect()` ne sont plus accessibles depuis un script du tout :
@@ -313,6 +346,7 @@ Ce pattern reste **asynchrone de bout en bout** : le script émetteur ne bloque 
 
 ## 7. Références
 
+- [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) — le pattern Transactional Outbox (§3.4 de ce guide) et son articulation avec `$Audit`/`atomicityScope`.
 - [architecture/queue-architecture.md](../architecture/queue-architecture.md) — architecture interne complète (deux instances `NatsQueueClient`, mécanisme `ServiceLoader`, traces de séquence publish/subscribe, divergences doc/code connues).
 - [queue-messaging.md](queue-messaging.md) — référence complète de l'API `$Queue` (`QueueBinding`, publish-only — toutes les surcharges `publish`).
 - [configuration/queue-service.md](../configuration/queue-service.md) — référence de configuration du côté publisher.

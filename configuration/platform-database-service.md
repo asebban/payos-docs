@@ -40,12 +40,17 @@ If `platform-database-service` is absent from configuration, `$PlatformDB` is si
 
 `database-service` derives its effective schema/isolation from the [`multitenancy`](multi-tenancy.md) block per tenant. `platform-database-service` does not — it is one connection pool, one schema, one Hibernate mapping set, for the whole runtime's lifetime, regardless of which tenant is making the request. See [architecture/multi-tenancy.md](../architecture/multi-tenancy.md#platform-scoped-database-platformdb) for why this is a separate database connection rather than a per-provider tenant-filtering flag.
 
+## `$PlatformDB` is read-only unless an endpoint opts into it
+
+Configuring this block makes `$PlatformDB` available, but by default it's a **read-only** subset (`get`/`getFresh`/`findAll`/`find`/`list`/`unique`/`first`/`newParams` — no writes). Full read/write access is granted only to an endpoint that declares `atomicityScope: "platform"` in its `mappings.json` entry — the same field that also removes `$DB` from that endpoint entirely. This is enforced by the platform, not left to application convention. See [developer/platform-database-usage.md](../developer/platform-database-usage.md#atomicityscope-and-the-read-onlyfull-split) and [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md).
+
 ## Hot reload
 
 `platform-database-service` participates in [hot reload](../operations/hot-reload.md), but **unlike** `database-service`: the previous connection pool is closed **immediately**, synchronously, with no `retired-session-factory-close-delay-seconds`-style grace period to let in-flight `$PlatformDB` requests drain. Avoid reloading configuration that changes `platform-database-service` while requests actively using `$PlatformDB` are in flight.
 
 ## Next
 
+- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) — the `atomicityScope` field and the read-only/full split.
 - [Developer: platform database usage (`$PlatformDB`)](../developer/platform-database-usage.md)
 - [Configuration: database service](database-service.md)
 - [Architecture: multi-tenancy](../architecture/multi-tenancy.md)

@@ -69,8 +69,13 @@ the global one. See [developer/application-model.md](../developer/application-mo
 
 `database-service` is always tenant-scoped — see [Multi-tenancy interaction](#multi-tenancy-interaction) above. For data that must **not** be duplicated per tenant (a country or currency table), see [platform-database-service.md](platform-database-service.md) — a separate, optional database backing `$PlatformDB`.
 
+## `$DB` can be entirely absent on an `atomicityScope: "platform"` endpoint
+
+An endpoint's `atomicityScope` field (`mappings.json`, default `"tenant"`) decides which of `$DB`/`$PlatformDB` carries `$Audit`/`$Queue`'s atomicity guarantee. An endpoint declared `atomicityScope: "platform"` gets no `$DB` at all — not a read-only version, `typeof $DB === 'undefined'` — since it has no declared reason left to touch the tenant database. This is independent of whether `database-service` itself is configured. See [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) for the full mechanism.
+
 ## Next
 
 - [developer/data-access.md](../developer/data-access.md)
 - [architecture/data-architecture.md](../architecture/data-architecture.md)
+- [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) — `atomicityScope` and the `$DB`/`$PlatformDB` lockdown.
 - [configuration/platform-database-service.md](platform-database-service.md) — the tenant-independent counterpart, for reference/master data.

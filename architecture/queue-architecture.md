@@ -141,7 +141,7 @@ sequenceDiagram
     Note over Cfg: exposé aux scripts JS comme $Queue
 ```
 
-Et, en parallèle, un **second** chemin de création pour le transport "queue" lui-même :
+Et, en parallèle, un **second** chemin de création pour le transport "queue" lui-même — qui construit aussi, depuis 2026-10-16, le dispatcher d'outbox (§8) apparié à ce `QueueServer` :
 
 ```mermaid
 sequenceDiagram
@@ -149,15 +149,19 @@ sequenceDiagram
     participant Servers as Servers.start("queue",...)
     participant Prov as QueueServerProvider
     participant QC as QueueClients.create(type)
-    participant QS as new QueueServer(client, topics)
+    participant Disp as new QueueOutboxDispatcher(client, maxAttempts, pollIntervalSeconds)
+    participant QS as new QueueServer(client, mapper, topics, dispatcher)
 
     Boot->>Servers: start(host, port, "queue", serverConf)
     Servers->>Prov: ServiceLoader<ServerProvider> → protocol()=="queue"
     Prov->>QC: resolveQueueClient(serverConf)
     QC-->>Prov: nouvelle instance NatsQueueClient
-    Prov->>QS: new QueueServer(queueClient, consumerTopics)
+    Prov->>Disp: construit le dispatcher (lit maxAttempts/pollIntervalSeconds sur serverConf)
+    Prov->>QS: new QueueServer(queueClient, mapper, consumerTopics, dispatcher)
     Servers->>QS: server.start(host, port)
     QS->>QS: queueClient.connect(...) puis subscribe(consumerTopics, listener)
+    QS->>Disp: dispatcher.start() — après le subscribe, avant la boucle de blocage
+    Disp->>Disp: ensureSchemaFor(payos_queue_outbox) puis démarre son thread daemon
 ```
 
 **Fichiers clés :**
@@ -239,8 +243,9 @@ sequenceDiagram
 ```
 
 - `PolyglotScriptingEngine.executeScript(...)` exige que le script API définisse trois fonctions JS : `execute`, `loadControlData`, `emitInsight`.
-- `publishInsightToQueue(...)` récupère `PayOSConfig.getQueueClient()` puis appelle `queueClient.publish(insightJson)` → `NatsQueueClient.publish(String)` → publie sur le `subject` fixé à la connexion (= `publisher-topic`).
-- Un script métier peut aussi publier explicitement via le binding `$Queue.publish(JSON.stringify(...))` (même chemin de code, un seul argument = le message).
+- `publishInsightToQueue(...)` récupère `PayOSConfig.getQueueClient()` puis appelle `queueClient.publish(insightJson)` → `NatsQueueClient.publish(String)` → publie sur le `subject` fixé à la connexion (= `publisher-topic`). Ce chemin appelle `IQueueClient` **directement**, sans passer par le binding `$Queue` — c'est un mécanisme interne du noyau, pas quelque chose qu'un script déclenche.
+
+> **Depuis 2026-10-16/17, ce flux ne concerne plus `$Queue` du tout.** Les deux surcharges "legacy" (`publish(message)`/`publish(message, replyTopic)`) ont été **retirées du binding `$Queue`** — un script ne peut plus les appeler (`$Queue.publish(message)` à un seul argument n'existe plus). Les quatre surcharges `publish(destination, message[, replyTo])` encore exposées aux scripts (`message` : objet/map JS ordinaire ou `QueueMessage`, §8) n'appellent plus `NatsQueueClient` du tout pendant la requête : chacune écrit une ligne dans `payos_queue_outbox` via la transaction `$DB`/`$PlatformDB`. `IQueueClient` lui-même conserve ses trois méthodes `publish` — seul le binding `$Queue` côté script a été réduit (puis étendu avec de nouvelles formes, toutes destination-based).
 
 ---
 
@@ -293,9 +298,50 @@ sequenceDiagram
 
 ---
 
+## 8. Le pattern Transactional Outbox (`QueueOutboxDispatcher`, depuis 2026-10-16/17)
+
+Document détaillé : [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](atomicity-db-audit-queue-v1-2026-10-16.md). Résumé côté queue :
+
+`$Queue.publish(destination, message[, replyTo])` écrit désormais une ligne `payos_queue_outbox` (`id`, `tenantId`, `destination`, `payload`, `metadata` JSON, `status` `PENDING`/`DISPATCHED`, `attempts`, `createdAt`, `lastAttemptedAt`, `lastError`) via la même transaction que `$DB`/`$PlatformDB` (selon `atomicityScope`), au lieu d'appeler le broker. Rien n'est jamais publié si cette transaction ne committe pas. Quatre surcharges partagent ce chemin : `message` peut être un objet/map JS ordinaire (sérialisé en JSON comme payload, id généré) ou un `QueueMessage` déjà construit (id/métadonnées conservés tels quels), chacune avec ou sans un troisième paramètre `replyTo` (fusionné dans les métadonnées). Ce sont les **seules** surcharges `publish` exposées par `$Queue` — les deux surcharges legacy (§2) ont été retirées du binding plutôt que laissées accessibles sans cette garantie ; `IQueueClient` lui-même les conserve, elles restent utilisées en interne par le noyau (§5).
+
+`QueueOutboxDispatcher` (`payos-server-queue`) est un simple thread worker (daemon), **pas** une entrée `servers[]` à part — il est démarré/arrêté par `QueueServer` lui-même (voir le diagramme de séquence du §3, mis à jour), et réutilise la connexion broker déjà établie par ce `QueueServer`, sans en ouvrir une seconde.
+
+```mermaid
+sequenceDiagram
+    participant Script as Script JS
+    participant QB as QueueBinding
+    participant DB as $DB / $PlatformDB (selon atomicityScope)
+    participant Disp as QueueOutboxDispatcher (thread daemon)
+    participant NQC as NatsQueueClient (déjà connecté par QueueServer)
+    participant NATS as Broker NATS
+
+    Script->>QB: $Queue.publish(destination, message)
+    QB->>DB: save("PayosQueueOutbox", row) — status=PENDING
+    Note over DB: Même transaction que le reste du script — commit/rollback ensemble
+    QB-->>Script: MessageHandle (id de la ligne outbox, pas encore d'id broker)
+
+    loop toutes les pollIntervalSeconds
+        Disp->>DB: list PayosQueueOutbox où status=PENDING, par tenant puis plateforme
+        Disp->>NQC: publish(destination, message) pour chaque ligne
+        NQC->>NATS: publication réelle
+        alt succès
+            Disp->>DB: update status=DISPATCHED
+        else échec
+            Disp->>DB: update attempts+1, lastError
+            Note over Disp: jamais abandonné — maxAttempts ne fait que passer le log en ERROR
+        end
+    end
+```
+
+Chaque tenant a sa propre session dédiée (`IDatabaseService.openDedicatedSessionFor(tenantId)`), ouverte une seule fois et réutilisée d'un cycle à l'autre — pas rouverte à chaque sondage. Une session qui échoue est refermée et rouverte au cycle suivant, sans arrêter le traitement des autres tenants ni du dispatcher lui-même (fail-open).
+
+**Démarrage et échec :** `QueueOutboxDispatcher` n'implémente pas `IServer` et n'a aucune notion de "serveur" — un échec de création de `payos_queue_outbox` y est une simple `IllegalStateException`. C'est `QueueServer.start(...)` (le vrai `IServer`) qui attrape déjà toute exception pendant son propre démarrage et la transforme en `UnableToStartServerException`, exactement comme n'importe quel autre échec — rien de spécifique au dispatcher n'a été ajouté au noyau pour ça. Conséquence : si ce `QueueServer` ne démarre pas, PayOS continue de démarrer sans lui (comportement déjà existant pour tout `servers[]`), mais `$Queue.publish(destination, message)` continue d'écrire dans `payos_queue_outbox` sans que personne ne la vide.
+
+Configuration : `maxAttempts`/`pollIntervalSeconds`, deux clés optionnelles sur la **même** entrée `servers[]` `protocol: "queue"` — voir [configuration/servers.md §Queue keys](../configuration/servers.md#queue-keys-queue) et [developer/queue-setup-guide.md §3.4](../developer/queue-setup-guide.md#34-le-pattern-transactional-outbox-et-son-dispatcher).
+
 ## Divergences doc/code à connaître
 
 Deux endroits de `payos-docs` ne correspondent pas exactement au code réel — à corriger si vous éditez cette doc :
 
-1. **`$Queue.publish(topic, message)` à deux arguments** (vu dans `payos-docs/developer/queue-messaging.md` et `scripting-bindings.md`) laisse penser que le premier argument est un nom de topic. **Ce n'est pas le cas** : la signature réelle est `publish(String message, String replyTopic)` — le premier argument est le **message**, le second un **topic de réponse optionnel** (confirmé par le test `NatsQueueClientLegacyPublishTest`). Seule la forme à un seul argument `$Queue.publish(json)` (documentée dans `javascript-api-endpoint-guide.md`) correspond au comportement réel.
+1. ~~**`$Queue.publish(topic, message)` à deux arguments**...~~ — **résolu le 2026-10-16/17** : `$Queue` n'expose plus `publish(message)` ni `publish(message, replyTopic)` (retirés du binding, §8) — la seule forme valable aujourd'hui est `$Queue.publish(destination, message)`. `javascript-api-endpoint-guide.md` a été corrigé en conséquence ; ce point de divergence n'a plus lieu d'être, conservé ici seulement comme historique.
 2. **Clés de config `url`/`subject`/`credentials`** dans `payos-docs/configuration/example-multi-env.md` ne correspondent pas aux clés réellement lues par le code (`host`/`port`/`publisher-topic`/`consumer-topic`/`type` dans `IConfigSpec.QueueService.Configuration`). Cet exemple est probablement aspirationnel/obsolète.

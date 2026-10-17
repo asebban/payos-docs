@@ -370,10 +370,12 @@ if ($Principal) {
 
 `$Queue` est injecté **uniquement si** un `IQueueClient` est enregistré dans la configuration PayOS (`PayOSConfig.setQueueClient(...)`). Si aucun client n'est configuré, `$Queue` est absent du contexte JS — tester sa présence avant usage.
 
-Méthodes disponibles dans les scripts JS :
+Méthodes disponibles dans les scripts JS (depuis 2026-10-16/17, `$Queue` n'expose plus que celles-ci — voir [queue-messaging.md](queue-messaging.md)) :
 
-- `publish(message: String) : void` — publie un message sur le topic configuré
-- `isConnected() : boolean` — vérifie si la connexion au broker est active
+- `publish(destination: String, message: Object) : MessageHandle` — forme la plus simple : `message` est un objet JS ordinaire, sérialisé en JSON comme payload. Écrit une ligne d'outbox transactionnelle (`payos_queue_outbox`), dans la même transaction que `$DB`/`$PlatformDB` selon `atomicityScope` ; la publication réelle sur le broker a lieu après coup, par un dispatcher séparé — voir [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md).
+- `publish(destination: String, message: Object, replyTo: String) : MessageHandle` — idem, en positionnant en plus la métadonnée `replyTo` lue par `QueueServer` pour router une réponse.
+- `publish(destination: String, message: QueueMessage[, replyTo]) : MessageHandle` — mêmes garanties, mais `message` est un `QueueMessage` déjà construit (utile pour un id explicite ou des métadonnées supplémentaires).
+- `isConnected() : boolean` — vérifie si la connexion au broker est active.
 
 **Cas d'usage typiques** :
 - Publier un événement métier après une opération (paiement créé, statut changé)
@@ -391,13 +393,13 @@ execute(request, controlData) {
     status: "PENDING"
   });
 
-  if ($Queue && $Queue.isConnected()) {
-    $Queue.publish(JSON.stringify({
+  if ($Queue) {
+    $Queue.publish("payments.events", {
       event: "payment.created",
       tenantId: request.getHeader("X-Tenant-Id"),
       correlationId: request.getHeader("X-Correlation-Id"),
       paymentId: saved
-    }));
+    });
   }
 
   $Response.setJsonBody({ status: "OK", id: saved });
@@ -571,8 +573,8 @@ var tenantId = request.getHeader("X-Tenant-Id");
 
 var r = $Api.get(`/payments/${paymentId}`); // X-Correlation-Id/X-Tenant-Id déjà transmis automatiquement
 
-if ($Queue && $Queue.isConnected()) {
-  $Queue.publish(JSON.stringify({ correlationId: correlationId, event: "...", tenantId: tenantId }));
+if ($Queue) {
+  $Queue.publish("payments.events", { correlationId: correlationId, event: "...", tenantId: tenantId });
 }
 ```
 

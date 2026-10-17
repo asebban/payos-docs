@@ -50,6 +50,8 @@ Internal/effective: `RUNTIME_CONFIG_FILE = payos.json`, `RUNTIME_BASE_DIRECTORY 
 | `tcp-handlers-dir` | TCP plugin dir (tcp). |
 | `type` | Queue connector type (queue). |
 | `consumer-topic` | Consumer topic (queue; default `default-topic`). |
+| `maxAttempts` | Transactional Outbox dispatcher's logging threshold (queue; default `10`) — never an abandon threshold. See [atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md). |
+| `pollIntervalSeconds` | Transactional Outbox dispatcher's poll frequency in seconds (queue; default `10`). |
 
 ### `swaggerUI`
 
@@ -222,11 +224,14 @@ Entirely optional — absent means a best-effort zero-config default (`buffered-
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `implementation.category` | `buffered-store` (zero-config only) | `IAuditLogger` provider `type()` to resolve. |
-| `implementation.parameters.buffer.initial-capacity` | `10000` | Starting buffer size. |
-| `implementation.parameters.buffer.max-capacity` | value of `initial-capacity` | Upper bound the buffer may grow to. |
-| `implementation.parameters.buffer.growth-percentage` | `0` | Growth step size (%), capped at `max-capacity`. |
-| `implementation.parameters.buffer.growth-enabled` | `false` | Allow bounded growth before falling back to synchronous overflow persistence. |
+| `implementation.category` | `buffered-store` (zero-config only) | `IAuditLogger` provider `type()` to resolve — `buffered-store` or `database`, coexisting, neither replaces the other. |
+| `implementation.parameters.buffer.initial-capacity` | `10000` | `buffered-store` only. Starting buffer size. |
+| `implementation.parameters.buffer.max-capacity` | value of `initial-capacity` | `buffered-store` only. Upper bound the buffer may grow to. |
+| `implementation.parameters.buffer.growth-percentage` | `0` | `buffered-store` only. Growth step size (%), capped at `max-capacity`. |
+| `implementation.parameters.buffer.growth-enabled` | `false` | `buffered-store` only. Allow bounded growth before falling back to synchronous overflow persistence. |
+| `implementation.parameters.disabled-event-types` | `[]` | `database` category only. System event types to suppress entirely — never `$Audit`'s own writes. |
+| `implementation.parameters.retention-days` | `90` | `database` category only. Purge delay for already-exported `payos_audit_event` rows. |
+| `implementation.parameters.poll-interval-seconds` | `10` | `database` category only. How often the background writer exports/purges. |
 | `store.backend` | `filesystem` (zero-config only) | `IAuditTrailStore` provider `type()` to resolve; may be left unset to run without a store. |
 | `store.filesystem.root` | current working directory (WARN logged) | Base directory for `tenant=<id>/date=YYYY-MM-DD/` partitions. |
 | `store.filesystem.partitioning` | `tenant-plus-day` | Only value supported. |

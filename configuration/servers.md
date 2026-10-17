@@ -19,7 +19,8 @@ protocol through `ServiceLoader`. The transport architecture is in
       "tcp-handlers-dir": "tcp-handlers" },
 
     { "protocol": "queue", "host": "localhost", "port": 4222,
-      "type": "nats", "consumer-topic": "payos.requests" }
+      "type": "nats", "consumer-topic": "payos.requests",
+      "maxAttempts": 10, "pollIntervalSeconds": 10 }
   ]
 }
 ```
@@ -59,13 +60,18 @@ apply. See [architecture/extensibility.md](../architecture/extensibility.md).
 
 ## Queue keys (`queue`)
 
-| Key | Purpose |
-| --- | --- |
-| `type` | Queue connector type (e.g. `nats`). |
-| `consumer-topic` | Topic the server consumes requests from (consumer topic; default `default-topic`). |
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `type` | — | Queue connector type (e.g. `nats`). |
+| `consumer-topic` | `default-topic` | Topic the server consumes requests from (consumer topic). |
+| `maxAttempts` | `10` | Transactional Outbox dispatcher (`QueueOutboxDispatcher`, paired with this same server — see [architecture/atomicity-db-audit-queue-v1-2026-10-16.md §4.1](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md#41-the-dispatcher)): a logging threshold only, never an abandon threshold — past it, a stuck message is logged at `ERROR` instead of `WARN` but keeps being retried indefinitely. |
+| `pollIntervalSeconds` | `10` | How often the dispatcher polls `payos_queue_outbox` for `PENDING` rows. |
 
 The queue transport consumes request envelopes and replies on the reply topic. See
-[queue-service.md](queue-service.md) for the connector itself.
+[queue-service.md](queue-service.md) for the connector itself. The same entry also starts the
+Transactional Outbox dispatcher that drains `$Queue.publish(destination, message)`'s writes —
+not a separate `servers[]` entry, see
+[architecture/atomicity-db-audit-queue-v1-2026-10-16.md §4](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md#4-queue--the-transactional-outbox-pattern).
 
 ## HTTP endpoints & Swagger UI
 

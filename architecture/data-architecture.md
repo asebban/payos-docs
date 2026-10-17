@@ -88,6 +88,8 @@ databaseService.clearCurrentTenant();
 
 Per-tenant schemas and isolation modes (configured under `multitenancy`) let a single runtime serve many tenants with the appropriate data separation. The architectural rules for tenant isolation are in [multi-tenancy.md](multi-tenancy.md).
 
+This same transaction is also what `$Audit`/`$Queue` write into, by default — see [Atomicity across `$DB`, `$Audit`, and `$Queue`](atomicity-db-audit-queue-v1-2026-10-16.md). An endpoint declared `atomicityScope: "platform"` in `mappings.json` has no `$DB` binding at all instead — the transaction described above simply doesn't open for that request.
+
 ### Session-factory lifecycle on reconfiguration
 
 Because configuration can be hot-reloaded (see [runtime-architecture.md](runtime-architecture.md)), a tenant's session factory may be replaced at runtime. The `retired-session-factory-close-delay-seconds` setting keeps the old factory open briefly so in-flight requests can complete before it is closed.
@@ -98,5 +100,6 @@ Applications declare their data model through `mapping-files` (an array of paths
 
 ## Next
 
+- [Atomicity across `$DB`, `$Audit`, and `$Queue`](atomicity-db-audit-queue-v1-2026-10-16.md) — `atomicityScope` and what rides on this transaction.
 - [Developer: data access](../developer/data-access.md) — using `$DB` from a script.
 - [Configuration: database service](../configuration/database-service.md) — every key.

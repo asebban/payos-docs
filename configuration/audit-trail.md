@@ -1,10 +1,10 @@
 Created: 2026-09-11
-Last updated: 2026-09-11
-Version: 1
+Last updated: 2026-10-16
+Version: 2 — supersedes v1: documents the `database` category (`payos-database-audit-trail`), added alongside `buffered-store` — see [`database` category parameters](#database-category-parameters-implementationparameters).
 
 # Audit trail configuration
 
-The `audit-trail` block selects and configures the pluggable, durable PCI-DSS audit-trail capability: which `IAuditLogger` delivery category is active, which `IAuditTrailStore` backend it persists to, and which business-context lookup keys are approved for indexing. It is distinct from the always-on `AuditLogger.logApiExecution(...)` log line described in [operations/observability.md](../operations/observability.md) — this block controls a separate, durable evidence pipeline behind the same `IAuditLogger` call surface.
+The `audit-trail` block selects and configures the pluggable, durable PCI-DSS audit-trail capability: which `IAuditLogger` delivery category is active, which `IAuditTrailStore` backend it persists to, and which business-context lookup keys are approved for indexing. It is distinct from the always-on `AuditLogger.logApiExecution(...)` log line described in [operations/observability.md](../operations/observability.md) — this block controls a separate, durable evidence pipeline behind the same `IAuditLogger` call surface. It also governs the kernel's own system-event logging path (`logAuthSuccess`, `logApiExecution`, ...) — a separate, best-effort-durable path from `$Audit`'s own strict, in-transaction write; see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md#3-audit--a-direct-write-in-the-same-transaction) for how the two relate.
 
 For the operational picture (defaults, metrics, known limitations, troubleshooting) see [operations/audit-trail.md](../operations/audit-trail.md). For the design rationale see the audit-trail architecture decision record referenced from that page.
 
@@ -50,8 +50,8 @@ From `IConfigSpec.AuditTrail` (`payos-foundation`):
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `implementation.category` | — (required if `audit-trail` is present) | Selects the `IAuditLogger` provider by matching its `type()`. Ships with one implementation: `buffered-store` (`payos-buffered-audit-trail`). |
-| `implementation.parameters` | `{}` | Opaque, category-specific block passed through as-is to the selected provider's `initialize(...)`. Shape below is `buffered-store`'s. |
+| `implementation.category` | — (required if `audit-trail` is present) | Selects the `IAuditLogger` provider by matching its `type()`. Ships with two coexisting implementations: `buffered-store` (`payos-buffered-audit-trail`) and `database` (`payos-database-audit-trail`) — see below. Neither replaces the other; pick the one matching your deployment's durability/latency trade-off. |
+| `implementation.parameters` | `{}` | Opaque, category-specific block passed through as-is to the selected provider's `initialize(...)`. Shape depends on the chosen category — both are documented below. |
 | `store.backend` | — (optional) | Selects the `IAuditTrailStore` provider by matching its `type()`. Ships with one implementation: `filesystem` (`payos-audit-trail-store-filesystem`). When absent, no store is bound — see [Operating without a store](#operating-without-a-store-backend). |
 | `business-keys.approved` | `[]` | Allowlist of `businessKeys` names an `AuditEvent` may index. See [Business keys allowlist](#business-keys-allowlist). |
 
@@ -63,6 +63,33 @@ From `IConfigSpec.AuditTrail` (`payos-foundation`):
 | `max-capacity` | value of `initial-capacity` | Upper bound the buffer may grow to. |
 | `growth-percentage` | `0` | Percentage the buffer grows by (capped at `max-capacity`) when full and growth is enabled. |
 | `growth-enabled` | `false` | When `false`, a full buffer goes straight to synchronous overflow persistence — see [operations/audit-trail.md](../operations/audit-trail.md#buffer-overflow-and-the-background-writer). |
+
+### `database` category parameters (`implementation.parameters`)
+
+`payos-database-audit-trail` writes every event — both the kernel's own system events and, separately and atomically, `$Audit`'s own writes (see the architecture note above) — directly into a `payos_audit_event` table, one row per event, rather than buffering in memory. A background `Writer` thread then exports already-committed rows to the configured `store` backend (the same `IAuditTrailStore` mechanism `buffered-store` uses) and purges them afterward, once past the configured retention.
+
+```json
+{
+  "audit-trail": {
+    "implementation": {
+      "category": "database",
+      "parameters": {
+        "disabled-event-types": ["API_EXEC"],
+        "retention-days": 90,
+        "poll-interval-seconds": 10
+      }
+    }
+  }
+}
+```
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `disabled-event-types` | `[]` | System event types (as emitted, e.g. `"API_EXEC"`) to suppress entirely — never written to `payos_audit_event`, never exported. Scoped to the kernel's own frequent system events only; a script's own `$Audit.logEvent(...)` call is never filtered by this list. |
+| `retention-days` | `90` | How long an **already-exported** row stays in `payos_audit_event` before the background writer purges it. A row that hasn't been exported yet is never purged, regardless of age — purging before export would lose the event before it reaches the store. |
+| `poll-interval-seconds` | `10` | How often the background writer checks for unexported rows and runs the retention purge. |
+
+The table itself is created automatically at startup, independent of whatever `ddl-auto` a tenant has configured for its own entities — if it cannot be created for some tenant or the platform database, startup aborts (`FatalException`), since this category treats a lost audit event as unacceptable. See [architecture: atomicity across `$DB`, `$Audit`, and `$Queue` §5](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md#5-startup-who-owns-table-creation-and-what-happens-when-it-fails).
 
 ### `filesystem` store parameters (`store.filesystem`)
 
@@ -102,6 +129,7 @@ Unlike most `bootstrap.json` blocks, `audit-trail` keys have **no** system prope
 
 ## Next
 
+- [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) — `$Audit`'s own strict, in-transaction write (distinct from this block, which governs system events and, for the `database` category, where `$Audit`'s writes also land).
 - [operations/audit-trail.md](../operations/audit-trail.md) — how the feature behaves operationally, metrics, known limitations, troubleshooting.
 - [operations/metrics-catalog-v2-2026-09-11.md](../operations/metrics-catalog-v2-2026-09-11.md) — full audit-trail metric inventory.
 - [operations/observability.md](../operations/observability.md) — the always-on audit log line this capability sits behind.

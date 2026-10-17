@@ -167,13 +167,20 @@ The remaining two of the six event categories, both pre-existing "reference shap
 (§1 and §6 of the contract doc) rather than newly built — but only now, alongside the four
 above, exposed to scripts.
 
-`$Audit` wraps `AuditLogger` but exposes **only** its free-form `logEvent(...)` entry point —
-deliberately none of `IAuditLogger`'s typed lifecycle methods (`logAuthSuccess`,
-`logSessionCreated`, `logApiExecution`, `logStartup`, ...). Those are system events the kernel
-already emits itself at the right moment; letting a script call them too would be redundant at
-best and, at worst, let it fabricate a fake `AUTH_SUCCESS` record in a trail that's supposed to be
-immutable/WORM. `tenantId`/`correlationId`/`appId`/`path`/`userId` are all pre-filled from the
-current request/principal — the script only supplies what's actually event-specific.
+`$Audit.logEvent(...)` writes a `payos_audit_event` row **directly**, through whichever of
+`$DB`/`$PlatformDB` this endpoint's `atomicityScope` names (`mappings.json`, default `"tenant"`)
+— the same transaction, so a later failure in the script rolls the audit row back along with
+everything else, and a successful script commits both together. It is **not** a wrapper over
+`AuditLogger`/`IAuditLogger` (that's a separate, best-effort-durable path the kernel uses for its
+own system events — `logAuthSuccess`, `logApiExecution`, `logStartup`, ...; `$Audit` deliberately
+exposes none of those typed methods to scripts, both because they're redundant with what the
+kernel already emits itself and because letting a script call them could fabricate a fake
+`AUTH_SUCCESS` record in a trail that's supposed to be immutable/WORM). See
+[architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md#3-audit--a-direct-write-in-the-same-transaction)
+for the full mechanism, including what happens if `atomicityScope` names a database that isn't
+configured (`logEvent(...)` throws immediately, rather than silently doing nothing).
+`tenantId`/`correlationId`/`appId`/`path`/`userId` are all pre-filled from the current
+request/principal — the script only supplies what's actually event-specific.
 
 Three overloads are available, all building the same schema-v2 `AuditEvent` shape (see [event-category-payload-contracts-v8-2026-09-14.md §1](event-category-payload-contracts-v8-2026-09-14.md#1-regulatory-audit-trail--auditevent-existing-reference-shape) for the full field contract). The 3-argument form only ever populates `extra` (free-form, never indexed/queryable):
 
@@ -224,29 +231,54 @@ If you use one without configuring its service, it will be absent.
 
 The database access service (`IDatabaseService`). Backed by the
 [database connector](../configuration/database-service.md). See [data access](data-access.md).
+Absent entirely (`typeof $DB === 'undefined'`) on an endpoint declared `atomicityScope: "platform"`
+in `mappings.json` — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md).
 
 ```javascript
 var rows = $DB.find("SELECT * FROM accounts WHERE tenant = ?", [$Tenant]);
+```
+
+### `$PlatformDB`
+
+The tenant-independent counterpart to `$DB`, backed by the
+[platform database connector](../configuration/platform-database-service.md). See
+[platform database usage](platform-database-usage.md). Read-only (`get`/`getFresh`/`findAll`/
+`find`/`list`/`unique`/`first`/`newParams`) unless this endpoint declares `atomicityScope:
+"platform"` in `mappings.json`, in which case it gets the full read/write surface instead (and
+`$DB` disappears from that same endpoint entirely) — see
+[architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md).
+
+```javascript
+var countries = $PlatformDB.findAll("Country");   // works regardless of atomicityScope
 ```
 
 ### `$Queue`
 
 A `QueueBinding` wrapping the message-queue client (`IQueueClient`), registered via
 `PayOSConfig.setQueueClient`. Backed by a [queue connector](../configuration/queue-service.md)
-such as NATS. Publish-only: exposes `publish(...)` and `isConnected()` only — `subscribe(...)` is
-not reachable from scripts at all (a subscription's lifetime must match the process, not a single
-script execution; see [queue messaging](queue-messaging.md) for why). Consuming a queue always
-means a dedicated `payos-server-queue` instance instead — see
+such as NATS. Narrow by design: exposes only four `publish(destination, message[, replyTo])`
+overloads (`message` either a plain `Map`/object or a `QueueMessage`) and `isConnected()` —
+`subscribe(...)` is not reachable from scripts at all (a subscription's lifetime must match the
+process, not a single script execution; see [queue messaging](queue-messaging.md) for why).
+Consuming a queue always means a dedicated `payos-server-queue` instance instead — see
 [queue setup guide §4](queue-setup-guide.md#4-configurer-et-utiliser-le-côté-consumer).
 
 ```javascript
-// publish(destination, QueueMessage) — the overload for targeting an explicit destination.
-// There is no publish(topic, message) two-string overload; see queue-messaging.md for the
-// full set of publish overloads.
-var message = new (Java.type("ma.s2m.payos.queue.QueueMessage"))(
-    orderId, JSON.stringify({ id: 42 }), {}, "payments.events");
-$Queue.publish("payments.events", message);
+// Simplest form — a plain object, no QueueMessage construction needed.
+$Queue.publish("payments.events", { id: 42, type: "payment.created" });
+
+// With a reply destination:
+$Queue.publish("orders.created", { orderId: 42 }, "orders.created.replies");
 ```
+
+Every overload writes a Transactional Outbox row through the same `atomicityScope`-selected
+session `$Audit` uses, instead of calling the broker during the request — a background dispatcher
+performs the real broker publish afterward, with unlimited retry. `IQueueClient` has two other,
+legacy `publish` overloads (implicit default topic, no durable `destination` to route an outbox
+row by) — `$Queue` doesn't expose either of them, precisely because they could never carry this
+guarantee. See
+[queue-messaging.md](queue-messaging.md#the-publish-overloads)
+and [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md#4-queue--the-transactional-outbox-pattern).
 
 ### `$Secrets`
 
@@ -360,8 +392,12 @@ sandbox blocks a denylist such as `java.lang.System`). See
 Bindings are injected by `ApiResourceHandler` immediately before script execution, after the
 tenant scope is opened and security has run. `HookEngine.injectCommonBindings(...)` duplicates
 the same wiring for the standalone hook-execution path — the two must be kept in sync when adding
-a binding. Optional bindings (`$DB`, `$Queue`, `$Secrets`, `$Cache`, `$SlidingWindow`, `$I18n`,
-`$WebHooks`, `$Connector`, `$Notification`) are injected only when their service is present.
-`$Analytics`, `$Metrics`, `$Integration`, `$EventStore`, `$Audit`, and `$Diagnostics` are always
-injected, like `$Logger`/`$Errors` — see their entries above for why. The full pipeline is in
-[architecture/request-processing.md](../architecture/request-processing.md).
+a binding. Optional bindings (`$DB`, `$PlatformDB`, `$Queue`, `$Secrets`, `$Cache`,
+`$SlidingWindow`, `$I18n`, `$WebHooks`, `$Connector`, `$Notification`) are injected only when their
+service is present (`$DB`/`$PlatformDB` additionally depend on `atomicityScope` — see their
+entries above). `$Analytics`, `$Metrics`, `$Integration`, `$EventStore`, `$Audit`, and
+`$Diagnostics` are always injected, like `$Logger`/`$Errors` — see their entries above for why.
+`$DB`/`$PlatformDB`/`$Audit`/`$Queue` are all injected together, after the request-scoped
+transaction(s) are open — later than every other binding in this list, and later than the
+pre-request hook — never during it; see
+[architecture/request-processing.md](../architecture/request-processing.md) for exactly where.

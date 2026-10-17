@@ -20,15 +20,16 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 | `$Metrics` | `MetricsBinding` (wraps `MetricsRecorder`; `record`; best-effort) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v8-2026-09-14.md](../developer/event-category-payload-contracts-v8-2026-09-14.md) |
 | `$Integration` | `IntegrationEventBinding` (wraps `IntegrationEventPublisher`; `publish`; best-effort) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v8-2026-09-14.md](../developer/event-category-payload-contracts-v8-2026-09-14.md) |
 | `$EventStore` | `EventStoreBinding` (wraps `EventStore`; `append`/`replay`; **propagates errors**, does not swallow them — unlike the other three) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v8-2026-09-14.md](../developer/event-category-payload-contracts-v8-2026-09-14.md) |
-| `$Audit` | `AuditBinding` (wraps `AuditLogger`; **only** the free-form `logEvent(eventType, result, [operation, resourceType, resourceId,] [businessKeys,] extra)` — no typed lifecycle methods; **propagates errors**) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v8-2026-09-14.md](../developer/event-category-payload-contracts-v8-2026-09-14.md) |
+| `$Audit` | `AuditBinding` (writes `payos_audit_event` **directly**, through whichever of `$DB`/`$PlatformDB` this endpoint's `atomicityScope` names — not a wrapper over `AuditLogger`; **only** the free-form `logEvent(eventType, result, [operation, resourceType, resourceId,] [businessKeys,] extra)` — no typed lifecycle methods; **propagates errors**, including when `atomicityScope` names an unconfigured database) | [scripting-bindings.md](../developer/scripting-bindings.md), [atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md), [event-category-payload-contracts-v8-2026-09-14.md](../developer/event-category-payload-contracts-v8-2026-09-14.md) |
 | `$Diagnostics` | `DiagnosticsBinding` (wraps `Diagnostics`; generic `logEvent(nature, stage, ...)`; best-effort) | [scripting-bindings.md](../developer/scripting-bindings.md), [event-category-payload-contracts-v8-2026-09-14.md](../developer/event-category-payload-contracts-v8-2026-09-14.md) |
 
 ## Available when the service is configured
 
 | Binding | Service | Type | Doc |
 | --- | --- | --- | --- |
-| `$DB` | database-service | `IDatabaseService` | [data-access.md](../developer/data-access.md) |
-| `$Queue` | queue-service | `QueueBinding` (wraps `IQueueClient`; exposes `publish`/`isConnected` only, no `subscribe`) | [queue-messaging.md](../developer/queue-messaging.md) |
+| `$DB` | database-service | `DatabaseBinding` (full read/write); **absent entirely** when this endpoint's `atomicityScope` is `"platform"` | [data-access.md](../developer/data-access.md), [atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) |
+| `$PlatformDB` | platform-database-service | `ReadOnlyDatabaseBinding` by default; full `DatabaseBinding` (read/write) when this endpoint's `atomicityScope` is `"platform"` | [platform-database-usage.md](../developer/platform-database-usage.md), [atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) |
+| `$Queue` | queue-service | `QueueBinding` (exposes `publish(destination, message[, replyTo])` — `message` a plain `Map`/object or a `QueueMessage` — and `isConnected` only, no `subscribe`; every `publish` overload writes a Transactional Outbox row through the `atomicityScope`-selected session instead of calling the broker) | [queue-messaging.md](../developer/queue-messaging.md), [atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) |
 | `$Secrets` | secret-service | `SecretsBinding` (wraps `ISecretProvider`; exposes `get`/`list`/`tokenize`/`detokenize` only) | [secrets-usage.md](../developer/secrets-usage.md) |
 | `$Cache` | cache-service | `CacheBinding` (wraps `ICacheStore`; exposes `put`/`get`/`remove`/`exists`/`increment`, auto-scoped by tenant) | [cache-usage.md](../developer/cache-usage.md), [cache-service.md](../configuration/cache-service.md) |
 | `$SlidingWindow` | sliding-window-service | `SlidingWindowBinding` (wraps `ISlidingWindowCounter`; exposes `count` only — read-only, auto-scoped by tenant) | [sliding-window-usage.md](../developer/sliding-window-usage.md), [sliding-window-service.md](../configuration/sliding-window-service.md) |
@@ -47,5 +48,8 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 
 Bindings are injected by `ApiResourceHandler` via `putMember(name, value)` immediately before
 script execution, after the tenant scope is opened and security has run. Optional bindings are
-injected only when their service is present. See
-[architecture/request-processing.md](../architecture/request-processing.md).
+injected only when their service is present (`$DB`/`$PlatformDB` additionally depend on
+`atomicityScope`, resolved from `mappings.json`). `$DB`/`$PlatformDB`/`$Audit`/`$Queue` are all
+injected together, after the request-scoped transaction(s) are open — not during the pre-request
+hook. See [architecture/request-processing.md](../architecture/request-processing.md) and
+[architecture/atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md).

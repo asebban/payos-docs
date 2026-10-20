@@ -1,6 +1,6 @@
 Created: 2026-10-16
-Last updated: 2026-10-17
-Version: 4 — supersedes v3: `publish(...)` gained a plain-`Map` form (no `QueueMessage`/`Java.type(...)` construction needed) and an optional trailing `replyTo` — see [The `publish(...)` overloads](#the-publish-overloads).
+Last updated: 2026-10-20
+Version: 5 — supersedes v4: corrected the `IQueueClient` overload count (four, not three) and documented its new `publish(destination, message, replyTo)` default overload for a `QueueMessage` — see [The `publish(...)` overloads](#the-publish-overloads).
 
 # Queue messaging (`$Queue`)
 
@@ -19,7 +19,7 @@ This page is about the first: emitting messages from your API logic.
 
 ## The `publish(...)` overloads
 
-`IQueueClient.publish(...)` itself has three overloads, but `$Queue` exposes a different set — four, all destination-based, none of them the legacy implicit-default-topic ones. The two legacy overloads (`publish(message)`, relying on a topic fixed at the connector's own `connect(host, port, topic)` time, and `publish(message, replyTopic)`) were removed from this binding entirely, not merely left available: with no durable `destination` string to route an outbox row by, a call through either could never carry the Transactional Outbox guarantee described below, and a binding where some calls are covered and others silently aren't would be worse than one with a single, consistent family. `IQueueClient` itself still has those two methods — only the script-facing `$Queue` binding dropped them.
+`IQueueClient.publish(...)` itself has four overloads, but `$Queue` exposes a different set — also four, all destination-based, none of them the legacy implicit-default-topic ones. The two legacy overloads (`publish(message)`, relying on a topic fixed at the connector's own `connect(host, port, topic)` time, and `publish(message, replyTopic)`) were removed from this binding entirely, not merely left available: with no durable `destination` string to route an outbox row by, a call through either could never carry the Transactional Outbox guarantee described below, and a binding where some calls are covered and others silently aren't would be worse than one with a single, consistent family. `IQueueClient` itself still has those two methods — only the script-facing `$Queue` binding dropped them. `IQueueClient` does **not** have a plain-`Map`/object overload at all — only `publish(destination, QueueMessage)` and `publish(destination, QueueMessage, replyTo)` (the latter a `default` method that merges `replyTo` into the message's metadata and delegates to the former); the plain-`Map` ergonomics below are a `$Queue`-only convenience, built on top of `QueueMessage` under the hood by `QueueBinding` itself.
 
 | Method | `message` | Purpose |
 | --- | --- | --- |
@@ -61,7 +61,7 @@ $Queue.publish("payments.events", message, "payments.events.replies");
 
 ## Transactional Outbox: how `publish(...)` actually works
 
-None of the four overloads above call the broker during the request. Each writes a `payos_queue_outbox` row through whichever transaction this endpoint's `atomicityScope` names (`$DB` by default, or `$PlatformDB` for `atomicityScope: "platform"` — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md)), so the publish commits or rolls back together with the rest of your script's database writes. A separate background component (`QueueOutboxDispatcher`, paired with the `queue` transport server) reads that table afterward and performs the real broker publish, retrying until success.
+None of the four overloads above call the broker during the request. Each writes a `payos_queue_outbox` row through whichever transaction this endpoint's `atomicityScope` names (`$DB` by default, or `$PlatformDB` for `atomicityScope: "platform"` — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md)), so the publish commits or rolls back together with the rest of your script's database writes. A separate background component (`QueueOutboxDispatcher`, paired with the `queue` transport server) reads that table afterward and performs the real broker publish, retrying until success.
 
 Concretely, this is what the call means:
 
@@ -128,7 +128,7 @@ service-adapter JAR on the [service-adapters path](../configuration/extensions-c
 
 ## Next
 
-- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — the full Transactional Outbox mechanism and the dispatcher that drains it.
+- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md) — the full Transactional Outbox mechanism and the dispatcher that drains it.
 - [Queue setup guide (de A à Z)](queue-setup-guide.md) — configuring and using both the publisher and consumer sides end to end, with a full worked example.
 - [Configuration: queue service](../configuration/queue-service.md)
 - [Architecture: extensibility (queue transport & connectors)](../architecture/extensibility.md)

@@ -64,24 +64,24 @@ apply. See [architecture/extensibility.md](../architecture/extensibility.md).
 
 ## Queue keys (`queue`)
 
-**At least one `servers[]` entry with `protocol: "queue"` is required for `$Queue` (the script binding) to work at all** — even if nothing actually needs to consume a message from it. `$Queue.publish(...)` is injected into every request whenever `queue-service` (the publisher block) is configured, entirely independently of this `servers[]` entry — but `payos_queue_outbox` is only ever created by `QueueOutboxDispatcher.start()`, which only ever runs from `QueueServer.start()`, i.e. only when this entry exists. A deployment with `queue-service` configured but no `servers[]` queue entry gets `$Queue` injected and callable, but `publish(...)` fails with a raw `org.hibernate.MappingException: Unknown entity` the first time it's called. See [architecture §5.3](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md#53-auditqueue-are-injected-unconditionally--their-table-isnt-created-unless-something-else-is-also-configured).
+**At least one `servers[]` entry with `protocol: "queue"` is required for `$Queue` (the script binding) to work at all** — even if nothing actually needs to consume a message from it. `$Queue.publish(...)` is injected into every request whenever `queue-service` (the publisher block) is configured, entirely independently of this `servers[]` entry — but `payos_queue_outbox` is only ever created by `QueueOutboxDispatcher.start()`, which only ever runs from `QueueServer.start()`, i.e. only when this entry exists. A deployment with `queue-service` configured but no `servers[]` queue entry gets `$Queue` injected and callable, but `publish(...)` fails with a raw `org.hibernate.MappingException: Unknown entity` the first time it's called. See [architecture §5.3](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md#53-auditqueue-are-injected-unconditionally--their-table-isnt-created-unless-something-else-is-also-configured).
 
 | Key | Default | Purpose |
 | --- | --- | --- |
 | `type` | — | Queue connector type (e.g. `nats`). |
 | `consumer-topic` | `default-topic` | Topic the server consumes requests from (consumer topic). |
-| `maxAttempts` | `10` | Transactional Outbox dispatcher (`QueueOutboxDispatcher`, paired with this same server — see [architecture/atomicity-db-audit-queue-v9-2026-10-19.md §4.1](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md#41-the-dispatcher)): a logging threshold only, never an abandon threshold — past it, a stuck message is logged at `ERROR` instead of `WARN` but keeps being retried indefinitely. |
+| `maxAttempts` | `10` | Transactional Outbox dispatcher (`QueueOutboxDispatcher`, paired with this same server — see [architecture/atomicity-db-audit-queue-v10-2026-10-20.md §4.1](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md#41-the-dispatcher)): a logging threshold only, never an abandon threshold — past it, a stuck message is logged at `ERROR` instead of `WARN` but keeps being retried indefinitely. |
 | `pollIntervalSeconds` | `10` | How often the dispatcher polls `payos_queue_outbox` for `PENDING` rows. |
 
 The queue transport consumes request envelopes and replies on the reply topic. See
 [queue-service.md](queue-service.md) for the connector itself. The same entry also starts the
 Transactional Outbox dispatcher that drains `$Queue.publish(destination, message)`'s writes —
 not a separate `servers[]` entry, see
-[architecture/atomicity-db-audit-queue-v9-2026-10-19.md §4](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md#4-queue--the-transactional-outbox-pattern).
+[architecture/atomicity-db-audit-queue-v10-2026-10-20.md §4](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md#4-queue--the-transactional-outbox-pattern).
 
 ### Required: register the outbox mapping file
 
-Creating `payos_queue_outbox` is not enough by itself. `payos-server-queue` creates it through a throwaway `SessionFactory` scoped only to its own mapping file — this does **not** make `"PayosQueueOutbox"` a resolvable entity-name on the tenant's own, ongoing `$DB` `SessionFactory` that `QueueBinding` actually writes through. See [architecture §5.1](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md#51-ensureschemafor-creates-the-table--it-does-not-register-the-entity) for the full mechanism.
+Creating `payos_queue_outbox` is not enough by itself. `payos-server-queue` creates it through a throwaway `SessionFactory` scoped only to its own mapping file — this does **not** make `"PayosQueueOutbox"` a resolvable entity-name on the tenant's own, ongoing `$DB` `SessionFactory` that `QueueBinding` actually writes through. See [architecture §5.1](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md#51-ensureschemafor-creates-the-table--it-does-not-register-the-entity) for the full mechanism.
 
 **For a tenant's own `$DB`:** add `mappings/PayosQueueOutbox.hbm.xml` (a classpath resource shipped inside the `payos-server-queue` jar) to the `mapping-files` array of at least one `applications[]` entry that tenant is authorized for — see [configuration/json-configuration-reference.md §3.2](json-configuration-reference.md). This is **not** a `database-service.mapping-files` key; the kernel never reads one for a tenant's own database. One authorized application per tenant is enough — mapping files are unioned across every application a tenant can reach.
 

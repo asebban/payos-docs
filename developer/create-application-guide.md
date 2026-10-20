@@ -243,7 +243,7 @@ Déclare les endpoints HTTP de l'application. Chaque clé est un template URI.
 - La valeur de `handler` est le **chemin relatif** du fichier JS dans `api/`, sans l'extension `.js`.
 - Les variables de chemin (`{id}`) sont accessibles dans le script via `request.getPathVariables()`.
 - `roles` est optionnel. Si absent, l'endpoint est public. Si présent, une authentification OIDC est requise.
-- `atomicityScope` est optionnel (défaut `"tenant"`) — il détermine quelle transaction (`$DB` ou `$PlatformDB`) porte la garantie d'atomicité de `$Audit`/`$Queue.publish(destination, message)`. La valeur `"platform"` retire entièrement `$DB` de l'endpoint (il n'existe plus du tout dans le script) et donne à `$PlatformDB` l'accès complet en lecture/écriture ; sans ce champ (ou avec `"tenant"`), `$PlatformDB` reste accessible uniquement en lecture. Voir [architecture: atomicité entre `$DB`, `$Audit` et `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md).
+- `atomicityScope` est optionnel (défaut `"tenant"`) — il détermine quelle transaction (`$DB` ou `$PlatformDB`) porte la garantie d'atomicité de `$Audit`/`$Queue.publish(destination, message)`. La valeur `"platform"` retire entièrement `$DB` de l'endpoint (il n'existe plus du tout dans le script) et donne à `$PlatformDB` l'accès complet en lecture/écriture ; sans ce champ (ou avec `"tenant"`), `$PlatformDB` reste accessible uniquement en lecture. Voir [architecture: atomicité entre `$DB`, `$Audit` et `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md).
 
 ### 5.2 `config/routes.json` — Routes de pages
 

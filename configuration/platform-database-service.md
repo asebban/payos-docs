@@ -46,7 +46,7 @@ If `platform-database-service` is absent from configuration, `$PlatformDB` is si
 
 ## `$PlatformDB` is read-only unless an endpoint opts into it
 
-Configuring this block makes `$PlatformDB` available, but by default it's a **read-only** subset (`get`/`getFresh`/`findAll`/`find`/`list`/`unique`/`first`/`newParams` — no writes). Full read/write access is granted only to an endpoint that declares `atomicityScope: "platform"` in its `mappings.json` entry — the same field that also removes `$DB` from that endpoint entirely. This is enforced by the platform, not left to application convention. See [developer/platform-database-usage.md](../developer/platform-database-usage.md#atomicityscope-and-the-read-onlyfull-split) and [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md).
+Configuring this block makes `$PlatformDB` available, but by default it's a **read-only** subset (`get`/`getFresh`/`findAll`/`find`/`list`/`unique`/`first`/`newParams` — no writes). Full read/write access is granted only to an endpoint that declares `atomicityScope: "platform"` in its `mappings.json` entry — the same field that also removes `$DB` from that endpoint entirely. This is enforced by the platform, not left to application convention. See [developer/platform-database-usage.md](../developer/platform-database-usage.md#atomicityscope-and-the-read-onlyfull-split) and [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md).
 
 ## Hot reload
 
@@ -55,7 +55,7 @@ Configuring this block makes `$PlatformDB` available, but by default it's a **re
 ## Next
 
 - [Developer: atomicity setup guide (de A à Z)](../developer/atomicity-setup-guide.md) — ordered end-to-end setup for `$DB`/`$PlatformDB` + `$Audit` + `$Queue`.
-- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — the `atomicityScope` field and the read-only/full split.
+- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md) — the `atomicityScope` field and the read-only/full split.
 - [Developer: platform database usage (`$PlatformDB`)](../developer/platform-database-usage.md)
 - [Configuration: database service](database-service.md)
 - [Architecture: multi-tenancy](../architecture/multi-tenancy.md)

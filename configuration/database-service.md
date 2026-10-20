@@ -79,12 +79,12 @@ The `database-service` block above configures the **connection** (dialect, URL, 
 
 ## `$DB` can be entirely absent on an `atomicityScope: "platform"` endpoint
 
-An endpoint's `atomicityScope` field (`mappings.json`, default `"tenant"`) decides which of `$DB`/`$PlatformDB` carries `$Audit`/`$Queue`'s atomicity guarantee. An endpoint declared `atomicityScope: "platform"` gets no `$DB` at all — not a read-only version, `typeof $DB === 'undefined'` — since it has no declared reason left to touch the tenant database. This is independent of whether `database-service` itself is configured. See [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) for the full mechanism.
+An endpoint's `atomicityScope` field (`mappings.json`, default `"tenant"`) decides which of `$DB`/`$PlatformDB` carries `$Audit`/`$Queue`'s atomicity guarantee. An endpoint declared `atomicityScope: "platform"` gets no `$DB` at all — not a read-only version, `typeof $DB === 'undefined'` — since it has no declared reason left to touch the tenant database. This is independent of whether `database-service` itself is configured. See [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md) for the full mechanism.
 
 ## Next
 
 - [developer/atomicity-setup-guide.md](../developer/atomicity-setup-guide.md) — ordered end-to-end setup for `$DB`/`$PlatformDB` + `$Audit` + `$Queue`, including the `applications[].mapping-files` step above.
 - [developer/data-access.md](../developer/data-access.md)
 - [architecture/data-architecture.md](../architecture/data-architecture.md)
-- [architecture/atomicity-db-audit-queue-v9-2026-10-19.md](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — `atomicityScope` and the `$DB`/`$PlatformDB` lockdown.
+- [architecture/atomicity-db-audit-queue-v10-2026-10-20.md](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md) — `atomicityScope` and the `$DB`/`$PlatformDB` lockdown.
 - [configuration/platform-database-service.md](platform-database-service.md) — the tenant-independent counterpart, for reference/master data.

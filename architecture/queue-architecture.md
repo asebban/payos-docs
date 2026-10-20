@@ -69,6 +69,7 @@ classDiagram
         +publish(message)
         +publish(message, replyTopic)
         +publish(destination, QueueMessage)
+        +publish(destination, QueueMessage, replyTo) : default
         +subscribe(MessageListener)
         +subscribe(destination, AckMessageListener)
         +subscribe(List~destination~, AckMessageListener) : default, fan-out
@@ -106,7 +107,7 @@ classDiagram
     QueueClients ..> IQueueClientFactory : ServiceLoader.load(...)
 ```
 
-- Interface : `payos/src/main/java/ma/s2m/payos/queue/IQueueClient.java`
+- Interface : `payos-foundation/src/main/java/ma/s2m/payos/queue/IQueueClient.java` (moved here, with `QueueMessage.java`, when `payos-foundation` was extracted out of the kernel)
 - Implémentation NATS : `queue-service-nats/src/main/java/ma/s2m/payos/queue/nats/NatsQueueClient.java:38` — encapsule directement le client Java `io.nats:jnats` (`Nats.connect(...)` ligne 74).
 - `NatsQueueClient` expose **deux API** dans la même classe :
   - API "legacy" simple : `publish(String)` / `publish(String, replyTopic)` / `subscribe(MessageListener)` — NATS core, un seul `subject` fixé à la connexion.
@@ -300,7 +301,7 @@ sequenceDiagram
 
 ## 8. Le pattern Transactional Outbox (`QueueOutboxDispatcher`, depuis 2026-10-16/17)
 
-Document détaillé : [architecture/atomicity-db-audit-queue-v9-2026-10-19.md](atomicity-db-audit-queue-v9-2026-10-19.md). Résumé côté queue :
+Document détaillé : [architecture/atomicity-db-audit-queue-v10-2026-10-20.md](atomicity-db-audit-queue-v10-2026-10-20.md). Résumé côté queue :
 
 `$Queue.publish(destination, message[, replyTo])` écrit désormais une ligne `payos_queue_outbox` (`id`, `tenantId`, `destination`, `payload`, `metadata` JSON, `status` `PENDING`/`DISPATCHED`, `attempts`, `createdAt`, `lastAttemptedAt`, `lastError`) via la même transaction que `$DB`/`$PlatformDB` (selon `atomicityScope`), au lieu d'appeler le broker. Rien n'est jamais publié si cette transaction ne committe pas. Quatre surcharges partagent ce chemin : `message` peut être un objet/map JS ordinaire (sérialisé en JSON comme payload, id généré) ou un `QueueMessage` déjà construit (id/métadonnées conservés tels quels), chacune avec ou sans un troisième paramètre `replyTo` (fusionné dans les métadonnées). Ce sont les **seules** surcharges `publish` exposées par `$Queue` — les deux surcharges legacy (§2) ont été retirées du binding plutôt que laissées accessibles sans cette garantie ; `IQueueClient` lui-même les conserve, elles restent utilisées en interne par le noyau (§5).
 

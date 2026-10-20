@@ -160,7 +160,7 @@ For `api` resources, `ApiResourceHandler.handle(application, request)` runs the 
              databaseService.endRequestScope(); clearCurrentTenant(); platformDatabaseService.endRequestScope()
 ```
 
-`$DB`/`$PlatformDB`/`$Audit`/`$Queue` all move together with step 7, not step 4, for the same reason: a pre-hook's use of any of them would silently run outside the request's transaction (or, for `$Audit`/`$Queue`, through a session that isn't open yet) — leaving them undefined during the pre-hook turns that into an immediate `"... is not defined"` rather than a silent semantic gap. See [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](atomicity-db-audit-queue-v9-2026-10-19.md) for the full `atomicityScope` mechanism.
+`$DB`/`$PlatformDB`/`$Audit`/`$Queue` all move together with step 7, not step 4, for the same reason: a pre-hook's use of any of them would silently run outside the request's transaction (or, for `$Audit`/`$Queue`, through a session that isn't open yet) — leaving them undefined during the pre-hook turns that into an immediate `"... is not defined"` rather than a silent semantic gap. See [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](atomicity-db-audit-queue-v10-2026-10-20.md) for the full `atomicityScope` mechanism.
 
 Hooks and native webhooks are detailed in [eventing-webhooks.md](eventing-webhooks.md);
 idempotency and audit logging in [security-architecture.md](security-architecture.md).
@@ -181,7 +181,7 @@ corresponding service is configured:
 | `$I18n` | yes | `I18nProxy` |
 | `$Errors` | yes | `ErrorsProxy` |
 | `$DB` | only if a database service is configured **and** `atomicityScope` ≠ `"platform"` | `DatabaseBinding(databaseService)` — full read/write |
-| `$PlatformDB` | only if a platform database service is configured | `DatabaseBinding` (full) if `atomicityScope == "platform"`, otherwise `ReadOnlyDatabaseBinding` — see [atomicity-db-audit-queue-v9-2026-10-19.md §2.2](atomicity-db-audit-queue-v9-2026-10-19.md#22-locking-out-the-database-atomicityscope-doesnt-cover) |
+| `$PlatformDB` | only if a platform database service is configured | `DatabaseBinding` (full) if `atomicityScope == "platform"`, otherwise `ReadOnlyDatabaseBinding` — see [atomicity-db-audit-queue-v10-2026-10-20.md §2.2](atomicity-db-audit-queue-v10-2026-10-20.md#22-locking-out-the-database-atomicityscope-doesnt-cover) |
 | `$Audit` | always | `AuditBinding(atomicitySession, tenant, correlationId, appId, path, userId)` — builds a generic `AuditEvent`, sets `AtomicWriteContext` to whichever of `$DB`/`$PlatformDB` `atomicityScope` names, calls the kernel's existing `AuditLogger.logEvent(AuditEvent)` unconditionally; `logEvent(...)` throws only if that session isn't configured — it always succeeds otherwise, atomic or not depending on whether the active audit-trail category reads `AtomicWriteContext` |
 | `$Queue` | only if a queue client is configured | `QueueBinding(queueClient, atomicitySession, tenant)` — exposes `publish(destination, message[, replyTo])` (`message` a plain `Map` or a `QueueMessage`; writes a Transactional Outbox row through the same session as `$Audit`) and `isConnected()`; the two legacy, implicit-default-topic overloads are not exposed on this binding at all |
 | `$Secrets` | only if a secret provider is configured | `SecretsBinding(provider, tenant)` |

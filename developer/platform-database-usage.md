@@ -8,7 +8,7 @@ When [`platform-database-service`](../configuration/platform-database-service.md
 
 ## `atomicityScope` and the read-only/full split
 
-Which binding your endpoint actually gets depends on its `atomicityScope` field in `mappings.json` (default `"tenant"` when the field is absent) — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md#21-which-transaction-carries-the-guarantee--atomicityscope) for the full reasoning:
+Which binding your endpoint actually gets depends on its `atomicityScope` field in `mappings.json` (default `"tenant"` when the field is absent) — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md#21-which-transaction-carries-the-guarantee--atomicityscope) for the full reasoning:
 
 | `atomicityScope` | `$PlatformDB` | `$DB` |
 | --- | --- | --- |
@@ -73,7 +73,7 @@ Same restrictions as `$DB`: no `describeSecret`-equivalent metadata read, no `ca
 
 ## Next
 
-- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — the full `atomicityScope` mechanism.
+- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md) — the full `atomicityScope` mechanism.
 - [Configuration: platform database service](../configuration/platform-database-service.md)
 - [Data access (`$DB`)](data-access.md)
 - [Architecture: multi-tenancy](../architecture/multi-tenancy.md)

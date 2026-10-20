@@ -188,7 +188,7 @@ best-effort-durable path by whatever the active implementation chooses; `$Audit`
 exposes none of those typed methods to scripts, both because they're redundant with what the
 kernel already emits itself and because letting a script call them could fabricate a fake
 `AUTH_SUCCESS` record in a trail that's supposed to be immutable/WORM). See
-[architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md#3-audit--always-works-atomicity-is-a-bonus-only-some-implementations-provide)
+[architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md#3-audit--always-works-atomicity-is-a-bonus-only-some-implementations-provide)
 for the full mechanism, including what happens if `atomicityScope` names a database that isn't
 configured at all (that one case does throw — unrelated to which audit-trail category is active).
 `tenantId`/`correlationId`/`appId`/`path`/`userId` are all pre-filled from the current
@@ -244,7 +244,7 @@ If you use one without configuring its service, it will be absent.
 The database access service (`IDatabaseService`). Backed by the
 [database connector](../configuration/database-service.md). See [data access](data-access.md).
 Absent entirely (`typeof $DB === 'undefined'`) on an endpoint declared `atomicityScope: "platform"`
-in `mappings.json` — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md).
+in `mappings.json` — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md).
 
 ```javascript
 var rows = $DB.find("SELECT * FROM accounts WHERE tenant = ?", [$Tenant]);
@@ -258,7 +258,7 @@ The tenant-independent counterpart to `$DB`, backed by the
 `find`/`list`/`unique`/`first`/`newParams`) unless this endpoint declares `atomicityScope:
 "platform"` in `mappings.json`, in which case it gets the full read/write surface instead (and
 `$DB` disappears from that same endpoint entirely) — see
-[architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md).
+[architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md).
 
 ```javascript
 var countries = $PlatformDB.findAll("Country");   // works regardless of atomicityScope
@@ -290,7 +290,7 @@ legacy `publish` overloads (implicit default topic, no durable `destination` to 
 row by) — `$Queue` doesn't expose either of them, precisely because they could never carry this
 guarantee. See
 [queue-messaging.md](queue-messaging.md#the-publish-overloads)
-and [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md#4-queue--the-transactional-outbox-pattern).
+and [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md#4-queue--the-transactional-outbox-pattern).
 
 ### `$Secrets`
 

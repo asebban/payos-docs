@@ -42,7 +42,7 @@ For developers **building applications on PayOS**. Applications are written prim
 
 ## Related references
 
-- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — `atomicityScope`, the `$DB`/`$PlatformDB` read-only/absent lockdown, `$Audit`'s direct write, and `$Queue`'s Transactional Outbox pattern.
+- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md) — `atomicityScope`, the `$DB`/`$PlatformDB` read-only/absent lockdown, `$Audit`'s direct write, and `$Queue`'s Transactional Outbox pattern.
 - [Configuration reference](../configuration/README.md) — every configuration key.
 - [Reference: script bindings index](../reference/script-bindings-index.md) — quick lookup.
 - [Architecture: request processing](../architecture/request-processing.md) — what runs your script.

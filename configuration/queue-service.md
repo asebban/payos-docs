@@ -54,7 +54,7 @@ The NATS service-adapter JAR (`ma.s2m.payos:queue-service-nats`) must be on the
 | Publish messages from a script (`$Queue`) | `queue-service` (this page) | [developer/queue-messaging.md](../developer/queue-messaging.md) |
 | Serve requests that arrive over a queue | a `queue` entry in `servers` | [servers.md](servers.md) |
 
-`$Queue.publish(destination, message[, replyTo])` — the only `publish(...)` family `$Queue` exposes (`message` a plain `Map`/object or a `QueueMessage`) — no longer calls this connector's client directly: it writes a Transactional Outbox row instead, drained afterward by a dispatcher paired with the `queue` entry in `servers[]` (`maxAttempts`/`pollIntervalSeconds`, see [servers.md](servers.md#queue-keys-queue)). The two legacy, implicit-default-topic overloads (`publish(message)`/`publish(message, replyTopic)`) were removed from `$Queue` entirely rather than left unprotected — see [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md).
+`$Queue.publish(destination, message[, replyTo])` — the only `publish(...)` family `$Queue` exposes (`message` a plain `Map`/object or a `QueueMessage`) — no longer calls this connector's client directly: it writes a Transactional Outbox row instead, drained afterward by a dispatcher paired with the `queue` entry in `servers[]` (`maxAttempts`/`pollIntervalSeconds`, see [servers.md](servers.md#queue-keys-queue)). The two legacy, implicit-default-topic overloads (`publish(message)`/`publish(message, replyTopic)`) were removed from `$Queue` entirely rather than left unprotected — see [architecture/atomicity-db-audit-queue-v9-2026-10-19.md](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md).
 
 ## Correlation
 

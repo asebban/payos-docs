@@ -45,7 +45,7 @@ The same request scope now also carries **one transaction for the whole request*
 
 One escape hatch remains: `$DB.markRollbackOnly()`. Any endpoint in the call chain — the entry endpoint or one it calls — can flag the shared transaction so it can only be rolled back, even if the entry endpoint's own script never sees an error and returns what looks like a success response. The platform then overrides that response with `409 Conflict` rather than let a caller believe a rolled-back write succeeded. It's asymmetric on purpose: a script can request a rollback from anywhere, but only the platform ever decides to actually commit or end the transaction.
 
-This same transaction is also what `$Audit.logEvent(...)` and `$Queue.publish(destination, message)` join — by default, on any endpoint that doesn't declare `atomicityScope: "platform"` in `mappings.json`. If your endpoint uses `$PlatformDB` instead of `$DB` for its writes, declare `atomicityScope: "platform"` so `$Audit`/`$Queue` ride on the right transaction instead — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md). Declaring `atomicityScope: "platform"` also removes `$DB` from the endpoint entirely (`typeof $DB === 'undefined'`), not just the transaction wiring.
+This same transaction is also what `$Audit.logEvent(...)` and `$Queue.publish(destination, message)` join — by default, on any endpoint that doesn't declare `atomicityScope: "platform"` in `mappings.json`. If your endpoint uses `$PlatformDB` instead of `$DB` for its writes, declare `atomicityScope: "platform"` so `$Audit`/`$Queue` ride on the right transaction instead — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md). Declaring `atomicityScope: "platform"` also removes `$DB` from the endpoint entirely (`typeof $DB === 'undefined'`), not just the transaction wiring.
 
 ## Schema and isolation
 
@@ -70,7 +70,7 @@ without a configured connector, the binding will be absent. Configure the
 
 ## Next
 
-- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) — `atomicityScope`, and how `$Audit`/`$Queue` ride on this same transaction.
+- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — `atomicityScope`, and how `$Audit`/`$Queue` ride on this same transaction.
 - [Configuration: database service](../configuration/database-service.md)
 - [Architecture: data architecture](../architecture/data-architecture.md)
 - [Platform database usage (`$PlatformDB`)](platform-database-usage.md) — the tenant-independent counterpart to `$DB`, for reference/master data shared by every tenant.

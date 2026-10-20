@@ -300,7 +300,7 @@ sequenceDiagram
 
 ## 8. Le pattern Transactional Outbox (`QueueOutboxDispatcher`, depuis 2026-10-16/17)
 
-Document détaillé : [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](atomicity-db-audit-queue-v1-2026-10-16.md). Résumé côté queue :
+Document détaillé : [architecture/atomicity-db-audit-queue-v9-2026-10-19.md](atomicity-db-audit-queue-v9-2026-10-19.md). Résumé côté queue :
 
 `$Queue.publish(destination, message[, replyTo])` écrit désormais une ligne `payos_queue_outbox` (`id`, `tenantId`, `destination`, `payload`, `metadata` JSON, `status` `PENDING`/`DISPATCHED`, `attempts`, `createdAt`, `lastAttemptedAt`, `lastError`) via la même transaction que `$DB`/`$PlatformDB` (selon `atomicityScope`), au lieu d'appeler le broker. Rien n'est jamais publié si cette transaction ne committe pas. Quatre surcharges partagent ce chemin : `message` peut être un objet/map JS ordinaire (sérialisé en JSON comme payload, id généré) ou un `QueueMessage` déjà construit (id/métadonnées conservés tels quels), chacune avec ou sans un troisième paramètre `replyTo` (fusionné dans les métadonnées). Ce sont les **seules** surcharges `publish` exposées par `$Queue` — les deux surcharges legacy (§2) ont été retirées du binding plutôt que laissées accessibles sans cette garantie ; `IQueueClient` lui-même les conserve, elles restent utilisées en interne par le noyau (§5).
 

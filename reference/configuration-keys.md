@@ -50,7 +50,7 @@ Internal/effective: `RUNTIME_CONFIG_FILE = payos.json`, `RUNTIME_BASE_DIRECTORY 
 | `tcp-handlers-dir` | TCP plugin dir (tcp). |
 | `type` | Queue connector type (queue). |
 | `consumer-topic` | Consumer topic (queue; default `default-topic`). |
-| `maxAttempts` | Transactional Outbox dispatcher's logging threshold (queue; default `10`) — never an abandon threshold. See [atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md). |
+| `maxAttempts` | Transactional Outbox dispatcher's logging threshold (queue; default `10`) — never an abandon threshold. See [atomicity-db-audit-queue-v9-2026-10-19.md](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md). |
 | `pollIntervalSeconds` | Transactional Outbox dispatcher's poll frequency in seconds (queue; default `10`). |
 
 ### `swaggerUI`

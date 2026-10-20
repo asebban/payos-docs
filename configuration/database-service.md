@@ -1,3 +1,7 @@
+Created: 2026-10-18
+Last updated: 2026-10-19
+Version: 2 — supersedes v1: links to the new end-to-end [developer/atomicity-setup-guide.md](../developer/atomicity-setup-guide.md).
+
 # Database service configuration
 
 The `database-service` block configures the Hibernate-based database connector
@@ -69,13 +73,18 @@ the global one. See [developer/application-model.md](../developer/application-mo
 
 `database-service` is always tenant-scoped — see [Multi-tenancy interaction](#multi-tenancy-interaction) above. For data that must **not** be duplicated per tenant (a country or currency table), see [platform-database-service.md](platform-database-service.md) — a separate, optional database backing `$PlatformDB`.
 
+## Mapping files actually come from `applications[]`
+
+The `database-service` block above configures the **connection** (dialect, URL, pool, `ddl-auto`) — it has no `mapping-files` key of its own for a tenant's main `$DB`. A tenant's actual Hibernate mapping-file set is resolved by unioning the `mapping-files` array (root-level key, with `extends` inheritance) of every `applications[]` entry that tenant is authorized for — see [configuration/json-configuration-reference.md §3.2](json-configuration-reference.md). This matters whenever a module needs its own entity resolvable on a tenant's `$DB` without a kernel mapping of its own — for example, `payos-database-audit-trail`/`payos-server-queue` registering `PayosAuditEvent`/`PayosQueueOutbox` for `$Audit`/`$Queue`: see [configuration/audit-trail.md §Required: register the mapping file](audit-trail.md#required-register-the-mapping-file) and [configuration/servers.md §Required: register the outbox mapping file](servers.md#required-register-the-outbox-mapping-file). The per-application `database-service.mapping-files` key shown in that reference page's example is a **different** thing — it only applies when that one application opts into its own dedicated, non-shared database.
+
 ## `$DB` can be entirely absent on an `atomicityScope: "platform"` endpoint
 
-An endpoint's `atomicityScope` field (`mappings.json`, default `"tenant"`) decides which of `$DB`/`$PlatformDB` carries `$Audit`/`$Queue`'s atomicity guarantee. An endpoint declared `atomicityScope: "platform"` gets no `$DB` at all — not a read-only version, `typeof $DB === 'undefined'` — since it has no declared reason left to touch the tenant database. This is independent of whether `database-service` itself is configured. See [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) for the full mechanism.
+An endpoint's `atomicityScope` field (`mappings.json`, default `"tenant"`) decides which of `$DB`/`$PlatformDB` carries `$Audit`/`$Queue`'s atomicity guarantee. An endpoint declared `atomicityScope: "platform"` gets no `$DB` at all — not a read-only version, `typeof $DB === 'undefined'` — since it has no declared reason left to touch the tenant database. This is independent of whether `database-service` itself is configured. See [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) for the full mechanism.
 
 ## Next
 
+- [developer/atomicity-setup-guide.md](../developer/atomicity-setup-guide.md) — ordered end-to-end setup for `$DB`/`$PlatformDB` + `$Audit` + `$Queue`, including the `applications[].mapping-files` step above.
 - [developer/data-access.md](../developer/data-access.md)
 - [architecture/data-architecture.md](../architecture/data-architecture.md)
-- [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) — `atomicityScope` and the `$DB`/`$PlatformDB` lockdown.
+- [architecture/atomicity-db-audit-queue-v9-2026-10-19.md](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — `atomicityScope` and the `$DB`/`$PlatformDB` lockdown.
 - [configuration/platform-database-service.md](platform-database-service.md) — the tenant-independent counterpart, for reference/master data.

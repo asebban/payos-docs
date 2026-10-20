@@ -1,3 +1,7 @@
+Created: 2026-10-18
+Last updated: 2026-10-19
+Version: 2 — supersedes v1: links to the new end-to-end [developer/atomicity-setup-guide.md](../developer/atomicity-setup-guide.md).
+
 # Platform database service configuration
 
 The `platform-database-service` block configures an optional, second Hibernate-based database connection — separate from [`database-service`](database-service.md) — that exposes `$PlatformDB` to scripts. Unlike `database-service`, it is **not** tenant-scoped: there is exactly one connection, shared by every tenant, and the runtime never injects or filters by `tenantId` on it. It exists for reference/master data that must not be duplicated per tenant (a country list, a currency table, an ISO code lookup). Developer usage is in [developer/platform-database-usage.md](../developer/platform-database-usage.md); the architectural reasoning is in [architecture/multi-tenancy.md](../architecture/multi-tenancy.md#platform-scoped-database-platformdb).
@@ -30,7 +34,7 @@ The `configuration` object accepts the same keys as [`database-service.configura
 | Key | Purpose |
 | --- | --- |
 | `configuration.*` | Same keys as `database-service.configuration` — see [database-service.md](database-service.md#keys). |
-| `mapping-files` | Hibernate mapping files (`.hbm.xml`) for the entities living in this database. **Required** — startup fails if `platform-database-service` is present but resolves to zero mapping files. Unlike `database-service`, there is no per-application `model/` directory convention here: list every file explicitly. |
+| `mapping-files` | Hibernate mapping files (`.hbm.xml`) for the entities living in this database. **Required** — startup fails if `platform-database-service` is present but resolves to zero mapping files. Unlike `database-service`, there is no per-application `model/` directory convention here: list every file explicitly. This is also where `payos-database-audit-trail`/`payos-server-queue` must be registered for `$Audit`/`$Queue` to work on `atomicityScope: "platform"` endpoints — see [configuration/audit-trail.md §Required: register the mapping file](audit-trail.md#required-register-the-mapping-file) and [configuration/servers.md §Required: register the outbox mapping file](servers.md#required-register-the-outbox-mapping-file). |
 
 ## This block is entirely optional
 
@@ -42,7 +46,7 @@ If `platform-database-service` is absent from configuration, `$PlatformDB` is si
 
 ## `$PlatformDB` is read-only unless an endpoint opts into it
 
-Configuring this block makes `$PlatformDB` available, but by default it's a **read-only** subset (`get`/`getFresh`/`findAll`/`find`/`list`/`unique`/`first`/`newParams` — no writes). Full read/write access is granted only to an endpoint that declares `atomicityScope: "platform"` in its `mappings.json` entry — the same field that also removes `$DB` from that endpoint entirely. This is enforced by the platform, not left to application convention. See [developer/platform-database-usage.md](../developer/platform-database-usage.md#atomicityscope-and-the-read-onlyfull-split) and [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md).
+Configuring this block makes `$PlatformDB` available, but by default it's a **read-only** subset (`get`/`getFresh`/`findAll`/`find`/`list`/`unique`/`first`/`newParams` — no writes). Full read/write access is granted only to an endpoint that declares `atomicityScope: "platform"` in its `mappings.json` entry — the same field that also removes `$DB` from that endpoint entirely. This is enforced by the platform, not left to application convention. See [developer/platform-database-usage.md](../developer/platform-database-usage.md#atomicityscope-and-the-read-onlyfull-split) and [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md).
 
 ## Hot reload
 
@@ -50,7 +54,8 @@ Configuring this block makes `$PlatformDB` available, but by default it's a **re
 
 ## Next
 
-- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) — the `atomicityScope` field and the read-only/full split.
+- [Developer: atomicity setup guide (de A à Z)](../developer/atomicity-setup-guide.md) — ordered end-to-end setup for `$DB`/`$PlatformDB` + `$Audit` + `$Queue`.
+- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — the `atomicityScope` field and the read-only/full split.
 - [Developer: platform database usage (`$PlatformDB`)](../developer/platform-database-usage.md)
 - [Configuration: database service](database-service.md)
 - [Architecture: multi-tenancy](../architecture/multi-tenancy.md)

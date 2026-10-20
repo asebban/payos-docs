@@ -1,7 +1,7 @@
 # Scripting bindings reference
 
 Created: 2026-06-05
-Last updated: 2026-09-16
+Last updated: 2026-10-19
 
 Before a script runs, the kernel injects a set of `$`-prefixed **bindings** into the
 scripting context via `scriptingEngine.putMember(name, value)`. They are the only sanctioned
@@ -167,18 +167,30 @@ The remaining two of the six event categories, both pre-existing "reference shap
 (§1 and §6 of the contract doc) rather than newly built — but only now, alongside the four
 above, exposed to scripts.
 
-`$Audit.logEvent(...)` writes a `payos_audit_event` row **directly**, through whichever of
-`$DB`/`$PlatformDB` this endpoint's `atomicityScope` names (`mappings.json`, default `"tenant"`)
-— the same transaction, so a later failure in the script rolls the audit row back along with
-everything else, and a successful script commits both together. It is **not** a wrapper over
-`AuditLogger`/`IAuditLogger` (that's a separate, best-effort-durable path the kernel uses for its
-own system events — `logAuthSuccess`, `logApiExecution`, `logStartup`, ...; `$Audit` deliberately
+`$Audit.logEvent(...)` builds a generic `AuditEvent` and calls `AuditLogger.logEvent(AuditEvent)`
+— the exact same static facade and call site the kernel's own system events already use — after
+setting an ambient session (whichever of `$DB`/`$PlatformDB` this endpoint's `atomicityScope`
+names, `mappings.json`, default `"tenant"`) that an implementation opting in can write through,
+joining that same transaction: a later failure in the script rolls the audit write back along
+with everything else, and a successful script commits both together. **This call always
+succeeds, no matter which audit-trail category is active** — `AuditBinding` never checks or
+refuses based on that. `AuditBinding` itself never knows a table, entity, or column name, and
+neither `IAuditLogger` nor `AuditEvent` carries any reference to a database concept — the ambient
+session lives in a separate, standalone channel (`AtomicWriteContext`), read only by an
+implementation that happens to look for it (today, only `payos-database-audit-trail`'s
+`"database"` category does); one that doesn't (e.g. `payos-buffered-audit-trail`'s in-memory
+`BufferedAuditLogger`, the zero-config default) just logs the event the normal way — the call
+still succeeds, it simply isn't tied to the transaction. Picking a non-database category is a
+trade-off (lose the atomicity guarantee), never a reason `$Audit` stops working. The kernel's own
+system events — `logAuthSuccess`, `logApiExecution`, `logStartup`, ... — go through the same
+`AuditLogger.logEvent(AuditEvent)` call, just never with that ambient session set — a separate,
+best-effort-durable path by whatever the active implementation chooses; `$Audit` deliberately
 exposes none of those typed methods to scripts, both because they're redundant with what the
 kernel already emits itself and because letting a script call them could fabricate a fake
 `AUTH_SUCCESS` record in a trail that's supposed to be immutable/WORM). See
-[architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md#3-audit--a-direct-write-in-the-same-transaction)
+[architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md#3-audit--always-works-atomicity-is-a-bonus-only-some-implementations-provide)
 for the full mechanism, including what happens if `atomicityScope` names a database that isn't
-configured (`logEvent(...)` throws immediately, rather than silently doing nothing).
+configured at all (that one case does throw — unrelated to which audit-trail category is active).
 `tenantId`/`correlationId`/`appId`/`path`/`userId` are all pre-filled from the current
 request/principal — the script only supplies what's actually event-specific.
 
@@ -232,7 +244,7 @@ If you use one without configuring its service, it will be absent.
 The database access service (`IDatabaseService`). Backed by the
 [database connector](../configuration/database-service.md). See [data access](data-access.md).
 Absent entirely (`typeof $DB === 'undefined'`) on an endpoint declared `atomicityScope: "platform"`
-in `mappings.json` — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md).
+in `mappings.json` — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md).
 
 ```javascript
 var rows = $DB.find("SELECT * FROM accounts WHERE tenant = ?", [$Tenant]);
@@ -246,7 +258,7 @@ The tenant-independent counterpart to `$DB`, backed by the
 `find`/`list`/`unique`/`first`/`newParams`) unless this endpoint declares `atomicityScope:
 "platform"` in `mappings.json`, in which case it gets the full read/write surface instead (and
 `$DB` disappears from that same endpoint entirely) — see
-[architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md).
+[architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md).
 
 ```javascript
 var countries = $PlatformDB.findAll("Country");   // works regardless of atomicityScope
@@ -278,7 +290,7 @@ legacy `publish` overloads (implicit default topic, no durable `destination` to 
 row by) — `$Queue` doesn't expose either of them, precisely because they could never carry this
 guarantee. See
 [queue-messaging.md](queue-messaging.md#the-publish-overloads)
-and [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md#4-queue--the-transactional-outbox-pattern).
+and [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md#4-queue--the-transactional-outbox-pattern).
 
 ### `$Secrets`
 

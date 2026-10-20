@@ -61,7 +61,7 @@ $Queue.publish("payments.events", message, "payments.events.replies");
 
 ## Transactional Outbox: how `publish(...)` actually works
 
-None of the four overloads above call the broker during the request. Each writes a `payos_queue_outbox` row through whichever transaction this endpoint's `atomicityScope` names (`$DB` by default, or `$PlatformDB` for `atomicityScope: "platform"` — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md)), so the publish commits or rolls back together with the rest of your script's database writes. A separate background component (`QueueOutboxDispatcher`, paired with the `queue` transport server) reads that table afterward and performs the real broker publish, retrying until success.
+None of the four overloads above call the broker during the request. Each writes a `payos_queue_outbox` row through whichever transaction this endpoint's `atomicityScope` names (`$DB` by default, or `$PlatformDB` for `atomicityScope: "platform"` — see [architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md)), so the publish commits or rolls back together with the rest of your script's database writes. A separate background component (`QueueOutboxDispatcher`, paired with the `queue` transport server) reads that table afterward and performs the real broker publish, retrying until success.
 
 Concretely, this is what the call means:
 
@@ -128,7 +128,7 @@ service-adapter JAR on the [service-adapters path](../configuration/extensions-c
 
 ## Next
 
-- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) — the full Transactional Outbox mechanism and the dispatcher that drains it.
+- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — the full Transactional Outbox mechanism and the dispatcher that drains it.
 - [Queue setup guide (de A à Z)](queue-setup-guide.md) — configuring and using both the publisher and consumer sides end to end, with a full worked example.
 - [Configuration: queue service](../configuration/queue-service.md)
 - [Architecture: extensibility (queue transport & connectors)](../architecture/extensibility.md)

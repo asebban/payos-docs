@@ -99,7 +99,7 @@ function loadControlData(request) {
 function emitInsight(request, response, payload) { return null; }
 ```
 
-- `publish(destination, message)` **n'appelle plus le broker pendant la requête** — voir §3.4. L'appel écrit une ligne dans `payos_queue_outbox` via la transaction `$DB`/`$PlatformDB` (selon `atomicityScope`, voir [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md)) et retourne rapidement ; la publication réelle sur le broker a lieu après coup, de façon asynchrone, par un dispatcher séparé.
+- `publish(destination, message)` **n'appelle plus le broker pendant la requête** — voir §3.4. L'appel écrit une ligne dans `payos_queue_outbox` via la transaction `$DB`/`$PlatformDB` (selon `atomicityScope`, voir [architecture/atomicity-db-audit-queue-v9-2026-10-19.md](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md)) et retourne rapidement ; la publication réelle sur le broker a lieu après coup, de façon asynchrone, par un dispatcher séparé.
 - Toujours propager `tenantId`/`correlationId` dans le payload publié — un consommateur asynchrone n'a aucun autre moyen de les retrouver (voir [operations/observability.md](../operations/observability.md)).
 - Les quatre surcharges destination-based sont les **seules** que `$Queue` expose aux scripts depuis 2026-10-16/17 — `publish(message)`/`publish(message, replyTopic)` (sujet legacy fixé à la connexion, un seul argument) ont été retirées du binding `$Queue` : sans destination explicite à associer à une ligne d'outbox, elles ne pouvaient jamais porter la garantie transactionnelle du §3.4, donc plutôt que de les laisser accessibles sans cette garantie, elles ont été supprimées du binding. `IQueueClient` conserve ces deux méthodes — seul `$Queue` côté script ne les expose plus.
 - Besoin d'un id explicite ou de métadonnées au-delà de `replyTo` ? Construisez un `QueueMessage` à la place — voir le message `envelope` du §3.3, qui l'utilise justement pour ça — et passez-le à `publish(destination, message)`/`publish(destination, message, replyTo)` (mêmes surcharges, mais `message` est alors un `QueueMessage`).
@@ -165,7 +165,7 @@ Ce dispatcher se configure avec deux clés optionnelles, sur la **même** entré
 | `maxAttempts` | `10` | Seuil de signalement uniquement (voir ci-dessus) — jamais un seuil d'abandon. |
 | `pollIntervalSeconds` | `10` | Fréquence (en secondes) à laquelle le dispatcher vérifie `payos_queue_outbox`. |
 
-Détail complet : [architecture/atomicity-db-audit-queue-v1-2026-10-16.md §4](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md#4-queue--the-transactional-outbox-pattern).
+Détail complet : [architecture/atomicity-db-audit-queue-v9-2026-10-19.md §4](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md#4-queue--the-transactional-outbox-pattern).
 
 ## 4. Configurer et utiliser le côté consumer
 
@@ -346,7 +346,7 @@ Ce pattern reste **asynchrone de bout en bout** : le script émetteur ne bloque 
 
 ## 7. Références
 
-- [architecture/atomicity-db-audit-queue-v1-2026-10-16.md](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) — le pattern Transactional Outbox (§3.4 de ce guide) et son articulation avec `$Audit`/`atomicityScope`.
+- [architecture/atomicity-db-audit-queue-v9-2026-10-19.md](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — le pattern Transactional Outbox (§3.4 de ce guide) et son articulation avec `$Audit`/`atomicityScope`.
 - [architecture/queue-architecture.md](../architecture/queue-architecture.md) — architecture interne complète (deux instances `NatsQueueClient`, mécanisme `ServiceLoader`, traces de séquence publish/subscribe, divergences doc/code connues).
 - [queue-messaging.md](queue-messaging.md) — référence complète de l'API `$Queue` (`QueueBinding`, publish-only — toutes les surcharges `publish`).
 - [configuration/queue-service.md](../configuration/queue-service.md) — référence de configuration du côté publisher.

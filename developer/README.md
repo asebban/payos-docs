@@ -14,6 +14,7 @@ For developers **building applications on PayOS**. Applications are written prim
 6. [Scripting bindings reference](scripting-bindings.md) — every `$` binding and its use.
 7. [Data access](data-access.md) — using `$DB`.
 7.1. [Platform database usage](platform-database-usage.md) — using `$PlatformDB`, the tenant-independent counterpart to `$DB` for reference/master data.
+7.2. [Atomicity setup guide (de A à Z)](atomicity-setup-guide.md) — configuring and using the `$DB`/`$PlatformDB` + `$Audit` + `$Queue` atomicity guarantee end to end: ordered setup steps, `atomicityScope`, two easy-to-miss activation pitfalls, worked examples, and troubleshooting.
 8. [Secrets usage](secrets-usage.md) — using `$Secrets`.
 9. [Vault secret-id secure injection](vault-secret-id-secure-injection.md) — securely injecting the Vault AppRole `secret-id` used by `$Secrets`.
 10. [Cache usage](cache-usage.md) — using `$Cache` (distributed `memory`/`redis` cache, shared across instances/bundles).
@@ -41,7 +42,7 @@ For developers **building applications on PayOS**. Applications are written prim
 
 ## Related references
 
-- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v1-2026-10-16.md) — `atomicityScope`, the `$DB`/`$PlatformDB` read-only/absent lockdown, `$Audit`'s direct write, and `$Queue`'s Transactional Outbox pattern.
+- [Architecture: atomicity across `$DB`, `$Audit`, and `$Queue`](../architecture/atomicity-db-audit-queue-v9-2026-10-19.md) — `atomicityScope`, the `$DB`/`$PlatformDB` read-only/absent lockdown, `$Audit`'s direct write, and `$Queue`'s Transactional Outbox pattern.
 - [Configuration reference](../configuration/README.md) — every configuration key.
 - [Reference: script bindings index](../reference/script-bindings-index.md) — quick lookup.
 - [Architecture: request processing](../architecture/request-processing.md) — what runs your script.

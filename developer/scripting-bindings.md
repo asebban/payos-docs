@@ -341,8 +341,11 @@ var msg = $I18n.t("payment.declined");
 ### `$WebHooks`
 
 The webhook hooks proxy (`WebhookHooksProxy`), available when a
-[webhook dispatcher](../configuration/webhook-service.md) is configured. See
-[webhooks & hooks](webhooks-and-hooks.md).
+[webhook dispatcher](../configuration/webhook-service.md) is configured. Two `emit(...)`
+overloads: `emit(eventName, payload)` dispatches to whatever `webhooks.json` configures for
+that event; `emit(eventName, payload, options)` supplies the destination (`url`, `method`,
+`headers`, `secret`, `retry`) directly as an argument instead, bypassing `webhooks.json`
+entirely. See [webhooks & hooks](webhooks-and-hooks.md).
 
 ### `$Library`
 

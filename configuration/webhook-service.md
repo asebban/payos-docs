@@ -46,8 +46,9 @@ in [developer/webhooks-and-hooks.md](../developer/webhooks-and-hooks.md).
 
 ## Per-application subscriptions
 
-Which events trigger a delivery — and where — is declared per application in
-`config/webhooks.json`, not in the bootstrap. Each subscription specifies the `event`,
+Which events trigger a delivery — and where — is declared per application in a `webhooks.json`
+file at the application's root (`{app base.path}/webhooks.json`, not `config/webhooks.json`),
+not in the bootstrap. Each subscription specifies the `event`,
 target `url`, `method`, signing `secret`, and an optional `filter` (`path`, `method`,
 `statusCodes`). The full subscription schema is in
 [developer/webhooks-and-hooks.md](../developer/webhooks-and-hooks.md).

@@ -192,7 +192,7 @@ If any `PAYOS_EDITOR_SECRET_*` variable is set, resolution happens from the envi
 | `http-webhook-service.connectTimeoutMs` | `5000` | Connect timeout. |
 | `http-webhook-service.requestTimeoutMs` | `10000` | Request timeout. |
 
-Per-app subscription fields (`config/webhooks.json`): `id`, `event`, `native`, `url`,
+Per-app subscription fields (`webhooks.json` at the application's root, not `config/webhooks.json`): `id`, `event`, `native`, `url`,
 `secret`, `method`, `headers`, `disabled`, `filter.path`, `filter.method`,
 `filter.statusCodes`.
 

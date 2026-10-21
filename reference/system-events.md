@@ -39,5 +39,6 @@ and outbound [native webhooks](../configuration/webhook-service.md). Defined in
 
 ## Subscribing
 
-Declare native webhook subscriptions per application in `config/webhooks.json`, referencing
-the event name. See [developer/webhooks-and-hooks.md](../developer/webhooks-and-hooks.md).
+Declare native webhook subscriptions per application in `webhooks.json` at the application's
+root (not `config/webhooks.json`), referencing the event name. See
+[developer/webhooks-and-hooks.md](../developer/webhooks-and-hooks.md).

@@ -19,7 +19,9 @@ Both fire from the same event points (e.g. `api.pre-request`, `api.post-request`
 
 ## Defining native webhook subscriptions
 
-Subscriptions are declared in an application's `config/webhooks.json`. Each entry:
+Subscriptions are declared in a `webhooks.json` file at the **root of the application
+directory** (`{app base.path}/webhooks.json` — not inside `config/`; `HookEngine.collectWebhooksInto`
+reads it straight from the app's base path). Each entry:
 
 ```json
 {
@@ -75,7 +77,43 @@ logger) is the binding to use from a hook script.
 
 When a dispatcher is configured, scripts can interact with webhooks programmatically via
 `$WebHooks` (a `WebhookHooksProxy`) — for example, to trigger a delivery explicitly from
-business logic.
+business logic. Two forms of `emit(...)` are available.
+
+### `emit(eventName, payload)` — config-driven
+
+Looks up `eventName` in the application's `webhooks.json` (see above) and dispatches to every
+matching, non-disabled, filter-passing subscriber. This is the common case — the destination,
+method, headers, secret, and retry policy are all whatever the configured entry says.
+
+```javascript
+$WebHooks.emit("payment.captured", { paymentId: payment.id, amount: payment.amount });
+```
+
+### `emit(eventName, payload, options)` — direct-argument
+
+Bypasses `webhooks.json` entirely: every emission parameter is supplied right here instead of
+being resolved from a configured subscription. Use this when the destination isn't known ahead
+of time (e.g. it comes from the request, a database row, or a per-tenant setting) — anywhere a
+static JSON entry can't express where to send the event. `options` uses the same field names as
+a `webhooks.json` entry, minus `id`/`native`/`disabled`/`filter` (none of which make sense for a
+single explicit destination the script is already choosing):
+
+```javascript
+$WebHooks.emit("payment.captured", { paymentId: payment.id, amount: payment.amount }, {
+    url: merchant.webhookUrl,       // required — the only thing a plain emit() can't supply
+    method: "POST",                 // optional, defaults to "POST"
+    headers: { "X-Source": "payos" },
+    secret: merchant.webhookSecret, // optional — signs the payload the same way (X-Payos-Signature)
+    retry: { maxAttempts: 5, backoffMs: 2000 }  // optional, defaults to 3 / 1000ms
+});
+```
+
+`options.url` is required — `emit(...)` throws `IllegalArgumentException` immediately if it's
+missing or blank, rather than silently doing nothing. Everything else about delivery is
+identical to the config-driven form: same `IWebhookDispatcher` (async, retried, same built-in
+`X-Payos-Event`/`X-Correlation-Id`/`X-Tenant-Id` headers), and calling this for a standard
+system event name still suppresses the kernel's automatic native dispatch for that same event —
+script `emit(...)` always takes priority, regardless of which form was used.
 
 ## Delivery characteristics
 

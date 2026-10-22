@@ -21,6 +21,7 @@ For developers **building applications on PayOS**. Applications are written prim
 11. [Sliding window counter usage](sliding-window-usage.md) — using `$SlidingWindow` (read-only exact sliding-window quota/rate-limit counter).
 12. [Tenant resolution](tenant-resolution.md) — how PayOS decides which tenant a request belongs to, the exact priority order (authenticated identity first, `X-Tenant-Id` only for anonymous requests), and how to test as a specific tenant locally.
 12.1. [Tenant quota enforcement](tenant-quota-enforcement.md) — how the platform's own per-tenant `requestsPerMinute` quota is counted, and why it's a different counter from `$SlidingWindow`.
+12.2. [Tenant registry in a database table](tenant-config-loader-database-v1-2026-10-22.md) — declaring/managing `multitenancy.tenants` as rows in a database table (`tenant-config-loader-database`) instead of hand-editing JSON, with a worked table/script example and an opt-in live-reload poller.
 13. [Queue messaging](queue-messaging.md) — using `$Queue`.
 14. [Queue setup guide (de A à Z)](queue-setup-guide.md) — configuring and using both the publisher (`$Queue`) and consumer (`queue` transport) sides end to end.
 15. [Notification service guide (A à Z)](notification-service-guide.md) — configuring, starting, and using `$Notification` end to end.

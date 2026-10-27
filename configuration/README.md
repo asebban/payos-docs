@@ -47,6 +47,7 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | `service-adapters-dir` / `extensions-dir` | [extensions-connectors.md](extensions-connectors.md) | Plugin discovery paths and classloaders (legacy SPI-backend loader). |
 | Connector framework (`connectors.json`, connector descriptor) | [connector-framework-parameters-v3-2026-08-11.md](connector-framework-parameters-v3-2026-08-11.md) | Business/payment connector plugin system — `connectors.json`, `META-INF/connector.properties`, credential references, hot-reload, tenant scoping, idempotency/dedup, retry policy, execution-state persistence, DLQ/terminal routing, diagnostics. Wired into `BootServer` since 2026-07-27. |
 | *(not a `bootstrap.json` block — its own standalone config, `tss-config.json`)* | [task-scheduling-system-v5-2026-10-14.md](task-scheduling-system-v5-2026-10-14.md) | `payos-job-scheduler` ("TSS"): its own schema connection, scheduler sizing, the per-tenant execution concurrency quota, and `jobs.json`'s per-tenant policy fields. |
+| *(not a `bootstrap.json` block — its own standalone config, `license-generator-config.json`)* | [payos-license-generator-v1-2026-10-27.md](payos-license-generator-v1-2026-10-27.md) | `payos-license-generator`: the standalone license-issuing service's secret-provider SPI selection, editor key-pair identity, license output directory, and HTTP port. |
 | Complete reference guide of configuration | [Json configuration reference](./json-configuration-reference.md) | |
 
 ## A complete index

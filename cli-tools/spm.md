@@ -42,6 +42,10 @@ It uses the same master key as the runtime — supplied via the provider `keyfil
 | `list` | List secret names for a tenant. |
 | `delete` | Remove a secret. |
 | `describe` | Show metadata (type, current version, timestamps). |
+| `key-create` | Generate a named AES-256 symmetric key, stored internally — key material is never displayed. |
+| `keypair-create` | Generate a named RSA/EC key pair (`--algorithm RSA_2048`\|`RSA_3072`\|`RSA_4096`\|`EC_P256`), stored internally — only the public key (PEM) is printed; the private key is never displayed or returned. Needed, for example, to bootstrap the editor's signing key for [payos-license-generator](../operations/payos-license-generator-setup-guide-v1-2026-10-27.md). |
+| `encrypt` | Encrypt content with a named internal key (from `key-create`), print base64 ciphertext. |
+| `decrypt` | Decrypt base64 ciphertext with a named internal key, write raw plaintext. |
 
 The filesystem provider also supports version history (`IVersionedSecretProvider`) and
 tokenization (`ITokenProvider`) at the Java API level, but `spm` doesn't yet expose CLI
@@ -55,6 +59,9 @@ secrets you are managing.
 ## Examples
 
 ```bash
+# generate a named RSA key pair, printing only the public key
+spm keypair-create --root ./secrets --tenant editor --key-name editor-signing-key --algorithm RSA_2048
+
 # set a secret for tenant "acme"
 spm set --root ./secrets --tenant acme --name psp-api-key --value "s3cr3t"
 

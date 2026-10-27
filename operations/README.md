@@ -17,6 +17,7 @@ For **operators** running PayOS in production: deployment, bundle encryption, se
 | Exhaustive Micrometer/Prometheus metrics catalog | [metrics-catalog-v2-2026-09-11.md](metrics-catalog-v2-2026-09-11.md) |
 | Zero-downtime configuration reload | [hot-reload.md](hot-reload.md) |
 | Guide of all CLI tools | [cli-tools-guide.md](./cli-tools-guide.md) |
+| `payos-license-generator` setup guide — build, configure, run, and generate a signed license, verified against a real build and a real HTTP request | [payos-license-generator-setup-guide-v1-2026-10-27.md](payos-license-generator-setup-guide-v1-2026-10-27.md) |
 
 ## Related references
 

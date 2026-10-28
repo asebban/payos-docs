@@ -1,10 +1,10 @@
 Created: 2026-10-06
-Last updated: 2026-10-14
-Version: 13
+Last updated: 2026-10-28
+Version: 14
 
 # Task Scheduling System: developer guide
 
-A self-contained, start-to-finish guide to writing and configuring job scripts for the Task Scheduling System (`payos-job-scheduler`, "TSS") — a Quartz-backed, clustered scheduler that fires your script on a cron schedule, separate from the HTTP/TCP/queue request path the rest of this guide otherwise covers. This page covers everything you need as a developer: how to configure TSS itself, where your job's own configuration lives, every field your script's `execute(context)` function can use, a realistic batch-job example, and what happens to an execution that your script never even gets to run. The condensed config-key reference (for a quick lookup once you already know this material) is [configuration/task-scheduling-system-v5-2026-10-14.md](../configuration/task-scheduling-system-v5-2026-10-14.md); the full day-2 operational picture (clustering, deployment modes, starting/stopping) is [operations/task-scheduling-system-v15-2026-10-07.md](../operations/task-scheduling-system-v15-2026-10-07.md).
+A self-contained, start-to-finish guide to writing and configuring job scripts for the Task Scheduling System (`payos-job-scheduler`, "TSS") — a Quartz-backed, clustered scheduler that fires your script on a cron schedule, separate from the HTTP/TCP/queue request path the rest of this guide otherwise covers. This page covers everything you need as a developer: how to configure TSS itself, where your job's own configuration lives, every field your script's `execute(context)` function can use, a realistic batch-job example, and what happens to an execution that your script never even gets to run. The condensed config-key reference (for a quick lookup once you already know this material) is [configuration/task-scheduling-system-v6-2026-10-28.md](../configuration/task-scheduling-system-v6-2026-10-28.md); the full day-2 operational picture (clustering, deployment modes, starting/stopping) is [operations/task-scheduling-system-v16-2026-10-28.md](../operations/task-scheduling-system-v16-2026-10-28.md).
 
 ## 1. Configuring TSS itself (`tss-config.json`)
 
@@ -68,7 +68,7 @@ TSS's own isolated schema (Quartz's own `QRTZ_*` tables, plus `tss_job_execution
 | Key | JSON field | Default | Effect |
 | --- | --- | --- | --- |
 | `TSS_JOBS_ROOT_DIR` | `rootDir` | `jobs` | The directory TSS walks for your job definitions — §2 covers its exact layout. Resolved relative to `--scheduler-base-dir`. |
-| `TSS_PAYOS_CONFIG_FILE` | `payosConfigFile` | `payos.json` | The PayOS config file TSS reads your tenant's database credentials from — **standalone mode only**. In embedded mode (TSS running inside `payos-runtime`), this is never read; TSS reuses the host's already-loaded tenant configuration directly, so this key has no effect there at all. |
+| `TSS_PAYOS_CONFIG_FILE` | `payosConfigFile` | `payos.json` | The PayOS config file TSS reads your tenant's database credentials from — **standalone mode only**. Tenants contributed by a PayOS config loader plugin (e.g. `tenant-config-loader-database`, which declares tenants from a registry table in the platform database) are picked up too, exactly as the runtime sees them — see the [operations guide](../operations/task-scheduling-system-v16-2026-10-28.md#tenant-and-platform-database-resolution). In embedded mode (TSS running inside `payos-runtime`), this is never read; TSS reuses the host's already-loaded tenant configuration directly, so this key has no effect there at all. |
 
 ### Running TSS locally to try your script
 
@@ -112,7 +112,8 @@ Only `implementation.type: "script"` + `trigger.type: "cron"` entries are loaded
 | `jobs[].implementation.mappingFiles` | No | Array of Hibernate mapping files this job's script needs on `$DB`. A tenant's *effective* mapping-file set is the union across every one of that tenant's jobs — declare only what this specific job touches, you don't need to repeat mappings another of the tenant's jobs already declared. |
 | `jobs[].trigger.type` | Yes | Must be `"cron"`. |
 | `jobs[].trigger.expression` | Yes | A standard Quartz cron expression (`"0 0 2 * * ?"` = every day at 02:00). |
-| `jobs[].parallelizable` | No (default `true`) | **A completely different concurrency control from the quota in §8 — don't conflate them, and don't confuse it with `$Parallel` (§4) either; this is about whether the same job can have two whole executions running at once, not about fanning a batch out within one execution.** `false` makes Quartz guarantee this *one specific job* (`(tenantId, scriptPath)`) never runs twice at once, cluster-wide: if a second trigger fires while the first execution is still running, Quartz makes it **wait** until the first finishes, then runs it — it is never rejected, never skipped, just delayed. (Internally: `false` schedules the job as `ExclusiveScriptJob`, annotated `@DisallowConcurrentExecution`; `true`/omitted uses the plain `ScriptJob`.) The quota in §8, by contrast, is a per-**tenant** cap across *all* that tenant's jobs together, and a rejection under quota is an outright `QUOTA_REJECTED` — never queued, never retried automatically. |
+| `jobs[].arguments` | No | A free-form JSON object handed to your script as `context.getArguments()` — see §6.1. Absent means an empty object; anything that isn't a JSON object is logged and ignored (the job itself still registers). |
+| `jobs[].parallelizable` | No (default `true`) | **A completely different concurrency control from the quota in §8 — don't conflate them, and don't confuse it with `$Parallel` (§4) either; this is about whether the same job can have two whole executions running at once, not about fanning a batch out within one execution.** `false` makes Quartz guarantee this *one specific job* (`(tenantId, scriptPath)`) never runs twice at once, cluster-wide: if a trigger fires while the previous execution is still running, Quartz holds it until that execution finishes, then runs it — never rejected outright. If the hold lasts longer than Quartz's misfire threshold (60 s, Quartz's default, not overridden by TSS), that slot is recorded as a `MISFIRE` (§10) and Quartz then fires the job **once** to catch up — several slots missed during one very long execution collapse into a single catch-up run, not one run per missed slot. (Internally: `false` schedules the job as `ExclusiveScriptJob`, annotated `@DisallowConcurrentExecution`; `true`/omitted uses the plain `ScriptJob`.) The same script under two *different* tenants is two different jobs and is never serialized by this flag. The quota in §8, by contrast, is a per-**tenant** cap across *all* that tenant's jobs together, and a rejection under quota is an outright `QUOTA_REJECTED` — never queued, never retried automatically. |
 
 ```json
 {
@@ -126,7 +127,8 @@ Only `implementation.type: "script"` + `trigger.type: "cron"` entries are loaded
         "mappingFiles": ["/opt/payos-tss/model/Invoice.hbm.xml"]
       },
       "trigger": { "type": "cron", "expression": "0 0 2 * * ?" },
-      "parallelizable": false
+      "parallelizable": false,
+      "arguments": { "batchSize": 100, "statuses": ["pending", "retry"] }
     },
     {
       "id": "cleanup-hourly",
@@ -139,6 +141,8 @@ Only `implementation.type: "script"` + `trigger.type: "cron"` entries are loaded
 ```
 
 ### `custom-jobs.json` — same schema, plus a required `tenant` field, no `maxConcurrentExecutions`
+
+An entry here replaces the matching `jobs.json` entry **as a whole**, `arguments` included — there is no key-by-key merge of the two `arguments` objects, so repeat every argument the overriding entry needs.
 
 ```json
 {
@@ -220,7 +224,7 @@ A tenant-scoped job can fan a batch of items out across a small, bounded pool of
 
 | Part | Shape | Effect |
 | --- | --- | --- |
-| `items` | array | The batch to process. Split across a bounded worker pool (see "Configuring the worker ceiling" below) — never more workers than items, so a 2-item batch never starts more than 2 workers regardless of the configured ceiling. |
+| `items` | array | The batch to process. Split across a bounded worker pool (see "Configuring the worker ceiling" below) — never more workers than items, so a 2-item batch never starts more than 2 workers regardless of the configured ceiling. Each item is copied into its worker as plain data — numbers, strings, booleans, `null`, objects and arrays, nested to any depth, so an array of arrays works (each inner array is one unit of work handed to one worker). An item arrives as a foreign array/object: index it (`item[0]`, `item.length`) rather than relying on `Array.prototype` methods, or call `Array.from(item)` first. Pass ids rather than `$DB`/`$PlatformDB` entities or functions, which are not plain data. |
 | `fn` | `function(item, $DB, extra)` | Called once per item, from whichever worker that item was assigned to. Its own `$DB` (the second parameter) is **not** the outer script's `$DB` — see below. `extra` is whatever you passed in `options.extra`, or `undefined` if you didn't. |
 | `options.extra` | any JSON-serializable value, optional | Computed once by the calling script, handed identically to every worker call — the way to get a value from outside the batch into `fn` without relying on a closure (see below). |
 | `options.failFast` | boolean, default `false` | `false` (default): every item is attempted regardless of earlier failures, and the returned array simply marks the failed ones. `true`: the moment one item fails, `$Parallel.forEach` itself throws instead of returning — see "Error handling" below. |
@@ -237,7 +241,26 @@ var results = $Parallel.forEach([101, 102, 103], function(orderId, $DB) {
 // results: [ { item: 101, result: 101 }, { item: 102, result: 102 }, { item: 103, result: 103 } ]
 ```
 
-**`$Logger` works inside `fn` too — it's the one binding that doesn't need to be a parameter.** Unlike `$DB`, `$Logger` is bound as the same kind of ambient global inside every worker's own isolated script as it is in the rest of your job — call it exactly as you already do elsewhere (`$Logger.info(...)`/`warn`/`error`/`debug`), no need to receive it through `fn`'s parameter list. This is deliberately safe to do, unlike exposing `$DB` this way: `$Logger` holds no per-execution state (no session, no transaction) that two threads could step on, just a constant tenant-prefix string and a delegate SLF4J logger — fine to reuse the exact same instance across every concurrently-running worker. If you see "`$Logger is not defined`" (or any other binding) inside a worker function, it means that binding genuinely isn't exposed there — only `$Logger` gets this treatment; `$DB`/`$PlatformDB` must come in through `fn`'s own parameters (`$DB`) or aren't available at all (`$PlatformDB` — see "Tenant-scoped jobs only" below).
+**`$Logger` and `$PlatformDB` work inside `fn` too — the two bindings that don't need to be a parameter.** Unlike `$DB`, both are bound as the same kind of ambient global inside every worker's own isolated script as they are in the rest of your job — call them exactly as you already do elsewhere, no need to receive them through `fn`'s parameter list. This is deliberately safe to do, unlike exposing `$DB` this way: neither holds per-execution state (no session, no transaction) that two threads could step on. `$Logger` is a constant tenant-prefix string plus a delegate SLF4J logger; `$PlatformDB` is a stateless pass-through to the platform database service, which opens and closes its own short-lived session on every single call — so concurrent workers never share a session (see "`$PlatformDB` inside a worker" below). Anything else — `$Parallel` itself, `context`, or any variable from your script — is not available inside `fn`; if you see "`… is not defined`" there, that's why.
+
+### `$PlatformDB` inside a worker
+
+A worker sees the **same, read-only** `$PlatformDB` your tenant-scoped job sees (`newParams`/`get`/`getFresh`/`findAll`/`find`/`list`/`unique`/`first` — no write method exists on it, inside or outside a worker). It is undefined inside workers only when no platform database is configured at all, exactly as in the calling script.
+
+```javascript
+var results = $Parallel.forEach(orderIds, function(orderId, $DB) {
+    var order = $DB.get("Order", orderId);
+    var rate = $PlatformDB.first("FROM Currency WHERE code = :c", { c: order.get("currency") });
+    order.put("amountEur", order.get("amount") * rate.get("rate"));
+    $DB.update("Order", order);
+    return order.get("id");
+});
+```
+
+Two things to keep in mind:
+
+- **Every call is its own session and transaction.** Two successive `$PlatformDB` reads inside one worker can observe different data if the platform database changes in between — the same as in the calling script.
+- **Every call borrows a platform-pool connection for its duration.** With several workers per job and several jobs running at once, up to `threadCount × maxParallelWorkersPerJob` platform reads can be in flight together; the platform pool (`platform-database-service.configuration.max-pool-size`, HikariCP's default `10` when unset) bounds them, and excess calls wait for a free connection. For small reference data every item needs, reading it **once** in the calling script and passing it through `options.extra` (below) is still cheaper than one query per item.
 
 ### Each worker runs `fn` in its own isolated script — no closures over your outer variables
 
@@ -345,7 +368,7 @@ Each batch is its own transaction — a crash after batch 3 of 10 leaves the fir
 
 `context` (TSS's own `JobContext` — not the `request`/`controlData` pair an API script's `execute` gets) exposes:
 
-| Field (Java accessor / JS property) | Type | Value |
+| Method | Type | Value |
 | --- | --- | --- |
 | `getJobId()` | string | The job's declared `id` from `jobs.json` (log-display only — see §2's note on why it's not a unique key). |
 | `getTenantId()` | string or `null` | The owning tenant, or `null` for a platform-level job. |
@@ -354,8 +377,48 @@ Each batch is its own transaction — a crash after batch 3 of 10 leaves the fir
 | `getDb()` | `$DB` binding, or `null` | `null` for a platform-level job. See §3. |
 | `getPlatformDb()` | `$PlatformDB` binding, or `null` | `null` only if no platform database is configured at all for this deployment. See §3. |
 | `getParallel()` | `$Parallel` binding, or `null` | `null` for a platform-level job. See §4. |
+| `getArguments()` | object | This job's declared `arguments` — never `null`, an empty object when none are declared. See §6.1. |
 
-In JavaScript, GraalVM exposes Java getters as plain properties too — `context.jobId`, `context.tenantId` etc. work the same as `context.getJobId()`.
+**Call these as methods.** The scripting engine exposes `context`'s Java methods, not bean-style properties: `context.getTenantId()` works, `context.tenantId` is `undefined` — so is `context.arguments`, which is a common slip with §6.1.
+
+### 6.1 Passing arguments to a script (`arguments`)
+
+A job entry's optional `arguments` object (in `jobs.json`, `custom-jobs.json` or `platform-jobs.json`) lets the same script be reused with different settings per job or per tenant, without hard-coding them in the script:
+
+```json
+{
+  "jobs": [
+    {
+      "id": "export-daily",
+      "implementation": { "type": "script", "script": "jobs/export.js" },
+      "trigger": { "type": "cron", "expression": "0 0 1 * * ?" },
+      "arguments": {
+        "batchSize": 500,
+        "dryRun": false,
+        "target": { "folder": "/exports", "formats": ["csv", "json"] }
+      }
+    }
+  ]
+}
+```
+
+```javascript
+// jobs/export.js
+function execute(context) {
+    var args = context.getArguments();
+    $Logger.info("batch={} folder={} formats={}", args.batchSize, args.target.folder, args.target.formats.length);
+    if (args.dryRun) {
+        return;
+    }
+    // ...
+}
+```
+
+- **Shape:** any JSON object — numbers, strings, booleans, `null`, nested objects and arrays. Access nested values with plain JS syntax (`args.target.formats[1]`, `args.target.formats.length`); an argument that isn't declared is simply `undefined`.
+- **A fresh copy per execution.** Mutating `args` inside your script never leaks into the next execution, which starts again from the declared values.
+- **When a change takes effect.** Arguments are looked up at execution time from the job definitions TSS loaded at startup — not from Quartz's persisted job data, which is never refreshed for a job Quartz already has registered. Editing `arguments` therefore takes effect on the **next TSS start**; no Quartz cleanup is needed. In a cluster, each node reads its own `jobs/` directory, so keep that content identical on every node (already the rule for everything else in it).
+- **Not a secret store.** `jobs.json` is read as plain JSON: unlike PayOS's own configuration files, `${VAR}`-style placeholders are **not** expanded here, so `"${API_TOKEN}"` reaches your script as that literal string. Keep secrets out of `arguments`.
+- **Not visible inside `$Parallel` workers by itself** — pass what a worker needs through `options.extra` (§4).
 
 ## 7. The five outcomes
 
@@ -505,8 +568,8 @@ password=*** invalid
 
 ## Next
 
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v5-2026-10-14.md) — condensed config-key reference, for a quick lookup once you know this material.
-- [Operations: Task Scheduling System](../operations/task-scheduling-system-v15-2026-10-07.md) — deployment modes, clustering, starting/stopping, operational troubleshooting.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v6-2026-10-28.md) — condensed config-key reference, for a quick lookup once you know this material.
+- [Operations: Task Scheduling System](../operations/task-scheduling-system-v16-2026-10-28.md) — deployment modes, clustering, starting/stopping, operational troubleshooting.
 - [Architecture: Task Scheduling System class diagram](../architecture/job-scheduler-class-diagram-v18-2026-10-07.md) — internal design, every production class (French).
 - [Data access](data-access.md) / [Platform database usage](platform-database-usage.md) — the same `$DB`/`$PlatformDB` concepts as used by API scripts, for comparison.
 - [Tenant quota enforcement](tenant-quota-enforcement.md) — the separate, HTTP-request-side quota mechanism.

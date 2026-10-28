@@ -1,10 +1,10 @@
 Created: 2026-10-06
-Last updated: 2026-10-14
-Version: 5
+Last updated: 2026-10-28
+Version: 6
 
 # Task Scheduling System configuration
 
-**Not a `bootstrap.json`/`PayOSConfig` block, unlike every other page in this directory.** `payos-job-scheduler` ("TSS") is its own standalone deployable with its own, independent configuration pipeline (`tss-config.json`, resolved by its own `StandaloneConfigLoader`) — it never reads `bootstrap.json` and its keys are not in `IConfigSpec`, they're in TSS's own `IJobConfigSpec`. This page exists so TSS's config surface is still discoverable from here; the full operational narrative (deployment modes, clustering, tenant/platform database resolution) lives in [operations/task-scheduling-system-v15-2026-10-07.md](../operations/task-scheduling-system-v15-2026-10-07.md).
+**Not a `bootstrap.json`/`PayOSConfig` block, unlike every other page in this directory.** `payos-job-scheduler` ("TSS") is its own standalone deployable with its own, independent configuration pipeline (`tss-config.json`, resolved by its own `StandaloneConfigLoader`) — it never reads `bootstrap.json` and its keys are not in `IConfigSpec`, they're in TSS's own `IJobConfigSpec`. This page exists so TSS's config surface is still discoverable from here; the full operational narrative (deployment modes, clustering, tenant/platform database resolution) lives in [operations/task-scheduling-system-v16-2026-10-28.md](../operations/task-scheduling-system-v16-2026-10-28.md).
 
 Every key in the `database`/`scheduler`/`jobs` blocks below resolves across three tiers, in priority order: **environment variable** → **system property** (same name) → a **field in `tss-config.json`**, nested under the block named in that table. `jobs.json`/`custom-jobs.json`/`platform-jobs.json` are a separate, declarative document format (TSS spec §7.2) — not part of this three-tier resolution at all; they're read directly from disk by `JobConfigLoader`.
 
@@ -32,9 +32,9 @@ TSS's own isolated schema (Quartz's `QRTZ_*` tables plus `tss_job_execution`) �
 | --- | --- | --- | --- |
 | `TSS_SCHEDULER_INSTANCE_NAME` | `schedulerInstanceName` | `TSS-Cluster` | Every clustered node sharing one `jobs/` registry must use the **same** name. |
 | `TSS_THREAD_COUNT` | `threadCount` | `5` | Quartz worker thread pool size — how many job executions can run concurrently on this one node. |
-| `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` | `maxConcurrentExecutionsPerTenant` | `0` (disabled) | **Global default** for the per-tenant concurrency quota (how many of one tenant's executions may be in progress at once, cluster-wide, across every node). `0` or negative means no tenant is ever rejected on this basis. A tenant can override this for itself via `jobs.json`'s own `maxConcurrentExecutions` field (below). Platform-level jobs are never subject to it — there's no tenant to meter. Exceeding it produces the `QUOTA_REJECTED` outcome — see [developer/task-scheduler-guide-v13-2026-10-14.md](../developer/task-scheduler-guide-v13-2026-10-14.md). |
-| `TSS_MAX_PARALLEL_WORKERS_PER_JOB` | `maxParallelWorkersPerJob` | `4` | Ceiling on how many worker threads one `$Parallel.forEach` call (tenant-scoped job scripts only) may use to fan a single execution's own batch out. A different axis from the quota above: that one bounds how many whole executions run at once; this one bounds how much *one* execution can fan out internally. See [developer/task-scheduler-guide-v13-2026-10-14.md §4](../developer/task-scheduler-guide-v13-2026-10-14.md#4-parallel--processing-a-batch-concurrently). |
-| `TSS_METRICS_HTTP_PORT` | `metricsHttpPort` | `0` (disabled) | **Standalone mode only.** `0`/negative never starts anything — embedded mode never reads this key at all. A positive value starts a tiny Prometheus scrape HTTP server on that port, serving `GET /metrics` — see [developer/task-scheduler-guide-v13-2026-10-14.md §12](../developer/task-scheduler-guide-v13-2026-10-14.md#12-metrics) for why standalone mode needs this and embedded mode doesn't. |
+| `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` | `maxConcurrentExecutionsPerTenant` | `0` (disabled) | **Global default** for the per-tenant concurrency quota (how many of one tenant's executions may be in progress at once, cluster-wide, across every node). `0` or negative means no tenant is ever rejected on this basis. A tenant can override this for itself via `jobs.json`'s own `maxConcurrentExecutions` field (below). Platform-level jobs are never subject to it — there's no tenant to meter. Exceeding it produces the `QUOTA_REJECTED` outcome — see [developer/task-scheduler-guide-v14-2026-10-28.md](../developer/task-scheduler-guide-v14-2026-10-28.md). |
+| `TSS_MAX_PARALLEL_WORKERS_PER_JOB` | `maxParallelWorkersPerJob` | `4` | Ceiling on how many worker threads one `$Parallel.forEach` call (tenant-scoped job scripts only) may use to fan a single execution's own batch out. A different axis from the quota above: that one bounds how many whole executions run at once; this one bounds how much *one* execution can fan out internally. See [developer/task-scheduler-guide-v14-2026-10-28.md §4](../developer/task-scheduler-guide-v14-2026-10-28.md#4-parallel--processing-a-batch-concurrently). Since workers can also read the (read-only) `$PlatformDB`, up to `threadCount × maxParallelWorkersPerJob` platform reads may be in flight at once — size `platform-database-service.configuration.max-pool-size` (HikariCP default `10`) accordingly. |
+| `TSS_METRICS_HTTP_PORT` | `metricsHttpPort` | `0` (disabled) | **Standalone mode only.** `0`/negative never starts anything — embedded mode never reads this key at all. A positive value starts a tiny Prometheus scrape HTTP server on that port, serving `GET /metrics` — see [developer/task-scheduler-guide-v14-2026-10-28.md §12](../developer/task-scheduler-guide-v14-2026-10-28.md#12-metrics) for why standalone mode needs this and embedded mode doesn't. |
 
 ## `jobs` block — file locations
 
@@ -43,7 +43,7 @@ Both values are resolved **relative to `--scheduler-base-dir`** (standalone mode
 | Key | JSON field | Default | Purpose |
 | --- | --- | --- | --- |
 | `TSS_JOBS_ROOT_DIR` | `rootDir` | `jobs` | Directory `JobConfigLoader` walks — one subdirectory per tenant (each with its own `jobs.json`/`custom-jobs.json`), plus this directory's own `platform-jobs.json` for platform-level jobs. |
-| `TSS_PAYOS_CONFIG_FILE` | `payosConfigFile` | `payos.json` | The PayOS config file TSS reads tenant/platform database settings from — standalone mode only (embedded mode reuses the host's already-loaded `PayOSConfig.settings` directly, no file re-read). |
+| `TSS_PAYOS_CONFIG_FILE` | `payosConfigFile` | `payos.json` | The PayOS config file TSS reads tenant/platform database settings from — standalone mode only (embedded mode reuses the host's already-loaded `PayOSConfig.settings` directly, no file re-read). After merging that file's `configDir`, standalone TSS also runs every SPI-discovered PayOS config loader (`IConfigLoader`) the same way the runtime does — e.g. `tenant-config-loader-database`, bundled in the standalone jar and inactive unless its `tenant-config-loader` block is enabled — so tenants declared in a database registry table are seen without copying their JSON declarations. See [operations §Tenant and platform database resolution](../operations/task-scheduling-system-v16-2026-10-28.md#tenant-and-platform-database-resolution). |
 
 ## Full `tss-config.json` example
 
@@ -96,7 +96,8 @@ One file per tenant directory under the jobs root. Besides the top-level `maxCon
 | `implementation.mappingFiles` | No | Array of Hibernate mapping files this job's script needs on its tenant's `$DB` session. A tenant's effective mapping-file set is the **union** across all of that tenant's jobs. |
 | `trigger.type` | Yes | Must be `"cron"` — the only value loaded today. |
 | `trigger.expression` | Yes | A standard Quartz cron expression. |
-| `parallelizable` | No (default `true`) | `false` schedules this job as `ExclusiveScriptJob` (`@DisallowConcurrentExecution`) — Quartz then guarantees this job never runs twice at once, cluster-wide. `true` (or omitted) schedules it as the plain, concurrency-unrestricted `ScriptJob`. |
+| `arguments` | No | Free-form JSON object handed to the script as `context.getArguments()`. Absent means an empty object; a non-object value is logged and ignored. Resolved at execution time from the jobs loaded at startup (not from Quartz's persisted job data), so an edit takes effect on the next TSS start. `${...}` placeholders are **not** expanded — keep secrets out. See [developer guide §6.1](../developer/task-scheduler-guide-v14-2026-10-28.md#61-passing-arguments-to-a-script-arguments). |
+| `parallelizable` | No (default `true`) | `false` schedules this job as `ExclusiveScriptJob` (`@DisallowConcurrentExecution`) — Quartz then guarantees this job (`(tenant, script)`) never runs twice at once, cluster-wide: a trigger firing during a running execution waits for it, and if it waits beyond Quartz's 60 s misfire threshold it is recorded as `MISFIRE` and fired once to catch up. `true` (or omitted) schedules it as the plain, concurrency-unrestricted `ScriptJob`. |
 
 ```json
 {
@@ -133,7 +134,7 @@ One file per tenant directory under the jobs root. Besides the top-level `maxCon
 
 ## `jobs/<tenantId>/custom-jobs.json` — tenant-scoped overrides and additions
 
-Same per-entry schema as `jobs.json` above, with one addition: every entry **must** declare a `tenant` field matching the enclosing directory exactly — a mismatch, or an absent field, causes that entry to be rejected (logged, skipped). No top-level `maxConcurrentExecutions` field here — that's declared once, in `jobs.json` only.
+Same per-entry schema as `jobs.json` above, with one addition: every entry **must** declare a `tenant` field matching the enclosing directory exactly — a mismatch, or an absent field, causes that entry to be rejected (logged, skipped). No top-level `maxConcurrentExecutions` field here — that's declared once, in `jobs.json` only. A matching entry replaces the `jobs.json` entry as a whole, `arguments` included (no key-by-key merge).
 
 Loaded after `jobs.json` and merged into the same per-tenant job map: a matching `scriptPath` is replaced; a new one is added.
 
@@ -186,10 +187,10 @@ A platform-level job's script gets **no `$DB`** (no tenant to open a session for
 
 ## Cluster recovery
 
-Every job is registered with Quartz's `requestRecovery(true)` — if a cluster node dies mid-execution, a surviving node re-fires that job as a new, separate execution. This is not independently configurable; it's always on for every job. The recovery execution also closes out its crashed predecessor's row (outcome `ABANDONED`) the moment it starts — otherwise that row would sit `completed_at IS NULL` forever and keep counting against the tenant's concurrency quota indefinitely. See [developer/task-scheduler-guide-v13-2026-10-14.md#11-multiple-attempts-for-the-same-trigger-firing](../developer/task-scheduler-guide-v13-2026-10-14.md#11-multiple-attempts-for-the-same-trigger-firing) for what you'll observe when it happens.
+Every job is registered with Quartz's `requestRecovery(true)` — if a cluster node dies mid-execution, a surviving node re-fires that job as a new, separate execution. This is not independently configurable; it's always on for every job. The recovery execution also closes out its crashed predecessor's row (outcome `ABANDONED`) the moment it starts — otherwise that row would sit `completed_at IS NULL` forever and keep counting against the tenant's concurrency quota indefinitely. See [developer/task-scheduler-guide-v14-2026-10-28.md#11-multiple-attempts-for-the-same-trigger-firing](../developer/task-scheduler-guide-v14-2026-10-28.md#11-multiple-attempts-for-the-same-trigger-firing) for what you'll observe when it happens.
 
 ## Next
 
-- [Operations: Task Scheduling System](../operations/task-scheduling-system-v15-2026-10-07.md) — deployment modes, clustering, starting/stopping, tenant/platform database resolution, the shared script pool, execution-history table reference and example queries.
-- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v13-2026-10-14.md) — the full developer guide: configuring TSS and tenant jobs, writing script jobs, the `context`/`$DB`/`$PlatformDB`/`$Parallel` surface, and execution outcomes & history.
+- [Operations: Task Scheduling System](../operations/task-scheduling-system-v16-2026-10-28.md) — deployment modes, clustering, starting/stopping, tenant/platform database resolution, the shared script pool, execution-history table reference and example queries.
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v14-2026-10-28.md) — the full developer guide: configuring TSS and tenant jobs, writing script jobs, the `context`/`$DB`/`$PlatformDB`/`$Parallel` surface, and execution outcomes & history.
 - [Architecture: Task Scheduling System class diagram](../architecture/job-scheduler-class-diagram-v18-2026-10-07.md) — internal design (French).

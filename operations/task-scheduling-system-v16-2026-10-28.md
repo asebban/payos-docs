@@ -1,6 +1,6 @@
 Created: 2026-10-02
-Last updated: 2026-10-07
-Version: 15
+Last updated: 2026-10-28
+Version: 16
 
 # Task Scheduling System (`payos-job-scheduler`)
 
@@ -28,12 +28,15 @@ cd payos-job-scheduler
 mvn clean package
 ```
 
-This produces `target/payos-job-scheduler-<version>.jar`: a self-contained, runnable uber-jar (`maven-shade-plugin`, same pattern as `payos-service-notification`), `Main-Class: ma.s2m.payos.scheduler.bootstrap.StandaloneMain`, every dependency bundled — GraalVM polyglot/JS, Hibernate, Quartz, HikariCP, the H2/PostgreSQL JDBC drivers, and `dynamic-database-service`'s `IDatabaseServiceFactory` SPI provider. No separate classpath assembly is needed to run it.
+This produces two jars side by side:
+
+- `target/payos-job-scheduler-<version>-standalone.jar` — the self-contained, runnable uber-jar (`maven-shade-plugin`, `standalone` classifier), `Main-Class: ma.s2m.payos.scheduler.bootstrap.StandaloneMain`, every dependency bundled — GraalVM polyglot/JS, Hibernate, Quartz, HikariCP, the H2/PostgreSQL JDBC drivers, `dynamic-database-service`'s `IDatabaseServiceFactory` SPI provider, and `tenant-config-loader-database`'s `IConfigLoader` provider (inactive unless configured — see [Tenant and platform database resolution](#tenant-and-platform-database-resolution)). No separate classpath assembly is needed to run it. It also carries the DDL scripts to apply before the first start (Quartz's `org/quartz/impl/jdbcjobstore/tables_<vendor>.sql` and `db/migration/tss_job_execution.sql`).
+- `target/payos-job-scheduler-<version>.jar` — the plain jar (TSS's own classes only, not runnable), the artifact `payos-runtime` depends on for embedded mode, so the runtime's own shade step bundles shared libraries exactly once.
 
 ## Starting the service (standalone)
 
 ```bash
-java -jar payos-job-scheduler-<version>.jar --scheduler-base-dir /opt/payos-tss
+java -jar payos-job-scheduler-<version>-standalone.jar --scheduler-base-dir /opt/payos-tss
 ```
 
 `--scheduler-base-dir` is optional; omitted, it defaults to the process's current working directory. Everything else TSS reads (`tss-config.json`, `jobs/`, job scripts, the PayOS config file) is resolved relative to this one directory unless overridden individually (see below).
@@ -67,6 +70,8 @@ Same three-tier resolution, under the `"scheduler"` block.
 | `TSS_SCHEDULER_INSTANCE_NAME` | `schedulerInstanceName` | `TSS-Cluster` | Quartz scheduler instance name — every clustered node sharing one `jobs/` registry must use the **same** name. |
 | `TSS_THREAD_COUNT` | `threadCount` | `5` | Quartz worker thread pool size. |
 | `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` | `maxConcurrentExecutionsPerTenant` | `0` (disabled) | Caps how many of one tenant's executions may be in progress at once, cluster-wide — the simplest possible "quota rejection" enforcement (FR21). This is the **global default**, applied to every tenant that doesn't declare its own `maxConcurrentExecutions` in its `jobs.json` (see below) — a tenant that genuinely needs a different number can override it there. A platform-level job is never subject to this (there's no tenant to meter). Exceeding it rejects the execution outright — see [Execution history](#execution-history-tss_job_execution) below for the `QUOTA_REJECTED` outcome this produces. |
+| `TSS_MAX_PARALLEL_WORKERS_PER_JOB` | `maxParallelWorkersPerJob` | `4` | Ceiling on the worker threads one `$Parallel.forEach` call may use inside a single execution. Each worker opens its own tenant session and may also read the (read-only) `$PlatformDB`, so size the tenant and platform connection pools for up to `threadCount × maxParallelWorkersPerJob` concurrent connections per node. |
+| `TSS_METRICS_HTTP_PORT` | `metricsHttpPort` | `0` (disabled) | Standalone only — a positive port starts a dedicated Prometheus `GET /metrics` server. See [Metrics](#metrics). |
 
 ### Jobs location
 
@@ -136,7 +141,8 @@ One file per tenant directory under the jobs root. A tenant routinely declares s
 - `implementation.script` — the script path, resolved at execution time against the **shared script pool** (see below) — not against this tenant's own directory.
 - `implementation.mappingFiles` — optional array of Hibernate mapping files this job's script needs on its tenant's `$DB` session. The tenant's effective mapping-file set is the **union** across all of that tenant's jobs.
 - `trigger.expression` — a standard Quartz cron expression.
-- `parallelizable` — parsed and stored, not yet enforced (every job currently schedules as parallel-safe).
+- `arguments` — optional free-form JSON object handed to the script as `context.getArguments()`. Looked up at execution time from the jobs loaded at startup, never from Quartz's persisted job data, so an edited value takes effect on the next TSS start with no Quartz cleanup. `${...}` placeholders are not expanded in `jobs.json` — keep secrets out of it. See the [developer guide §6.1](../developer/task-scheduler-guide-v14-2026-10-28.md#61-passing-arguments-to-a-script-arguments).
+- `parallelizable` — `false` schedules the job as `ExclusiveScriptJob` (`@DisallowConcurrentExecution`): this `(tenant, script)` job never runs twice at once anywhere in the cluster. A trigger firing during a running execution waits for it; if it waits beyond Quartz's misfire threshold (60 s) it is recorded as `MISFIRE` and fired once to catch up. `true` (the default) imposes no such restriction.
 
 ### `jobs/<tenantId>/custom-jobs.json` — tenant-scoped overrides and additions
 
@@ -203,7 +209,7 @@ A `jobs/` root with no `platform-jobs.json` at all is not an error — same as a
 
 TSS does **not** duplicate PayOS's tenant/database configuration model — it reads the real PayOS config and reuses the kernel's own resolution logic.
 
-**Standalone mode:** `TenantDatabaseRegistryLoader.loadPayOSSettings` reads the file at `TSS_PAYOS_CONFIG_FILE` (default `payos.json`, resolved relative to `--scheduler-base-dir`) the same way `ConfigLoader.loadServerConfig` does in the kernel: that file is read only for its `configDir` key (default `"."`, relative to the file's own directory) — the actual settings (`database-service`, `multitenancy`, `applications`, `platform-database-service`) live in that directory's `*.json` files, merged together (every `*.json` file except `custom.json`, then `custom.json` last so it can override anything). This means tenant definitions are routinely found in a file separate from `payos.json` itself, exactly as in a real PayOS deployment. TSS deliberately does **not** call `ConfigLoader.loadServerConfig` itself — that method also runs kernel-boot side effects (service-adapter loading, secret-service/encryption-key initialization, `applications` loading) TSS must not repeat.
+**Standalone mode:** `TenantDatabaseRegistryLoader.loadPayOSSettings` reads the file at `TSS_PAYOS_CONFIG_FILE` (default `payos.json`, resolved relative to `--scheduler-base-dir`) the same way `ConfigLoader.loadServerConfig` does in the kernel: that file is read only for its `configDir` key (default `"."`, relative to the file's own directory) — the actual settings (`database-service`, `multitenancy`, `applications`, `platform-database-service`) live in that directory's `*.json` files, merged together (every `*.json` file except `custom.json`, then `custom.json` last so it can override anything). This means tenant definitions are routinely found in a file separate from `payos.json` itself, exactly as in a real PayOS deployment. TSS deliberately does **not** call `ConfigLoader.loadServerConfig` itself — that method also runs kernel-boot side effects (service-adapter loading, secret-service/encryption-key initialization, `applications` loading) TSS must not repeat. It does, however, run the one step of it that can change which tenants exist: every SPI-discovered `IConfigLoader` is invoked on the merged settings, each contribution deep-merged on top (the loader wins on conflict), a failing loader logged and skipped — exactly the kernel's own contract, so a given configuration yields the same tenant set in standalone TSS as in the runtime.
 
 **Embedded mode:** no file is read at all — `RuntimeIntegrationHook` reuses `PayOSConfig.settings` and `PayOSConfig.getPlatformDatabaseService()` directly, since the host (`payos-runtime`) has already loaded them.
 
@@ -233,6 +239,37 @@ Yes — `platform-database-service` is its own top-level block in one of PayOS's
 `password` is omitted here for the same reason as `tss-config.json`'s `dbPassword` above — but this file is read through the kernel's own `ConfigLoader.loadConfigByDirectory`, which (unlike TSS's own `tss-config.json` loader) runs `EnvVarResolver.resolve(...)` on every file it loads, expanding `${VAR}`-style tokens (including the `${VAR:-default}`/`${file:/path}`/etc. forms it supports). A real deployment typically sets `"password": "${PLATFORM_DB_PASSWORD}"` here rather than a literal secret. Every `mapping-files` entry is a Hibernate mapping file for the platform's own reference-data entities (e.g. shared currency/country tables) — see [Known limitation: relative file paths](#known-limitation-relative-file-paths) below if using a relative path here.
 
 TSS never names the concrete database-service implementation anywhere in its own code: `TenantDatabaseRegistryLoader` produces `Map<String, DatabaseTenantDefinition>` (a plain, framework-neutral `payos-foundation` type), and the actual `IDatabaseService` is built from it via `ServiceLoader<IDatabaseServiceFactory>` — the same SPI mechanism, and the same provider (`dynamic-database-service`'s `DynamicDatabaseServiceFactory`), the kernel itself uses.
+
+### Running standalone on its own node — avoiding a copy of the tenant configuration
+
+A standalone node typically has no `payos-runtime` on it. TSS never contacts a runtime process — it only reads the configuration files described above from its own disk — so the node needs a subset of the PayOS configuration directory. Two ways to keep that subset from drifting away from the runtime's:
+
+1. **Declare tenants in the database (recommended).** With `tenant-config-loader-database`, `multitenancy.tenants` comes from a registry table in the platform database, read through the same `IConfigLoader` step the runtime runs. The loader is already bundled in the standalone jar; the node then only needs the platform connection and the loader's column mapping, both stable — no tenant list to copy:
+
+   ```json
+   {
+     "platform-database-service": {
+       "configuration": {
+         "url": "jdbc:postgresql://db.internal:5432/payos_platform",
+         "username": "platform_svc",
+         "password": "${PLATFORM_DB_PASSWORD}",
+         "driver_class": "org.postgresql.Driver"
+       },
+       "mapping-files": ["/opt/payos-tss/model/Currency.hbm.xml"]
+     },
+     "tenant-config-loader": { "enabled": true, "table": "tenant_registry" }
+   }
+   ```
+
+   Tenants declared in JSON (if any remain) are merged alongside the registry's; a registry row wins on conflict. Column names and every optional field are documented in [tenant-config-loader-database](../developer/tenant-config-loader-database-v1-2026-10-22.md).
+2. **Mount the same configuration directory** on both nodes (a Kubernetes ConfigMap/Secret mounted into both pods, a shared volume, or one configuration artifact deployed by the same pipeline) instead of maintaining two copies.
+
+Either way, TSS resolves tenants **once, at startup**: a tenant added to the registry or the shared files is picked up on the next TSS start. Things to know before relying on this:
+
+- **Secrets:** use `${VAR}`, `${VAR:?message}` or `${file:/run/secrets/...}` placeholders in these files — they are expanded (see the `platform-database-service` note above). The PayOS **secret service is not initialized** in standalone TSS, so a value the runtime would fetch from it is not resolved here; provide it through an environment variable or a mounted file.
+- **Encrypted configuration files are not supported in standalone mode.** Files encrypted with `payosv2-packer` cannot be decrypted, because standalone TSS never initializes the editor encryption key: such a file is logged as failing to load and skipped — if it holds `multitenancy`, startup then fails with a "tenant not declared" diagnostic. Ship these files unencrypted (with secrets as placeholders) on a TSS node.
+- **Every declared tenant must be valid.** Tenant connections are resolved and validated for every tenant under `multitenancy.tenants` in one pass, including tenants with no jobs — a broken declaration blocks startup, as it does for the runtime.
+- **Only `IConfigLoader` providers inside the standalone jar run.** There is no service-adapters directory in standalone mode; an additional loader must be bundled into the jar or put on the classpath (`java -cp` instead of `java -jar`).
 
 ### Known limitation: relative file paths
 
@@ -280,11 +317,11 @@ WHERE outcome IN ('MISFIRE', 'QUOTA_REJECTED') AND started_at > CURRENT_TIMESTAM
 
 ## Metrics
 
-Every finished execution also emits into PayOS's existing metrics infrastructure (`PayOSMetrics` — the same `IMetricsRecorder`/Micrometer-backed facade every other PayOS component already uses) — TSS adds no metrics-specific tooling of its own. Query TSS's job-execution metrics (logically `tss.job.execution.count`/`tss.job.execution.duration` — see below for the actual exposed names) through the exact same backend/dashboard you already use for every other PayOS metric, no separate system. Full tag/field shape and worked examples: [developer guide](../developer/task-scheduler-guide-v13-2026-10-14.md#12-metrics).
+Every finished execution also emits into PayOS's existing metrics infrastructure (`PayOSMetrics` — the same `IMetricsRecorder`/Micrometer-backed facade every other PayOS component already uses) — TSS adds no metrics-specific tooling of its own. Query TSS's job-execution metrics (logically `tss.job.execution.count`/`tss.job.execution.duration` — see below for the actual exposed names) through the exact same backend/dashboard you already use for every other PayOS metric, no separate system. Full tag/field shape and worked examples: [developer guide](../developer/task-scheduler-guide-v14-2026-10-28.md#12-metrics).
 
 **Embedded mode:** nothing to configure — the host's own `payos-server-http` `/metrics` endpoint already scrapes TSS's samples (same JVM, same static registry).
 
-**Standalone mode:** set `TSS_METRICS_HTTP_PORT` to a positive port (default `0` = disabled) to start a dedicated Prometheus scrape HTTP server on that port — standalone TSS has no HTTP server of its own otherwise, so without this, job-execution metrics are recorded but genuinely unreachable from outside the process. Point your Prometheus (or compatible) scraper at `http://<standalone-host>:<port>/metrics` as its own target. See the [developer guide §12.1](../developer/task-scheduler-guide-v13-2026-10-14.md#121-how-these-metrics-actually-get-exposed--embedded-vs-standalone) for the full explanation.
+**Standalone mode:** set `TSS_METRICS_HTTP_PORT` to a positive port (default `0` = disabled) to start a dedicated Prometheus scrape HTTP server on that port — standalone TSS has no HTTP server of its own otherwise, so without this, job-execution metrics are recorded but genuinely unreachable from outside the process. Point your Prometheus (or compatible) scraper at `http://<standalone-host>:<port>/metrics` as its own target. See the [developer guide §12.1](../developer/task-scheduler-guide-v14-2026-10-28.md#121-how-these-metrics-actually-get-exposed--embedded-vs-standalone) for the full explanation.
 
 **A misconfigured port never stops the scheduler from starting.** If `TSS_METRICS_HTTP_PORT` points at a port already in use (or otherwise fails to bind), TSS logs a warning and continues running with job scheduling fully intact — just without metrics exposure for that run. Check the startup logs for `Failed to start the standalone metrics HTTP server` if `/metrics` isn't reachable and you expected it to be.
 
@@ -292,7 +329,7 @@ Every finished execution also emits into PayOS's existing metrics infrastructure
 - **Standalone:** `StandaloneMain` sets it itself at startup (unless you've already set it yourself, in which case your own choice is respected). Safe to do unconditionally, since standalone TSS owns 100% of its own JVM — this can only ever affect TSS's own metrics.
 - **Embedded:** `RuntimeIntegrationHook` deliberately does **not** touch this flag — in that mode TSS shares `payos-runtime`'s own JVM with the kernel's API metrics, connectors, and audit trail, and deciding that host's metrics-cardinality policy isn't TSS's call to make. `tenant_id` appears on TSS's metrics in embedded mode only if the host has already enabled the flag itself. If you run TSS embedded and want `tenant_id` on your TSS dashboards, set `-Dpayos.metrics.tenant-tags-enabled=true` on `payos-runtime`'s own JVM — the same setting then applies to every PayOS metric in that process, TSS's included.
 
-The exact metric names as they actually appear in `/metrics` (not the logical names used elsewhere in this doc) are shown in the [developer guide's worked example](../developer/task-scheduler-guide-v13-2026-10-14.md#what-youll-actually-see-at-metrics).
+The exact metric names as they actually appear in `/metrics` (not the logical names used elsewhere in this doc) are shown in the [developer guide's worked example](../developer/task-scheduler-guide-v14-2026-10-28.md#what-youll-actually-see-at-metrics).
 
 ## Clustering
 
@@ -302,13 +339,13 @@ Multiple TSS nodes sharing the same `TSS_SCHEDULER_INSTANCE_NAME` and pointed at
 
 The daemon uses slf4j with logback; no `logback.xml` ships by default. Job registration logs the number of jobs and tenants registered at startup; each execution logs its `jobId`/`tenantId`/`scriptPath` on both success and failure paths.
 
-**Sensitive-data masking — always on, nothing to configure.** Before a script error's message reaches `tss_job_execution.failure_message` or a log line, TSS masks sensitive-looking `key: value`/`key=value` fragments inside it (the same canonical denylist — `password`, `token`, `ssn`, `cardNumber`, etc. — every other PayOS component uses). This is deliberately best-effort, not a guarantee: a message with no recognizable key prefix at all (an unlabeled bare secret) passes through unmasked. Full behavior and worked examples: [developer guide §13](../developer/task-scheduler-guide-v13-2026-10-14.md#13-sensitive-data-masking).
+**Sensitive-data masking — always on, nothing to configure.** Before a script error's message reaches `tss_job_execution.failure_message` or a log line, TSS masks sensitive-looking `key: value`/`key=value` fragments inside it (the same canonical denylist — `password`, `token`, `ssn`, `cardNumber`, etc. — every other PayOS component uses). This is deliberately best-effort, not a guarantee: a message with no recognizable key prefix at all (an unlabeled bare secret) passes through unmasked. Full behavior and worked examples: [developer guide §13](../developer/task-scheduler-guide-v14-2026-10-28.md#13-sensitive-data-masking).
 
 ## Next
 
 - [Class diagram](../architecture/job-scheduler-class-diagram-v18-2026-10-07.md) — every class, how they relate, and the full execution-flow walkthrough (registration through a fired trigger through script execution through cleanup).
 - [ADR-0009](../architecture/adr/0009-task-scheduling-system.md) — the architectural decision behind TSS's design.
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v5-2026-10-14.md) — the config-key reference only, for a quick lookup without the full narrative.
-- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v13-2026-10-14.md) — the full developer guide: configuring TSS and tenant jobs, writing script jobs, the `context`/`$DB`/`$PlatformDB`/`$Parallel` surface, and the same execution-history/misfire/quota model from a job script author's point of view.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v6-2026-10-28.md) — the config-key reference only, for a quick lookup without the full narrative.
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v14-2026-10-28.md) — the full developer guide: configuring TSS and tenant jobs, writing script jobs, the `context`/`$DB`/`$PlatformDB`/`$Parallel` surface, and the same execution-history/misfire/quota model from a job script author's point of view.
 - [notification-service.md](notification-service.md) — the other standalone-daemon precedent this guide's structure follows.
 - [deployment.md](deployment.md) — `payos-runtime`'s own deployment model, relevant to TSS's embedded mode.

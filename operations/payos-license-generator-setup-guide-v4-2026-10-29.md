@@ -1,16 +1,16 @@
 Created: 2026-10-27
 Last updated: 2026-10-29
-Version: 3 — supersedes v2: step 9 generalizes persistence beyond H2 to any JDBC database.
+Version: 4 — supersedes v3: adds step 10, the Prometheus metrics endpoint (Story 4.3).
 
 # payos-license-generator setup guide
 
-A worked, verified walkthrough of building, configuring, and running `payos-license-generator` — the standalone service that generates cryptographically signed, machine-bound PayOS license files, per PRD Journey 1. Every command below was actually run against a real build, a real `secret-service-filesystem` provider, and a real HTTP request — this is not a hypothetical sequence. For the full configuration key reference see [configuration/payos-license-generator-v3-2026-10-29.md](../configuration/payos-license-generator-v3-2026-10-29.md); for the architecture and design decisions behind this service see its own repo's `_bmad-output/planning-artifacts/architecture.md`.
+A worked, verified walkthrough of building, configuring, and running `payos-license-generator` — the standalone service that generates cryptographically signed, machine-bound PayOS license files, per PRD Journey 1. Every command below was actually run against a real build, a real `secret-service-filesystem` provider, and a real HTTP request — this is not a hypothetical sequence. For the full configuration key reference see [configuration/payos-license-generator-v4-2026-10-29.md](../configuration/payos-license-generator-v4-2026-10-29.md); for the architecture and design decisions behind this service see its own repo's `_bmad-output/planning-artifacts/architecture.md`.
 
 ## What this service is, and isn't
 
-`payos-license-generator` exposes one HTTP endpoint, `POST /v1/generate_license`: given client/entitlement/machine data, it validates the payload, generates an AES key, RSA-encrypts it against the editor's public key, computes per-machine SHA-256 fingerprints, assembles the complete license document, signs it with the editor's RSA private key, and writes the signed file to disk. It is the **issuing** side of PayOS licensing — it has no compile-time dependency on `payos-kernel` or any specific secret-provider module (Vault, filesystem, or a future one are all discovered via SPI at runtime), and it is not part of `payos-runtime`. The files it produces are meant to be read by the **validating** side already documented at [configuration/license-service.md](../configuration/license-service.md) and [developer/license-validation.md](../developer/license-validation.md) — `payos-kernel`'s `ILicenseValidator` extension point, where a `SignedLicenseValidator` implementation would verify the `signature` block this service produces against the editor's public key. No such validator ships yet; only `DevLicenseValidator` (no-op) and `LicenseValidator` (file-presence check only) exist today.
+`payos-license-generator` exposes two HTTP endpoints: `POST /v1/generate_license` and `GET /metrics`. Given client/entitlement/machine data, the first validates the payload, generates an AES key, RSA-encrypts it against the editor's public key, computes per-machine SHA-256 fingerprints, assembles the complete license document, signs it with the editor's RSA private key, and writes the signed file to disk. It is the **issuing** side of PayOS licensing — it has no compile-time dependency on `payos-kernel` or any specific secret-provider module (Vault, filesystem, or a future one are all discovered via SPI at runtime), and it is not part of `payos-runtime`. The files it produces are meant to be read by the **validating** side already documented at [configuration/license-service.md](../configuration/license-service.md) and [developer/license-validation.md](../developer/license-validation.md) — `payos-kernel`'s `ILicenseValidator` extension point, where a `SignedLicenseValidator` implementation would verify the `signature` block this service produces against the editor's public key. No such validator ships yet; only `DevLicenseValidator` (no-op) and `LicenseValidator` (file-presence check only) exist today.
 
-A caller-fault payload error returns 4xx naming the offending field; an infrastructure-fault failure (secret provider unreachable or misconfigured) returns 5xx; every request, successful or failed, is tagged with a correlation ID returned in the `X-Correlation-Id` response header and present on every log line produced while handling it. Every attempt is also recorded as one structured JSON log line, and optionally as a row in any JDBC-reachable database — see steps 8 and 9 below.
+A caller-fault payload error returns 4xx naming the offending field; an infrastructure-fault failure (secret provider unreachable or misconfigured) returns 5xx; every request, successful or failed, is tagged with a correlation ID returned in the `X-Correlation-Id` response header and present on every log line produced while handling it. Every attempt is also recorded as one structured JSON log line, optionally as a row in any JDBC-reachable database, and always as an update to two Prometheus counters — see steps 8, 9, and 10 below.
 
 ## 1. Build the service
 
@@ -19,7 +19,7 @@ cd payos-license-generator
 mvn -o clean package
 ```
 
-Produces a single executable shaded jar at `target/payos-license-generator-<version>.jar` — `payos-foundation`, Undertow, Jackson, SLF4J/Logback, `logstash-logback-encoder`, and the embedded H2 database engine are all bundled; no secret-provider implementation is bundled (confirmed by `jar tf target/payos-license-generator-*.jar | grep -i secretprovider` returning nothing beyond `payos-foundation`'s own interface-naming constants).
+Produces a single executable shaded jar at `target/payos-license-generator-<version>.jar` — `payos-foundation`, Undertow, Jackson, SLF4J/Logback, `logstash-logback-encoder`, the embedded H2 database engine, and Micrometer's core + Prometheus registry are all bundled; no secret-provider implementation is bundled (confirmed by `jar tf target/payos-license-generator-*.jar | grep -i secretprovider` returning nothing beyond `payos-foundation`'s own interface-naming constants).
 
 ## 2. Build a secret-provider JAR
 
@@ -146,11 +146,13 @@ By default every attempt is only logged (step 7's JSON lines already include one
 ```json
 {
   "persistence-enabled": "true",
-  "persistence-jdbc-url": "jdbc:h2:file:db/license-generator"
+  "persistence-jdbc-url": "jdbc:h2:file:./db/license-generator"
 }
 ```
 
 Persistence is a plain JDBC connection, not an H2-specific feature — `persistence-jdbc-url` can point at any database, and `persistence-jdbc-driver`/`persistence-jdbc-username`/`persistence-jdbc-password` go with it (see the configuration reference's Persistence section for the PostgreSQL-style example). The example above keeps the bundled, zero-setup default: an embedded H2 file, needing no separate server or driver JAR, which is what the rest of this step walks through.
+
+Two things actually tripped during verification here, both now reflected in the example above: first, H2 2.x rejects a bare relative path (`jdbc:h2:file:db/license-generator` with no `./`) outright; second, unlike `license-output-dir` and the service's other path-typed settings, `persistence-jdbc-url` is **not** resolved against `--generator-path` — it's a connection string, used exactly as configured, so `./db/license-generator` is relative to the process's actual working directory at launch. If you run the service from a different directory than `--generator-path` points at, use an absolute path here instead.
 
 Restart the service and generate a license as in step 8 — the directory `db/` and the file `db/license-generator.mv.db` are created automatically on first use, no migration step needed. Stop the service, then inspect the database directly with H2's own shell tool (the jar is already on the classpath inside the service's own shaded jar, or fetch `com.h2database:h2:2.3.232` separately):
 
@@ -164,6 +166,26 @@ This was verified against a real run: a successful request produced a row with `
 
 Switching to another vendor (PostgreSQL, MySQL, etc.) reuses this exact mechanism — set `persistence-jdbc-url`/`persistence-jdbc-driver`/`persistence-jdbc-username`/`persistence-jdbc-password` and put that vendor's driver JAR on the classpath yourself, since only H2's driver is bundled. This has not been re-verified here against a live non-H2 server; the code path is identical to the H2 case above (same `CREATE TABLE IF NOT EXISTS`/insert statements over a standard `java.sql.Connection`), and `CREATE TABLE IF NOT EXISTS` is supported by PostgreSQL and MySQL/MariaDB the same way it is by H2. A vendor without that syntax (Oracle, SQL Server) needs the table pre-created with the schema in the configuration reference before you enable persistence against it.
 
+## 10. Scrape Prometheus metrics
+
+`GET /metrics` is always available, independent of whether persistence (step 9) is enabled — two counters, updated on every attempt, success or failure alike:
+
+```bash
+curl -s http://localhost:8099/metrics
+```
+
+```
+# HELP license_generator_generation_errors_total Total number of generation attempts that failed due to an infrastructure fault
+# TYPE license_generator_generation_errors_total counter
+license_generator_generation_errors_total{category="infra"} 0.0
+license_generator_generation_errors_total{category="validation"} 1.0
+# HELP license_generator_licenses_generated_total Total number of licenses successfully generated
+# TYPE license_generator_licenses_generated_total counter
+license_generator_licenses_generated_total 1.0
+```
+
+This is real output from a run that generated one license (step 8) and triggered one validation failure before the scrape — `license_generator_licenses_generated_total` is the total-licenses counter (Story 4.3's first acceptance criterion); `license_generator_generation_errors_total`, tagged by `category`, is the error-by-category counter (the second) — `validation` for a 4xx-mapped `ValidationException`, `infra` for a 5xx-mapped `SecretProviderUnavailableException` or any other unexpected failure. Point a Prometheus server's scrape config at this path and port to monitor issuance volume and failure trends without reading logs, per the story's intent.
+
 ## MVP limitations (by design, not oversight)
 
-No authentication — the request above needs no `Authorization` header at all. This is a deliberate MVP decision (see the source PRD's Epic 5), not an omission: the HTTP layer has an auth seam ready, but nothing is wired to it yet, so this service must only be deployed on a trusted internal network for now. No Prometheus metrics endpoint yet either (Epic 4's Story 4.3, not yet implemented) — for now, operational visibility comes from the structured JSON logs (step 7) and, if enabled, the persistence table (step 9).
+No authentication — the request above needs no `Authorization` header at all. This is a deliberate MVP decision (see the source PRD's Epic 5), not an omission: the HTTP layer has an auth seam ready, but nothing is wired to it yet, so this service must only be deployed on a trusted internal network for now (this now includes `/metrics`, which is likewise unauthenticated). Operational visibility comes from the structured JSON logs (step 7), the Prometheus counters (step 10), and, if enabled, the persistence table (step 9).

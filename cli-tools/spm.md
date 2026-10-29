@@ -43,7 +43,7 @@ It uses the same master key as the runtime — supplied via the provider `keyfil
 | `delete` | Remove a secret. |
 | `describe` | Show metadata (type, current version, timestamps). |
 | `key-create` | Generate a named AES-256 symmetric key, stored internally — key material is never displayed. |
-| `keypair-create` | Generate a named RSA/EC key pair (`--algorithm RSA_2048`\|`RSA_3072`\|`RSA_4096`\|`EC_P256`), stored internally — only the public key (PEM) is printed; the private key is never displayed or returned. Needed, for example, to bootstrap the editor's signing key for [payos-license-generator](../operations/payos-license-generator-setup-guide-v3-2026-10-29.md). |
+| `keypair-create` | Generate a named RSA/EC key pair (`--algorithm RSA_2048`\|`RSA_3072`\|`RSA_4096`\|`EC_P256`), stored internally — only the public key (PEM) is printed; the private key is never displayed or returned. Needed, for example, to bootstrap the editor's signing key for [payos-license-generator](../operations/payos-license-generator-setup-guide-v4-2026-10-29.md). |
 | `encrypt` | Encrypt content with a named internal key (from `key-create`), print base64 ciphertext. |
 | `decrypt` | Decrypt base64 ciphertext with a named internal key, write raw plaintext. |
 

@@ -1,10 +1,10 @@
 Created: 2026-10-27
 Last updated: 2026-10-29
-Version: 3 — supersedes v2: persistence is no longer H2-only, see Persistence below.
+Version: 4 — supersedes v3: adds the Metrics section (Story 4.3) — no new configuration keys, `/metrics` is always on.
 
 # payos-license-generator configuration
 
-Configuration reference for `payos-license-generator` — a standalone service, not part of `payos-runtime`'s `payos.json`/`bootstrap.json` configuration tree. For the full build/run walkthrough see [operations/payos-license-generator-setup-guide-v3-2026-10-29.md](../operations/payos-license-generator-setup-guide-v3-2026-10-29.md).
+Configuration reference for `payos-license-generator` — a standalone service, not part of `payos-runtime`'s `payos.json`/`bootstrap.json` configuration tree. For the full build/run walkthrough see [operations/payos-license-generator-setup-guide-v4-2026-10-29.md](../operations/payos-license-generator-setup-guide-v4-2026-10-29.md).
 
 ## Resolution order
 
@@ -36,7 +36,7 @@ Every setting below resolves with the same priority, checked in this order, firs
 | `license-output-dir` | path | `licenses` | Directory the completed, signed license file is written to, named `<license_id>.json`. Written atomically (temp file, then rename) — see the architecture doc's `LicenseFileWriter` notes. |
 | `http-port` | value | `8080` | Port the Undertow HTTP listener binds, on all interfaces (`0.0.0.0`). |
 | `persistence-enabled` | value | `false` | When `true`, every generation attempt (success or failure) is additionally written as a row to a database over a plain JDBC connection — see Persistence below. When `false` (the default), attempts are still logged (see Logging below) but no database is touched at all. |
-| `persistence-jdbc-url` | value | `jdbc:h2:file:<generator-path>/license-generator-db` | JDBC connection URL. The default points at an embedded H2 file next to the bundle (resolved relative to `--generator-path` like the other file-path-valued settings); set it to any other vendor's URL (PostgreSQL, MySQL, etc.) to persist there instead. Only relevant when `persistence-enabled` is `true`. |
+| `persistence-jdbc-url` | value | `jdbc:h2:file:<generator-path>/license-generator-db` | JDBC connection URL, used exactly as given — **not** resolved against `--generator-path` the way the path-typed settings above are, since it's a connection string, not necessarily a filesystem path. Only the *default* (used when this key is absent) is built from `--generator-path`; an explicit value is passed straight to the driver. Set it to any other vendor's URL (PostgreSQL, MySQL, etc.) to persist there instead. Only relevant when `persistence-enabled` is `true`. |
 | `persistence-jdbc-driver` | value | `org.h2.Driver` | Fully-qualified JDBC driver class to load before connecting. The service bundles H2's driver; any other vendor's driver JAR must be placed on the classpath yourself (the kernel/service does not bundle it) — see Persistence below. |
 | `persistence-jdbc-username` | value | `sa` | Database user for the JDBC connection. |
 | `persistence-jdbc-password` | value | *(empty)* | Database password for the JDBC connection. |
@@ -73,9 +73,11 @@ The table is created automatically on first use for a vendor that supports `CREA
 ```json
 {
   "persistence-enabled": "true",
-  "persistence-jdbc-url": "jdbc:h2:file:db/license-generator"
+  "persistence-jdbc-url": "jdbc:h2:file:./db/license-generator"
 }
 ```
+
+The leading `./` is required, not cosmetic: H2 2.x rejects a bare relative path (`jdbc:h2:file:db/license-generator`, no `./`) outright with "a file path that is implicitly relative to the current working directory is not allowed" — and, unlike `license-output-dir` or the other path-typed settings, this value is **not** resolved against `--generator-path` first (see the Keys table above), so `./` here is relative to the process's actual working directory at launch, not the bundle directory. Prefer an absolute path if the two differ in your deployment.
 
 To use another database instead of the bundled H2 default, point `persistence-jdbc-url`/`persistence-jdbc-driver` at it and put that vendor's JDBC driver JAR on the classpath yourself (the service only bundles H2's):
 
@@ -100,10 +102,21 @@ java -cp h2-2.3.232.jar org.h2.tools.Shell \
 
 For any other vendor, inspect the table with that vendor's own client against the same `persistence-jdbc-url`/credentials.
 
+## Metrics
+
+`GET /metrics` is always on — there is no configuration key to disable it, and no dependency on `persistence-enabled`. It serves a Prometheus text-exposition scrape (Micrometer's `PrometheusMeterRegistry`, bundled) of two counters, updated on every generation attempt:
+
+| Metric | Labels | Meaning |
+| --- | --- | --- |
+| `license_generator_licenses_generated_total` | *(none)* | Total licenses successfully generated. |
+| `license_generator_generation_errors_total` | `category="validation"` \| `category="infra"` | Total failed attempts, broken down by whether the caller's payload was invalid or an infrastructure fault (secret provider unreachable, etc.) occurred. |
+
+Both are plain counters — they only ever increase for the life of the process; a restart resets them to zero, same as any in-memory Micrometer registry with no remote push.
+
 ## Vault instead of filesystem
 
 Set `secret-provider-type` to `vault`, put a packaged `secret-service-vault` JAR in `secret-provider-dir` instead of (or alongside) the filesystem provider's, and populate `secret-provider-config` with Vault's own connection settings (address, token, mount points) — see [secret-service.md](secret-service.md) for the exact key names the Vault factory expects. The editor's RSA key pair must still be created once against Vault Transit before first use; `spm` only targets the filesystem provider (see [cli-tools/spm.md](../cli-tools/spm.md)), so use the Vault CLI/API directly for that step, matching [operations/secrets-management.md](../operations/secrets-management.md)'s Vault guidance.
 
 ## Not yet configurable (MVP)
 
-Authentication is unconditionally absent — there is no config key to enable it yet; the HTTP layer has an auth seam but nothing wired to it (Epic 5 of the source PRD). Prometheus metrics exposition is likewise not yet implemented (Epic 4's Story 4.3), so there is no metrics-related configuration key yet either.
+Authentication is unconditionally absent — there is no config key to enable it yet; the HTTP layer has an auth seam but nothing wired to it (Epic 5 of the source PRD), and this applies to `/metrics` too, which is just as unauthenticated as `/v1/generate_license`.

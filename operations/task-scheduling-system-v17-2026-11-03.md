@@ -1,12 +1,12 @@
 Created: 2026-10-02
-Last updated: 2026-10-28
-Version: 16
+Last updated: 2026-11-03
+Version: 17
 
 # Task Scheduling System (`payos-job-scheduler`)
 
 Operator/developer guidance for running TSS: a Quartz-backed, clustered scheduler that registers and fires tenant JavaScript job scripts on a cron schedule, reading PayOS's own tenant/platform database configuration rather than duplicating it.
 
-Like `payos-service-notification`, this is its **own deployable artifact** with its own entry point — it does not implement `IServer`/`ServerProvider` and is not booted from a bundle's `service-adapters-dir`. Unlike the notification daemon, it can also run **embedded inside `payos-runtime`** instead of as a separate process — see [Deployment modes](#deployment-modes) below. For the class-level design (every class, how they relate, the full execution-flow walkthrough), see the living [class diagram](../architecture/job-scheduler-class-diagram-v18-2026-10-07.md) and [ADR-0009](../architecture/adr/0009-task-scheduling-system.md); this page is the operational "how do I configure and run it" companion.
+Like `payos-service-notification`, this is its **own deployable artifact** with its own entry point — it does not implement `IServer`/`ServerProvider` and is not booted from a bundle's `service-adapters-dir`. Unlike the notification daemon, it can also run **embedded inside `payos-runtime`** instead of as a separate process — see [Deployment modes](#deployment-modes) below. For the class-level design (every class, how they relate, the full execution-flow walkthrough), see the living [class diagram](../architecture/job-scheduler-class-diagram-v19-2026-11-03.md) and [ADR-0009](../architecture/adr/0009-task-scheduling-system.md); this page is the operational "how do I configure and run it" companion.
 
 ## Deployment modes
 
@@ -18,6 +18,7 @@ Like `payos-service-notification`, this is its **own deployable artifact** with 
 | Tenant/platform database settings come from | A PayOS config file this module loads itself (see [Tenant and platform database resolution](#tenant-and-platform-database-resolution)) | The host's already-loaded `PayOSConfig.settings`/`PayOSConfig.getPlatformDatabaseService()` — no file is re-read |
 | A job-registration failure (bad tenant config, etc.) | **Propagates** — fails the whole startup. TSS is this process's only job, so fail-fast is correct. | **Logged, not propagated** — TSS is a secondary subsystem inside `payos-runtime` and must not take the whole runtime down over a problem scoped to TSS's own jobs |
 | TSS's own Quartz schema DB (`tss-config.json`) | Resolved via `StandaloneConfigLoader`'s three-tier model (below) | Same — this part doesn't change between modes |
+| Jobs hot reload and the admin HTTP endpoint | `TSS_HOT_RELOAD_ENABLED` (on by default), `TSS_ADMIN_HTTP_PORT` (off by default) | `task-scheduler.scheduler.hotReloadEnabled`, `task-scheduler.admin.httpPort` — same behavior, the endpoint secured by the host's own `security` configuration |
 
 Both modes delegate all scheduler construction and job registration to the same `SchedulerBootstrap`/`TenantDatabaseRegistryLoader` code, so the two deployment modes cannot drift apart in behavior.
 
@@ -141,7 +142,7 @@ One file per tenant directory under the jobs root. A tenant routinely declares s
 - `implementation.script` — the script path, resolved at execution time against the **shared script pool** (see below) — not against this tenant's own directory.
 - `implementation.mappingFiles` — optional array of Hibernate mapping files this job's script needs on its tenant's `$DB` session. The tenant's effective mapping-file set is the **union** across all of that tenant's jobs.
 - `trigger.expression` — a standard Quartz cron expression.
-- `arguments` — optional free-form JSON object handed to the script as `context.getArguments()`. Looked up at execution time from the jobs loaded at startup, never from Quartz's persisted job data, so an edited value takes effect on the next TSS start with no Quartz cleanup. `${...}` placeholders are not expanded in `jobs.json` — keep secrets out of it. See the [developer guide §6.1](../developer/task-scheduler-guide-v14-2026-10-28.md#61-passing-arguments-to-a-script-arguments).
+- `arguments` — optional free-form JSON object handed to the script as `context.getArguments()`. Stored with the job in the TSS database and kept up to date by reconciliation, so an edited value reaches every node through hot reload or `sync`, without a restart (see [Changing jobs without a restart](#changing-jobs-without-a-restart)). `${...}` placeholders are not expanded in `jobs.json` — keep secrets out of it. See the [developer guide §6.1](../developer/task-scheduler-guide-v15-2026-11-03.md#61-passing-arguments-to-a-script-arguments).
 - `parallelizable` — `false` schedules the job as `ExclusiveScriptJob` (`@DisallowConcurrentExecution`): this `(tenant, script)` job never runs twice at once anywhere in the cluster. A trigger firing during a running execution waits for it; if it waits beyond Quartz's misfire threshold (60 s) it is recorded as `MISFIRE` and fired once to catch up. `true` (the default) imposes no such restriction.
 
 ### `jobs/<tenantId>/custom-jobs.json` — tenant-scoped overrides and additions
@@ -264,7 +265,7 @@ A standalone node typically has no `payos-runtime` on it. TSS never contacts a r
    Tenants declared in JSON (if any remain) are merged alongside the registry's; a registry row wins on conflict. Column names and every optional field are documented in [tenant-config-loader-database](../developer/tenant-config-loader-database-v1-2026-10-22.md).
 2. **Mount the same configuration directory** on both nodes (a Kubernetes ConfigMap/Secret mounted into both pods, a shared volume, or one configuration artifact deployed by the same pipeline) instead of maintaining two copies.
 
-Either way, TSS resolves tenants **once, at startup**: a tenant added to the registry or the shared files is picked up on the next TSS start. Things to know before relying on this:
+Either way, TSS resolves tenants **once, at startup**: a tenant added to the registry or the shared files is picked up on the next TSS start — hot reload and `sync` never schedule a brand-new tenant's jobs before then (see [Safety rules](#safety-rules)). Things to know before relying on this:
 
 - **Secrets:** use `${VAR}`, `${VAR:?message}` or `${file:/run/secrets/...}` placeholders in these files — they are expanded (see the `platform-database-service` note above). The PayOS **secret service is not initialized** in standalone TSS, so a value the runtime would fetch from it is not resolved here; provide it through an environment variable or a mounted file.
 - **Encrypted configuration files are not supported in standalone mode.** Files encrypted with `payosv2-packer` cannot be decrypted, because standalone TSS never initializes the editor encryption key: such a file is logged as failing to load and skipped — if it holds `multitenancy`, startup then fails with a "tenant not declared" diagnostic. Ship these files unencrypted (with secrets as placeholders) on a TSS node.
@@ -274,6 +275,103 @@ Either way, TSS resolves tenants **once, at startup**: a tenant added to the reg
 ### Known limitation: relative file paths
 
 Two things resolve relative paths against the JVM's **current working directory**, not `--scheduler-base-dir` or any PayOS base directory — a pre-existing kernel behavior TSS inherits unchanged, not something introduced by this module: a relative `jdbc:h2:file:...` URL, and a relative Hibernate mapping-file path declared without an `applications`-style base path (which includes every `implementation.mappingFiles` entry in `jobs.json`, and `platform-database-service.mapping-files`). Use **absolute** paths for both in any deployment where the process's working directory isn't guaranteed to be the scheduler base directory — this is the only reliable option today.
+
+## Changing jobs without a restart
+
+The `jobs/` files are the source of truth for what is scheduled. One reconciliation step compares them with the jobs Quartz holds in the TSS database and applies only the differences. It runs at every node startup, on hot reload when `jobs/` changes, and on demand through `sync` (command line or HTTP, see [Administration](#administration-manual-trigger-sync-and-list)).
+
+| Change in the jobs files | What reconciliation does |
+| --- | --- |
+| New job | Scheduled. |
+| `trigger.expression` changed | The cron trigger is replaced; the next fire time follows the new expression. |
+| `parallelizable`, `id` or `arguments` changed | The job definition is replaced in place; its trigger and next fire time are kept. |
+| Job removed (from `jobs.json`, `custom-jobs.json` or `platform-jobs.json`, or its whole tenant directory removed) | Deleted from the scheduler, with a `WARN` log line: `Job '<tenant>/<script>' is no longer declared in any jobs file — deleted from the scheduler`. An execution already running finishes normally. |
+| Nothing | Nothing is touched: triggers keep their next fire time and misfire state. |
+
+Since `arguments` are stored with the job in the TSS database, an edited value reaches every node of the cluster as soon as one node has reconciled.
+
+### Safety rules
+
+- **An unreadable `jobs.json` or `platform-jobs.json`** (invalid JSON, typically a file caught mid-write) abandons the whole pass: the scheduler is left exactly as it was, an error is logged, and the next change retries. At startup, standalone mode still fails fast on it, as before.
+- **An unreadable `custom-jobs.json`** only lets that tenant's missing jobs be added: none of its existing jobs is updated or deleted until the file reads cleanly again, so a broken override file never unschedules custom jobs.
+- **A missing `jobs/` directory** (wrong `TSS_JOBS_ROOT_DIR`, volume not mounted) is never read as "no jobs": nothing is deleted.
+- **A brand-new tenant** (no job of its own in the scheduler yet) is only scheduled when the nodes restart, because a node opens a tenant's database at startup: hot reload and `sync` report its jobs as skipped (`new tenant: restart the scheduler nodes to open its database`). A changed `mappingFiles` is likewise logged and applied at the next restart. Restart every node (rolling restart) so each one serves the new tenant.
+- **An invalid cron expression** fails that job only: it is reported and logged, its previous trigger stays in force, and every other job is reconciled normally.
+
+### New tenants: directories created from `jobs/template.json`
+
+Before every reconciliation (startup, hot reload, `sync`), TSS creates `jobs/<tenantId>/` for each tenant declared under `multitenancy.tenants` in the PayOS configuration that has none yet, with a `jobs.json` made from `jobs/template.json` when that file exists — every `{{tenantId}}` in it replaced by the tenant's id (see [configuration §`jobs/template.json`](../configuration/task-scheduling-system-v8-2026-11-03.md#jobstemplatejson--model-for-new-tenants)) — or an empty directory otherwise. The tenant list is re-read each time: standalone nodes and the `sync` command reload the PayOS config file (`TSS_PAYOS_CONFIG_FILE`, including config loaders such as a database tenant registry); embedded mode reads the host's live configuration. Existing tenant directories and files are never modified, an invalid `template.json` is never copied, and nothing is created when the jobs root is missing. Typical sequence for a new tenant: declare it in PayOS, run `sync` (or wait for the next reload) to create its directory and adjust its `jobs.json` if needed, then restart the nodes — its jobs are scheduled at that restart, like any new tenant. A tenant removed from the PayOS configuration keeps its directory: remove it yourself, otherwise the next startup refuses to register jobs with a "not declared under multitenancy.tenants" diagnostic (standalone: startup fails; embedded: the scheduler runs with no job registered).
+
+### Hot reload
+
+On by default (`TSS_HOT_RELOAD_ENABLED`, embedded: `task-scheduler.scheduler.hotReloadEnabled`). TSS uses the same `ConfigWatcher` as PayOS's own configuration hot reload: it watches `jobs/` and every tenant directory present at startup, waits about 2 s after the last change (an editor save or a multi-file copy produces a burst of events), then re-reads the files and reconciles. Quartz is never stopped: executions in progress are not interrupted and no trigger is missed. Hot reload stays off when no job at all was declared at startup.
+
+File-system notifications are not delivered everywhere: a network share (NFS, SMB) modified from another host, or a Kubernetes ConfigMap update (swapped through its `..data` link, never reported as a `.json` change), go unnoticed — the same limitation as PayOS's own hot reload. Run `sync` after such a change.
+
+Every node watches and reconciles on its own; two nodes applying the same change is harmless, the second one finds nothing left to do. All nodes must therefore see the same `jobs/` content: a node with an outdated copy would, when it restarts or reloads, reconcile the cluster back to its version.
+
+## Administration: manual trigger, sync and list
+
+Three operations, available both on the command line and as an HTTP endpoint, and audited the same way through either channel.
+
+| Operation | Effect |
+| --- | --- |
+| `trigger` | Fires one job once, now, outside its cron schedule, on whichever node picks it up. Every rule of a scheduled run applies: exclusivity for a `parallelizable: false` job, tenant quota, execution history, metrics — tagged `triggerType=manual` instead of `cron`. The cron schedule itself is unaffected. |
+| `sync` | Re-reads `jobs/` and runs the reconciliation above. Returns its report: `added`, `rescheduled`, `updated`, `deleted`, `skipped`, `failed`. |
+| `list` | The scheduled jobs: tenant, script, id, cron expression, `parallelizable`, next and previous fire time. |
+
+### Command line
+
+The standalone jar takes a command after its options (`run`, the default, starts the service):
+
+```bash
+java -jar payos-job-scheduler-<version>-standalone.jar --scheduler-base-dir /opt/payos-tss list --tenant acme
+java -jar payos-job-scheduler-<version>-standalone.jar --scheduler-base-dir /opt/payos-tss trigger --tenant acme --script jobs/acme/daily-report.js
+java -jar payos-job-scheduler-<version>-standalone.jar --scheduler-base-dir /opt/payos-tss trigger --platform --script jobs/compliance-export.js
+java -jar payos-job-scheduler-<version>-standalone.jar --scheduler-base-dir /opt/payos-tss sync
+```
+
+The command reads `tss-config.json` like the service and connects to the TSS database through a Quartz instance that is never started: it never fires a job and never joins the cluster, so it can run on any host with database access while the nodes are running — including against an embedded deployment, which shares the same TSS database. Access is controlled by the TSS database credentials. `sync` reconciles against the `jobs/` files of the host it runs on. The result is printed as JSON; exit codes: `0` success, `1` a `sync` that failed on some jobs, `2` usage error, `3` unknown job. Each command is audited under the operating-system user name.
+
+### HTTP endpoint
+
+Enabled by `TSS_ADMIN_HTTP_PORT` (embedded: `task-scheduler.admin.httpPort`), on its own port in both modes so it can be firewalled separately from business traffic. Like hot reload, it stays off when no job was declared at startup.
+
+| Request | Body | Response |
+| --- | --- | --- |
+| `GET /tss/admin/jobs[?tenantId=acme]` | — | `200` `{"jobs": [...]}` |
+| `POST /tss/admin/jobs/trigger` | `{"tenantId": "acme", "scriptPath": "jobs/acme/daily-report.js"}` — `tenantId` omitted for a platform job | `202` triggered, `404` unknown job, `400` no `scriptPath` |
+| `POST /tss/admin/sync` | — | `200` with the reconciliation report |
+
+```bash
+curl -X POST https://tss-admin.internal:8095/tss/admin/jobs/trigger \
+  -H "Authorization: Bearer $TOKEN" -H "X-Tenant-Id: acme" -H "Content-Type: application/json" \
+  -d '{"tenantId": "acme", "scriptPath": "jobs/acme/daily-report.js"}'
+```
+
+**Authentication.** Every call needs `Authorization: Bearer <access token>`; without it the answer is `401`, never a login redirect. The token is verified by PayOS's own security service, exactly as for a Bearer call to the runtime: signature against the identity provider's published keys, issuer, expiry. The audience is deliberately not checked by that service (so that `client_credentials` tokens work), which makes the TSS roles the real gate: grant them only to the accounts and clients that need them. In a multi-tenant setup, send `X-Tenant-Id` so the token is verified against that tenant's realm; without it, the global `security` configuration applies. Bearer tokens are validated by the `nimbus` security provider, the PayOS default.
+
+**Authorization.**
+
+| Token role | Allowed |
+| --- | --- |
+| `tss-platform-admin` (`TSS_ADMIN_PLATFORM_ROLE`) | Every operation, on every tenant and on platform jobs. |
+| `tss-tenant-admin` (`TSS_ADMIN_TENANT_ROLE`) | `trigger` and `list` on its own tenant only — the tenant derived from the token's issuer realm, which the request cannot forge. Never `sync`, never a platform job. |
+| Neither | `403`. |
+
+**Standalone mode** reads the `security` configuration from the PayOS config file (`TSS_PAYOS_CONFIG_FILE`), so the node must be able to reach the identity provider. The session store is forced to `memory` for TSS, since the endpoint only serves stateless Bearer calls and a `redis` store module is not bundled in the standalone jar.
+
+### Audit trail
+
+Every `trigger` and `sync`, from either channel, is written through PayOS's audit facade (`AuditLogger`), so it lands wherever the platform's audit trail goes:
+
+| Event | `result` | Content |
+| --- | --- | --- |
+| `TSS_JOB_TRIGGERED` | `SUCCESS`, `NOT_FOUND`, `FAILURE` | `userId` (token principal or OS user), `tenantId`, `resourceId` (`<tenant or platform>/<scriptPath>`), `channel` (`http` or `cli`) |
+| `TSS_JOBS_SYNCHRONIZED` | `SUCCESS`, `PARTIAL`, `FAILURE` | `userId`, `channel` |
+| `TSS_ADMIN_DENIED` | `DENIED` | a tenant administrator reaching outside its tenant: `userId`, its `tenantId`, the `operation` and `targetTenantId` |
+
+PayOS's own authorization records (granted or denied by role) are written as well. A manually triggered execution's `tss_job_execution` row looks like any other — the table has no trigger-type column; the audit trail and the `triggerType` metric tag tell manual runs apart.
 
 ## Execution history (`tss_job_execution`)
 
@@ -317,11 +415,11 @@ WHERE outcome IN ('MISFIRE', 'QUOTA_REJECTED') AND started_at > CURRENT_TIMESTAM
 
 ## Metrics
 
-Every finished execution also emits into PayOS's existing metrics infrastructure (`PayOSMetrics` — the same `IMetricsRecorder`/Micrometer-backed facade every other PayOS component already uses) — TSS adds no metrics-specific tooling of its own. Query TSS's job-execution metrics (logically `tss.job.execution.count`/`tss.job.execution.duration` — see below for the actual exposed names) through the exact same backend/dashboard you already use for every other PayOS metric, no separate system. Full tag/field shape and worked examples: [developer guide](../developer/task-scheduler-guide-v14-2026-10-28.md#12-metrics).
+Every finished execution also emits into PayOS's existing metrics infrastructure (`PayOSMetrics` — the same `IMetricsRecorder`/Micrometer-backed facade every other PayOS component already uses) — TSS adds no metrics-specific tooling of its own. Query TSS's job-execution metrics (logically `tss.job.execution.count`/`tss.job.execution.duration` — see below for the actual exposed names) through the exact same backend/dashboard you already use for every other PayOS metric, no separate system. Full tag/field shape and worked examples: [developer guide](../developer/task-scheduler-guide-v15-2026-11-03.md#12-metrics).
 
 **Embedded mode:** nothing to configure — the host's own `payos-server-http` `/metrics` endpoint already scrapes TSS's samples (same JVM, same static registry).
 
-**Standalone mode:** set `TSS_METRICS_HTTP_PORT` to a positive port (default `0` = disabled) to start a dedicated Prometheus scrape HTTP server on that port — standalone TSS has no HTTP server of its own otherwise, so without this, job-execution metrics are recorded but genuinely unreachable from outside the process. Point your Prometheus (or compatible) scraper at `http://<standalone-host>:<port>/metrics` as its own target. See the [developer guide §12.1](../developer/task-scheduler-guide-v14-2026-10-28.md#121-how-these-metrics-actually-get-exposed--embedded-vs-standalone) for the full explanation.
+**Standalone mode:** set `TSS_METRICS_HTTP_PORT` to a positive port (default `0` = disabled) to start a dedicated Prometheus scrape HTTP server on that port — standalone TSS has no HTTP server of its own otherwise, so without this, job-execution metrics are recorded but genuinely unreachable from outside the process. Point your Prometheus (or compatible) scraper at `http://<standalone-host>:<port>/metrics` as its own target. See the [developer guide §12.1](../developer/task-scheduler-guide-v15-2026-11-03.md#121-how-these-metrics-actually-get-exposed--embedded-vs-standalone) for the full explanation.
 
 **A misconfigured port never stops the scheduler from starting.** If `TSS_METRICS_HTTP_PORT` points at a port already in use (or otherwise fails to bind), TSS logs a warning and continues running with job scheduling fully intact — just without metrics exposure for that run. Check the startup logs for `Failed to start the standalone metrics HTTP server` if `/metrics` isn't reachable and you expected it to be.
 
@@ -329,23 +427,23 @@ Every finished execution also emits into PayOS's existing metrics infrastructure
 - **Standalone:** `StandaloneMain` sets it itself at startup (unless you've already set it yourself, in which case your own choice is respected). Safe to do unconditionally, since standalone TSS owns 100% of its own JVM — this can only ever affect TSS's own metrics.
 - **Embedded:** `RuntimeIntegrationHook` deliberately does **not** touch this flag — in that mode TSS shares `payos-runtime`'s own JVM with the kernel's API metrics, connectors, and audit trail, and deciding that host's metrics-cardinality policy isn't TSS's call to make. `tenant_id` appears on TSS's metrics in embedded mode only if the host has already enabled the flag itself. If you run TSS embedded and want `tenant_id` on your TSS dashboards, set `-Dpayos.metrics.tenant-tags-enabled=true` on `payos-runtime`'s own JVM — the same setting then applies to every PayOS metric in that process, TSS's included.
 
-The exact metric names as they actually appear in `/metrics` (not the logical names used elsewhere in this doc) are shown in the [developer guide's worked example](../developer/task-scheduler-guide-v14-2026-10-28.md#what-youll-actually-see-at-metrics).
+The exact metric names as they actually appear in `/metrics` (not the logical names used elsewhere in this doc) are shown in the [developer guide's worked example](../developer/task-scheduler-guide-v15-2026-11-03.md#what-youll-actually-see-at-metrics).
 
 ## Clustering
 
-Multiple TSS nodes sharing the same `TSS_SCHEDULER_INSTANCE_NAME` and pointed at the same TSS database form a Quartz cluster: job registration is idempotent (`registerScriptJobs` skips a `JobKey` that's already registered, logging it as expected rather than an error), and only one node fires a given trigger at a time. Point every node's `jobs/` root (standalone) or bundle (embedded) at the same content — a clustered node that registers a *different* `jobs.json` than its peers results in whichever node registers first owning that job's trigger.
+Multiple TSS nodes sharing the same `TSS_SCHEDULER_INSTANCE_NAME` and pointed at the same TSS database form a Quartz cluster: only one node fires a given trigger at a time, and every node reconciles the shared scheduler against its own `jobs/` files at startup and on hot reload (see [Changing jobs without a restart](#changing-jobs-without-a-restart)). Reconciliation is idempotent, so nodes with identical files find nothing left to change after the first one. Point every node's `jobs/` root (standalone) or bundle (embedded) at the same content — a node with *different* files would reconcile the whole cluster to its own version (adding, changing or deleting jobs) when it starts or reloads. A shared volume, or one artifact deployed by the same pipeline, avoids this.
 
 ## Logging
 
-The daemon uses slf4j with logback; no `logback.xml` ships by default. Job registration logs the number of jobs and tenants registered at startup; each execution logs its `jobId`/`tenantId`/`scriptPath` on both success and failure paths.
+The daemon uses slf4j with logback; no `logback.xml` ships by default. Job registration logs the number of jobs and tenants registered at startup; every reconciliation logs one summary line (`Job reconciliation (STARTUP|LIVE): added=[...], rescheduled=[...], ...`), and each deletion of an undeclared job its own `WARN`; each execution logs its `jobId`/`tenantId`/`scriptPath` on both success and failure paths.
 
-**Sensitive-data masking — always on, nothing to configure.** Before a script error's message reaches `tss_job_execution.failure_message` or a log line, TSS masks sensitive-looking `key: value`/`key=value` fragments inside it (the same canonical denylist — `password`, `token`, `ssn`, `cardNumber`, etc. — every other PayOS component uses). This is deliberately best-effort, not a guarantee: a message with no recognizable key prefix at all (an unlabeled bare secret) passes through unmasked. Full behavior and worked examples: [developer guide §13](../developer/task-scheduler-guide-v14-2026-10-28.md#13-sensitive-data-masking).
+**Sensitive-data masking — always on, nothing to configure.** Before a script error's message reaches `tss_job_execution.failure_message` or a log line, TSS masks sensitive-looking `key: value`/`key=value` fragments inside it (the same canonical denylist — `password`, `token`, `ssn`, `cardNumber`, etc. — every other PayOS component uses). This is deliberately best-effort, not a guarantee: a message with no recognizable key prefix at all (an unlabeled bare secret) passes through unmasked. Full behavior and worked examples: [developer guide §13](../developer/task-scheduler-guide-v15-2026-11-03.md#13-sensitive-data-masking).
 
 ## Next
 
-- [Class diagram](../architecture/job-scheduler-class-diagram-v18-2026-10-07.md) — every class, how they relate, and the full execution-flow walkthrough (registration through a fired trigger through script execution through cleanup).
+- [Class diagram](../architecture/job-scheduler-class-diagram-v19-2026-11-03.md) — every class, how they relate, and the full execution-flow walkthrough (registration through a fired trigger through script execution through cleanup).
 - [ADR-0009](../architecture/adr/0009-task-scheduling-system.md) — the architectural decision behind TSS's design.
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v6-2026-10-28.md) — the config-key reference only, for a quick lookup without the full narrative.
-- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v14-2026-10-28.md) — the full developer guide: configuring TSS and tenant jobs, writing script jobs, the `context`/`$DB`/`$PlatformDB`/`$Parallel` surface, and the same execution-history/misfire/quota model from a job script author's point of view.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v8-2026-11-03.md) — the config-key reference only, for a quick lookup without the full narrative.
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v15-2026-11-03.md) — the full developer guide: configuring TSS and tenant jobs, writing script jobs, the `context`/`$DB`/`$PlatformDB`/`$Parallel` surface, and the same execution-history/misfire/quota model from a job script author's point of view.
 - [notification-service.md](notification-service.md) — the other standalone-daemon precedent this guide's structure follows.
 - [deployment.md](deployment.md) — `payos-runtime`'s own deployment model, relevant to TSS's embedded mode.

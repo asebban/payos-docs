@@ -45,6 +45,19 @@ Instead of `--key`, `edc` can pull the key from a secret provider (mirrors the r
 | `--secret-config` | — | Secret provider config path. |
 | `--service-adapters-dir` | — | Where to load the provider connector from. |
 
+### License-derived key (used automatically when a `*.lic` file is found)
+
+When `--key` is omitted, `edc` looks for exactly one `*.lic` file directly under `--inputdir`
+before falling back to the secret-provider key above — see
+[operations/bundle-encryption.md#sourcing-the-key-from-a-license-file](../operations/bundle-encryption.md#sourcing-the-key-from-a-license-file)
+for the full behaviour. These flags identify the editor's own signing key pair used to unwrap it:
+
+| Flag | Env var | Default | Purpose |
+| --- | --- | --- | --- |
+| `--editor-id` | `PAYOS_EDITOR_ID` | `editor` | Namespace/id of the editor's signing key pair in the secret provider — not a PayOS tenant. |
+| `--editor-key-name` | `PAYOS_EDITOR_KEY_NAME` | `editor-signing-key` | Key pair name. |
+| — | `PAYOS_LICENSE_FILE_PATH` | — | Overrides the `*.lic` convention scan — same variable `payos-kernel` uses at boot. |
+
 ### Vault provider flags
 
 When `--secret-provider vault` is used, these additional flags configure the Vault client
@@ -106,10 +119,15 @@ never at risk.
 
 ## Key length requirement
 
-Pack and unpack always require an **exactly 16-character** key — `PayOSPacker` rejects any
-other length (`key.length() != 16`) for both `pack` and `unpack`. This is independent of
-`--generatekey <n>`, which can generate a key of any length `n`; if you intend to use the
-generated key with `pack`/`unpack`, generate it with `n = 16`.
+The `--key`/`--secret-name` (`encryptionKey`) text-key path always requires an **exactly
+16-character** key — `PayOSPacker`'s `String`-based `pack`/`unpack` overloads reject any other
+length. This is independent of `--generatekey <n>`, which can generate a key of any length `n`;
+if you intend to use the generated key with `--key`, generate it with `n = 16`.
+
+The license-derived path (above) is different: it resolves a raw 32-byte AES-256 key unwrapped
+from the license, never typed as a 16-character string. `PayOSPacker` also exposes `byte[]`-based
+`pack`/`unpack` overloads accepting any AES-valid length (16/24/32 bytes) for this purpose — the
+16-character restriction only applies to the `String`-keyed CLI flags.
 
 ## Examples
 
@@ -130,9 +148,15 @@ edc --encryption unpack --inputdir ./packed-bundle --key "0123456789abcdef"
 
 # pack to a separate output directory — ./bundle is never modified
 edc --encryption pack --inputdir ./bundle --outputdir ./bundle-packed --key "0123456789abcdef"
+
+# pack using the key embedded in a license file found at the root of ./bundle (no --key)
+edc --encryption pack --inputdir ./bundle \
+    --secret-provider filesystem --root ./editor-secrets \
+    --editor-id editor --editor-key-name editor-signing-key
 ```
 
 ## Next
 
 - [operations/bundle-encryption.md](../operations/bundle-encryption.md)
 - [operations/secrets-management.md](../operations/secrets-management.md)
+- [architecture/license-validation-architecture-v3-2026-11-01.md](../architecture/license-validation-architecture-v3-2026-11-01.md)

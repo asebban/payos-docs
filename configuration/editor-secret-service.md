@@ -2,7 +2,13 @@
 
 The `editor-secret-service` block configures the secret provider that backs `ma.s2m.payos.editor.IEditorProvider` — specifically, `EditorEncryptionKeyInitializer`'s resolution of the bundle-wide `encryptionKey` used to decrypt `P8G2`/`P8OS` config payloads produced by `edc` (the `payosv2-packer` module). It is deliberately **separate from [`secret-service`](secret-service.md)**: `secret-service` backs the `$Secrets` binding and holds ordinary per-tenant application secrets, while `editor-secret-service` holds the one bundle-wide key that only the editor (the core PayOS team producing the base application) ever mints — see [architecture/tenant-bundle-encryption-key-lifecycle](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md) for the full lifecycle and the reasoning behind keeping this custody path distinct from ordinary tenant secrets.
 
-This block is **required by default** in every `bootstrap.json`, not just bundles that ship encrypted config files: `EditorEncryptionKeyInitializer` runs unconditionally during `ConfigLoader.loadServerConfig()`, and a missing or malformed `editor-secret-service.configuration` block fails boot outright with a `ResourceException` (surfaced as `ConfigNotFoundException`), rather than deferring the failure to whenever an encrypted file is first loaded. Bundles that never load encrypted config files can opt out explicitly with `"enabled": false` — see the key table below.
+This block is **required by default** in every `bootstrap.json`, not just bundles that ship encrypted config files — *unless* a valid license has already supplied a key (see below). `ConfigLoader.loadServerConfig()` only invokes `EditorEncryptionKeyInitializer` (environment-variable path, then JSON-block path) when `CryptoService.getInstance().hasKey()` is still `false` at that point; a missing or malformed `editor-secret-service.configuration` block then fails boot outright with a `ResourceException` (surfaced as `ConfigNotFoundException`), rather than deferring the failure to whenever an encrypted file is first loaded. Bundles that never load encrypted config files can opt out explicitly with `"enabled": false` — see the key table below.
+
+**Since 2026-10, this is the fallback path, not the only path.** When `payos-kernel`'s real `LicenseValidator` is active (see
+[architecture/license-validation-architecture-v3-2026-11-01.md](../architecture/license-validation-architecture-v3-2026-11-01.md)),
+`BootServer` resolves and sets `CryptoService`'s key from the license's own `key_envelope` *before* `ConfigLoader` even starts — in
+that case everything on this page is skipped entirely. This page's mechanism remains active for bundles with no license (dev mode)
+or for decrypting application-specific config unrelated to the license's own key.
 
 ## Common keys
 
@@ -77,6 +83,14 @@ PAYOS_EDITOR_SECRET_CFG_KV_MOUNT=secret
 
 These variables take full precedence over the JSON block: if any `PAYOS_EDITOR_SECRET_*` variable is set, resolution happens from the environment alone and `payos.json`'s `editor-secret-service` block (if any) is never even looked for — mixing sources (some fields from JSON, some from environment) is not supported. If none of these variables are set, behavior is exactly as documented above (the JSON block is read from `payos.json`, which must then be plaintext or otherwise already-decryptable).
 
+Two more variables identify the editor's *signing* key pair (distinct from the symmetric
+`encryptionKey` this block otherwise resolves) — used by license validation and `payosv2-packer`
+to verify signatures and unwrap `key_envelope.encrypted_key`, both via this same provider:
+`PAYOS_EDITOR_ID` (the editor's own namespace/id in the secret provider — not a PayOS tenant;
+default `editor`) and `PAYOS_EDITOR_KEY_NAME` (default
+`editor-signing-key`). See
+[configuration/license-service-v2-2026-11-01.md](license-service-v2-2026-11-01.md).
+
 This only covers `editor-secret-service` — the classical `secret-service` block (`$Secrets`, ordinary tenant secrets) has no equivalent environment-variable path yet; see [architecture/tenant-bundle-encryption-key-lifecycle](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md#3-editor-scopes-what-actually-gets-encrypted) for that open gap.
 
 ## Why this is a separate block, not a `secret-service` alias
@@ -88,3 +102,5 @@ This only covers `editor-secret-service` — the classical `secret-service` bloc
 - [secret-service.md](secret-service.md) — the general-purpose `$Secrets` binding this block is deliberately kept separate from.
 - [architecture/tenant-bundle-encryption-key-lifecycle](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md) — the full key lifecycle (generation, custody, delivery, rotation) this configuration block fits into.
 - [operations/bundle-encryption.md](../operations/bundle-encryption.md) — the `edc` CLI that produces the encrypted payloads this key decrypts.
+- [architecture/license-validation-architecture-v3-2026-11-01.md](../architecture/license-validation-architecture-v3-2026-11-01.md) — how license validation takes priority over this fallback, and the signing key pair variables above.
+- [configuration/license-service-v2-2026-11-01.md](license-service-v2-2026-11-01.md) — full environment-variable reference for license validation.

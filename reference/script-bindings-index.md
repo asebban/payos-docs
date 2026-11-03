@@ -38,6 +38,18 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 | `$Connector` | connector framework | `ConnectorBinding` (gated on `PayOSConfig.getConnectorRegistry()`; **wired into `BootServer` since 2026-07-27** via `ConnectorFrameworkInitializer` — absent only when no connectors are configured/found) | [scripting-bindings.md](../developer/scripting-bindings.md), [connector-framework-parameters-v3-2026-08-11.md](../configuration/connector-framework-parameters-v3-2026-08-11.md) |
 | `$Notification` | notification-service | `NotificationBinding` (gated on `PayOSConfig.getNotificationServiceFactory()`) | [scripting-bindings.md](../developer/scripting-bindings.md), [notification-service.md](../configuration/notification-service.md) |
 
+## Task Scheduling System job scripts
+
+Job scripts run by `payos-job-scheduler` (`ScriptJob`) get a different, smaller set of bindings, plus a `context` argument passed to their `execute(context)` function. None of the API-script bindings above (`$Request`, `$Response`, `$Api`, ...) exist there. Full explanations are in the [TSS developer guide](../developer/task-scheduler-guide-v15-2026-11-03.md).
+
+| Binding | Present when | Purpose |
+| --- | --- | --- |
+| `$DB` | Tenant-scoped job | The job's tenant database, on a session dedicated to this run (`JobDatabaseBinding`). |
+| `$PlatformDB` | Platform database configured | Platform database: read-only for a tenant job, read/write for a platform job. |
+| `$Parallel` | Tenant-scoped job | `forEach(items, fn[, options])`: process a batch on worker threads, each with its own `$DB` session. |
+| `$Logger` | Always | `info`/`warn`/`error`/`debug`; lines of a tenant job are tagged with its tenant. |
+| `context` (argument of `execute`) | Always | `getJobId()`, `getTenantId()`, `getScriptPath()`, `getFiredAt()`, `getArguments()` (the job's `arguments` object from `jobs.json`, stored in the scheduler and identical on every node), plus `getDb()`, `getPlatformDb()`, `getParallel()`, `getLogger()`. |
+
 ## Java interop
 
 | Mechanism | Notes |

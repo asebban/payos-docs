@@ -1,11 +1,11 @@
 Created : 2026-09-30
-Dernière mise à jour : 2026-10-07
-Version : v18
+Dernière mise à jour : 2026-11-03
+Version : v19
 
 # Diagramme de classes — Task Scheduling System (`payos-job-scheduler`)
 
 **Audience :** architectes, tech leads, contributeurs à `payos-job-scheduler`, `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`
-**Périmètre :** les Stories 1.1 et 1.2 (§4-8, 10-11, y compris la résolution du gap AC1), **plus les Stories 2.1 et 2.2 de l'Epic 2** (§13 — package `history/`, détection de misfire, quota de concurrence par tenant, requêtes d'historique), **plus la Story 2.3** (§14 — package `metrics/`, émission `PayOSMetrics`, exposition HTTP Prometheus en mode standalone), **plus la Story 2.4** (§15 — masquage des données sensibles via `history/SensitiveDataScrubber`, réutilisation de `SensitiveFieldMasker`), plus les classes d'appui touchées dans `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`.
+**Périmètre :** les Stories 1.1 et 1.2 (§4-8, 10-11, y compris la résolution du gap AC1), **plus les Stories 2.1 et 2.2 de l'Epic 2** (§13 — package `history/`, détection de misfire, quota de concurrence par tenant, requêtes d'historique), **plus la Story 2.3** (§14 — package `metrics/`, émission `PayOSMetrics`, exposition HTTP Prometheus en mode standalone), **plus la Story 2.4** (§15 — masquage des données sensibles via `history/SensitiveDataScrubber`, réutilisation de `SensitiveFieldMasker`), **plus la gestion du cycle de vie des jobs** (§16, ajouté 2026-11-03 — packages `reconciliation/` et `admin/`, rechargement à chaud de `jobs/`, provisionnement des répertoires tenant depuis `jobs/template.json`, arguments stockés dans le `JobDataMap`, déclenchement manuel et `triggerType`), plus les classes d'appui touchées dans `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`.
 **Trou connu, assumé, pas caché :** les Stories 1.3, 1.4 et 1.5 de l'Epic 1 (jobs de niveau plateforme, `custom-jobs.json`, `ExclusiveScriptJob`/`@DisallowConcurrentExecution`) ne sont **pas encore** couvertes par ce diagramme malgré leur statut `done` — ce document n'a pas été tenu à jour entre la Story 1.2 et la Story 2.1/2.2. Voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour le détail exact de ce qui manque. Les classes citées au §13 qui dépendent de mécanismes introduits par ces stories manquantes (ex. `ExclusiveScriptJob`) sont signalées comme telles plutôt que silencieusement supposées déjà connues.
 **Document vivant :** ce diagramme sera mis à jour au fil des prochaines stories — voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour ce qui manque encore.
 
@@ -28,6 +28,7 @@ Version : v18
 13. [Stories 2.1 et 2.2 — le package `history/`, misfire, quota de concurrence](#13-stories-21-et-22--le-package-history-misfire-quota-de-concurrence)
 14. [Story 2.3 — métriques (`metrics/`) et exposition HTTP standalone](#14-story-23--métriques-metrics-et-exposition-http-standalone)
 15. [Story 2.4 — masquage des données sensibles (`history/SensitiveDataScrubber`)](#15-story-24--masquage-des-données-sensibles-historysensitivedatascrubber)
+16. [Cycle de vie des jobs — réconciliation, rechargement à chaud, administration, provisionnement](#16-cycle-de-vie-des-jobs--réconciliation-rechargement-à-chaud-administration-provisionnement)
 
 ---
 
@@ -728,6 +729,8 @@ Les §4-8 et 10-11 couvrent les Stories 1.1 (infrastructure de clustering) et 1.
 
 Restent aussi, dans l'Epic 2 : émission `PayOSMetrics` (Story 2.3), masquage des données sensibles dans les logs/historique/métriques (Story 2.4).
 
+**Mise à jour 2026-11-03 :** les Stories 2.3 et 2.4 sont désormais couvertes (§14, §15). Le §16 décrit la gestion du cycle de vie des jobs (réconciliation, rechargement à chaud, administration, provisionnement des tenants) ; il remplace aussi la logique d'enregistrement décrite au §7, à l'étape 5 du §10 et au §13 (`SchedulerBootstrap.registerOne` n'existe plus : tout passe par `JobReconciler`). Le §16 montre au passage `ExclusiveScriptJob` et `custom-jobs.json` tels qu'ils sont utilisés aujourd'hui, sans retracer l'historique des Stories 1.3-1.5, qui reste à documenter ici.
+
 Ce document sera mis à jour à chaque nouvelle story qui ajoute ou modifie des classes de production — mais ce trou (1.3-1.5) montre que cette intention n'a pas été suivie de façon fiable entre le 2026-10-02 et le 2026-10-06 ; à garder à l'esprit avant de faire confiance à ce document comme source unique de vérité.
 
 ---
@@ -738,9 +741,9 @@ Ce document sera mis à jour à chaque nouvelle story qui ajoute ou modifie des 
 2. **Chargement des jobs** — `TenantJobRegistry jobRegistry = new JobConfigLoader().load(jobsRootDir)` (`jobsRootDir` résolu relativement au répertoire de base). Si aucun job n'est trouvé, rien d'autre ne se passe — pas une erreur (environnement standalone/dev sans `jobs/` encore).
 3. **Résolution du registre tenant** — mode standalone : `TenantDatabaseRegistryLoader.loadPayOSSettings(payosConfigFile)` charge la config PayOS (fichier pointeur `payos.json` + fichiers du `configDir`, voir §7), puis `resolveForTenants(settings, jobRegistry)` appelle `DatabaseServiceInitializer.resolveTenantDatabaseConnections` (kernel) pour chaque tenant et construit un `DynamicDataAccessService.TenantConfig` (identifiants de connexion + union des `mappingFiles` déclarés dans `jobs.json`, via `TenantConfig.allMappingFiles()`). Mode embarqué : mêmes appels, mais directement sur `PayOSConfig.settings` déjà chargé par l'hôte — aucune relecture de fichier.
 4. **Construction des dépendances** — `new DynamicDataAccessService(tenantRegistry)` (le `IDatabaseService` multi-tenant), `new FileSystemScriptLoader(baseDir)`, assemblés en `ScriptExecutionDependencies`.
-5. **Planification** — `bootstrap.registerScriptJobs(jobRegistry, dependencies)` installe `ScriptJobFactory` puis, pour chaque `JobDefinition` de `jobRegistry.allJobs()`, planifie un `JobDetail`(`ScriptJob`) + `Trigger` cron, avec pour `JobKey` `(scriptPath, tenantId)`.
+5. **Planification** — `bootstrap.registerScriptJobs(jobRegistry, dependencies)` installe `ScriptJobFactory` et `MisfireExecutionListener`, puis délègue à `JobReconciler.reconcile(jobRegistry, STARTUP)` (depuis 2026-11-03, voir [§16](#16-cycle-de-vie-des-jobs--réconciliation-rechargement-à-chaud-administration-provisionnement)) : chaque `JobDefinition` absente de Quartz est planifiée (`JobDetail` `ScriptJob` ou `ExclusiveScriptJob` + `Trigger` cron, `JobKey` `(scriptPath, tenantId ou "platform")`), chaque job modifié est mis à jour, chaque job qui n'est plus déclaré est supprimé.
 6. **Déclenchement** — à l'heure du cron, le thread interne du scheduler acquiert le trigger dû et obtient un `JobRunShell` ; `JobRunShell.initialize(qs)` appelle `qs.getJobFactory().newJob(bundle, scheduler)` — c'est-à-dire `ScriptJobFactory.newJob(...)` (construit `new ScriptJob(dependencies)`, les dépendances installées à l'étape 5) — puis `JobRunShell.run()` appelle `ScriptJob.execute(quartzContext)` (détail complet et vérifié : [§7](#7-payos-job-schedulerbootstrap--points-dentrée-et-cycle-de-vie)).
-7. **Résolution** — `execute` lit `jobId`/`tenantId`/`scriptPath` du `JobDataMap` et appelle `runJob(...)`.
+7. **Résolution** — `execute` lit `jobId`/`tenantId`/`scriptPath` du `JobDataMap` (et, depuis 2026-11-03, `arguments` et `triggerType`, voir §16.6) et appelle `runJob(...)`.
 8. **Ouverture de session** — `runJob` appelle `dependencies.multiTenantDatabaseService().openDedicatedSessionFor(tenantId)`, obtenant un `IDatabaseService.DedicatedTenantSession` dédié à cette seule exécution, puis `tenantSession.setCurrentTenant(tenantId)`.
 9. **Construction du contexte** — `new JobContext(jobId, tenantId, scriptPath, Instant.now(), tenantSession, platformDatabaseService)`, qui construit en interne `$DB` (`JobDatabaseBinding`) et `$PlatformDB` (`DatabaseBinding`, si configurée).
 10. **Chargement du script** — `dependencies.scriptLoader().apply(scriptPath)` résout le contenu du script depuis le pool partagé (`FileSystemScriptLoader`, étape 4).
@@ -766,8 +769,8 @@ Une troisième source de confusion possible, apparue avec la résolution du gap 
 
 ## 12. Références
 
-- [ADR-0009 — Task Scheduling System](adr/0009-task-scheduling-system.md)
-- [Operations: Task Scheduling System](../operations/task-scheduling-system-v16-2026-10-28.md) — le pendant opérationnel de ce document : comment configurer et démarrer TSS (standalone ou embarqué), tss-config.json, jobs.json, résolution tenant/plateforme, limitations connues
+- [ADR-0009 — Task Scheduling System](adr/0009-task-scheduling-system.md) (v1) et sa révision courante [ADR-0009 v4](adr/0009-task-scheduling-system-v4-2026-11-03.md), qui contient le diagramme de classes d'ensemble du module
+- [Operations: Task Scheduling System](../operations/task-scheduling-system-v17-2026-11-03.md) — le pendant opérationnel de ce document : comment configurer et démarrer TSS (standalone ou embarqué), tss-config.json, jobs.json, résolution tenant/plateforme, limitations connues
 - `payos-job-scheduler/_bmad-output/planning-artifacts/architecture.md` — architecture narrative complète du module, tenue par le workflow BMad (décisions, corrections, séquence d'implémentation)
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/1-1-resilient-clustered-scheduling-infrastructure.md` — Story 1.1 (infrastructure de clustering)
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/1-2-register-and-run-a-script-job-on-a-cron-schedule.md` — Story 1.2 (enregistrement + exécution), y compris le journal de correction architecturale (Debug Log) menant à `IDatabaseService.openDedicatedSessionFor`, et la note de résolution de la Task 5 (gap AC1 — choix hybride, extraction kernel, câblage complet)
@@ -892,14 +895,14 @@ Comme pour les tables `QRTZ_*` de Quartz elles-mêmes, **TSS ne crée jamais cet
 | `outcome` | `SUCCESS`, `SCRIPT_ERROR`, `MISFIRE`, `QUOTA_REJECTED`, ou `ABANDONED` (ligne d'un nœud crashé, clôturée par l'exécution de récupération qui l'a remplacée — Story 2.2, suivi de revue round 1, `JobExecutionListener.onRecoveryStarted`). |
 | `failure_message` | Tronqué en Java à 2000 caractères avant l'écriture (correctif de revue de code, Story 2.1 round 1) pour que jamais un message trop long ne fasse échouer l'écriture elle-même. |
 
-Voir [configuration/task-scheduling-system-v6-2026-10-28.md](../configuration/task-scheduling-system-v6-2026-10-28.md) et [operations/task-scheduling-system-v16-2026-10-28.md](../operations/task-scheduling-system-v16-2026-10-28.md) pour les requêtes directes types.
+Voir [configuration/task-scheduling-system-v8-2026-11-03.md](../configuration/task-scheduling-system-v8-2026-11-03.md) et [operations/task-scheduling-system-v17-2026-11-03.md](../operations/task-scheduling-system-v17-2026-11-03.md) pour les requêtes directes types.
 
 ### 13.9 Références (Stories 2.1/2.2)
 
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-1-live-and-point-in-time-view-of-job-executions.md` — Story 2.1, y compris la correction du design de pool de connexions et le déplacement de `JobExecutionListener`.
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-2-query-execution-history-and-failure-diagnosis.md` — Story 2.2, y compris la recherche sur le quota (`TenantPolicyService`/`ISlidingWindowCounter` écarté), le constat empirique sur la récupération après crash, et le suivi same-day sur la surcharge par tenant.
-- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v14-2026-10-28.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`/`$Parallel`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v6-2026-10-28.md) — référence de configuration (quota global/par tenant, récupération après crash).
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v15-2026-11-03.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`/`$Parallel`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v8-2026-11-03.md) — référence de configuration (quota global/par tenant, récupération après crash).
 
 ## 14. Story 2.3 — métriques (`metrics/`) et exposition HTTP standalone
 
@@ -1028,7 +1031,7 @@ public final class StandaloneMetricsServer implements Closeable {
 
 ### 14.6 Référence
 
-Voir [configuration/task-scheduling-system-v6-2026-10-28.md](../configuration/task-scheduling-system-v6-2026-10-28.md), [developer guide §12](../developer/task-scheduler-guide-v14-2026-10-28.md#12-metrics) et [operations guide](../operations/task-scheduling-system-v16-2026-10-28.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
+Voir [configuration/task-scheduling-system-v8-2026-11-03.md](../configuration/task-scheduling-system-v8-2026-11-03.md), [developer guide §12](../developer/task-scheduler-guide-v15-2026-11-03.md#12-metrics) et [operations guide](../operations/task-scheduling-system-v17-2026-11-03.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
 
 ### 14.7 Références (Story 2.3)
 
@@ -1076,7 +1079,7 @@ Repère les fragments `key: value`/`key=value` dont la clé correspond à `Sensi
 
 ### 15.5 Référence
 
-Voir [developer guide §13](../developer/task-scheduler-guide-v14-2026-10-28.md#13-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v16-2026-10-28.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
+Voir [developer guide §13](../developer/task-scheduler-guide-v15-2026-11-03.md#13-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v17-2026-11-03.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
 
 ### 15.6 Références (Story 2.4)
 
@@ -1084,3 +1087,267 @@ Voir [developer guide §13](../developer/task-scheduler-guide-v14-2026-10-28.md#
 - `payos-connector-api/src/main/java/ma/s2m/payos/connector/util/SensitiveFieldMasker.java` — le masqueur canonique réutilisé ; confirmé piloté uniquement par nom de clé, sans scan de contenu.
 - `payos-foundation/src/main/java/ma/s2m/payos/events/audit/AuditEvent.java` lignes 439-487 — précédent `isSensitiveKeyName`/`Builder.field(...)` pour un masquage par champ avec échappatoire.
 - `payos/src/main/java/ma/s2m/payos/scripting/ConnectorScriptHandle.java` ligne 343 — précédent le plus proche pour l'appel `mask(Map)` en masse de `JobMetricsEmitter`.
+
+---
+
+## 16. Cycle de vie des jobs — réconciliation, rechargement à chaud, administration, provisionnement
+
+**Ajouté 2026-11-03.** Ce paragraphe couvre un ensemble de changements demandés ensemble, sans story BMad dédiée : modifier un job (cron, `parallelizable`, `arguments`) ou en supprimer un sans redémarrer, déclencher un job à la main (CLI et HTTP sécurisé), et créer automatiquement le répertoire `jobs/<tenantId>/` d'un nouveau tenant. Le principe directeur : **les fichiers de `jobs/` sont l'unique source de vérité**, et un seul composant (`JobReconciler`) aligne Quartz sur eux. La décision et ses conséquences sont dans [ADR-0009 v4](adr/0009-task-scheduling-system-v4-2026-11-03.md) ; le mode d'emploi est dans [operations §Changing jobs without a restart](../operations/task-scheduling-system-v17-2026-11-03.md#changing-jobs-without-a-restart) et [operations §Administration](../operations/task-scheduling-system-v17-2026-11-03.md#administration-manual-trigger-sync-and-list).
+
+### 16.1 Vue d'ensemble — nouvelles classes
+
+| Package | Classe | Rôle |
+| --- | --- | --- |
+| `reconciliation` | `JobReconciler` | Calcule l'écart entre les jobs déclarés (`TenantJobRegistry`) et les jobs enregistrés dans Quartz, puis ajoute, replanifie, met à jour ou supprime. Seule classe qui écrit des définitions de jobs dans Quartz. |
+| `reconciliation` | `JobReconciler.Mode` | `STARTUP` (démarrage d'un nœud) ou `LIVE` (rechargement à chaud, `sync`). |
+| `reconciliation` | `ReconciliationReport` (record) | Résultat d'une passe : `added`, `rescheduled`, `updated`, `deleted`, `skipped`, `failed`. |
+| `reconciliation` | `JobsSynchronizer` | Une passe complète en mode `LIVE` : provisionner les répertoires tenant manquants, relire `jobs/`, réconcilier. Utilisé par le rechargement à chaud et par `sync`. |
+| `reconciliation` | `JobsSynchronizer.TenantSource` (interface fonctionnelle) | Fournit les tenants déclarés dans la configuration PayOS, pour le provisionnement. |
+| `registration` | `TenantDirectoryProvisioner` | Crée `jobs/<tenantId>/` pour chaque tenant déclaré qui n'en a pas, avec un `jobs.json` issu de `jobs/template.json` personnalisé (`{{tenantId}}`). |
+| `bootstrap` | `JobsHotReloader` | Surveille `jobs/` avec le `ConfigWatcher` du kernel, regroupe les événements (2 s) et appelle `JobsSynchronizer.synchronize()`. |
+| `admin` | `JobAdminService` | Implémentation unique des trois opérations `trigger`, `sync`, `list`, auditées. Partagée par la CLI et l'endpoint HTTP. |
+| `admin` | `JobAdminService.JobSummary` (record) | Une ligne de `list` : tenant, script, id, cron, `parallelizable`, prochaine et précédente exécution (ISO-8601). |
+| `admin` | `AdminHttpServer` | Endpoint HTTP d'administration (`com.sun.net.httpserver.HttpServer` du JDK, port dédié). |
+| `admin` | `AdminAccessPolicy` (+ records `Decision`, `Caller`) | Authentifie un appel avec l'`ISecurityService` de PayOS et décide de ce que l'appelant peut faire. |
+| `admin` | `AdminSettings` (record) | Port, rôle plateforme, rôle tenant ; valeurs par défaut et `disabled()`. |
+
+Classes existantes modifiées : `SchedulerBootstrap`, `StandaloneMain`, `StandaloneJobRegistration`, `RuntimeIntegrationHook`, `TaskSchedulerRuntimeIntegration`, `JobConfigLoader`, `TenantJobRegistry`, `ScriptJob`, `JobExecutionEvent`, `MisfireExecutionListener`, `JobMetricsEmitter`, `IJobConfigSpec` (voir §16.6).
+
+### 16.2 Diagramme de classes
+
+```mermaid
+classDiagram
+    direction LR
+
+    class JobReconciler {
+        <<job-scheduler>>
+        +JobReconciler(Scheduler scheduler)
+        +reconcile(TenantJobRegistry registry, Mode mode) ReconciliationReport
+        +groupOf(String tenantId)$ String
+        +tenantOf(String group)$ String
+        +jobKey(JobDefinition job)$ JobKey
+    }
+    class Mode {
+        <<enumeration>>
+        STARTUP
+        LIVE
+    }
+    class ReconciliationReport {
+        <<record>>
+        List added
+        List rescheduled
+        List updated
+        List deleted
+        List skipped
+        List failed
+        +changedAnything() boolean
+    }
+    class JobsSynchronizer {
+        <<job-scheduler>>
+        +JobsSynchronizer(Path root, JobReconciler reconciler, TenantJobRegistry startupRegistry, TenantSource source)
+        +synchronize() ReconciliationReport
+        +jobsRootDir() Path
+    }
+    class TenantSource {
+        <<interface>>
+        +tenantIds() Collection
+    }
+    class TenantDirectoryProvisioner {
+        <<job-scheduler>>
+        +TEMPLATE_FILE_NAME$ String
+        +TENANT_ID_PLACEHOLDER$ String
+        +declaredTenantIds(Map payosSettings)$ Set
+        +provision(Path jobsRootDir, Collection tenantIds)$ List
+    }
+    class JobsHotReloader {
+        <<job-scheduler>>
+        +start(JobsSynchronizer synchronizer)$ JobsHotReloader
+        +close()
+    }
+    class JobAdminService {
+        <<job-scheduler>>
+        +JobAdminService(Scheduler scheduler, JobsSynchronizer synchronizer)
+        +trigger(String tenantId, String scriptPath, String triggeredBy, String channel)
+        +sync(String requestedBy, String channel) ReconciliationReport
+        +list(String tenantFilter) List~JobSummary~
+    }
+    class JobSummary {
+        <<record>>
+        String tenantId
+        String scriptPath
+        String jobId
+        String cronExpression
+        boolean parallelizable
+        String nextFireTime
+        String previousFireTime
+    }
+    class AdminHttpServer {
+        <<job-scheduler>>
+        +start(AdminSettings settings, JobAdminService service)$ AdminHttpServer
+        +port() int
+        +close()
+    }
+    class AdminAccessPolicy {
+        <<job-scheduler>>
+        +AdminAccessPolicy(ISecurityService securityService, String platformRole, String tenantRole)
+        +authenticate(Request request) Decision
+    }
+    class Caller {
+        <<record>>
+        String id
+        String tenantId
+        boolean platformAdmin
+        +mayTrigger(String tenantId) boolean
+        +maySync() boolean
+        +mayList(String tenantId) boolean
+    }
+    class AdminSettings {
+        <<record>>
+        int httpPort
+        String platformRole
+        String tenantRole
+    }
+    class SchedulerBootstrap {
+        <<job-scheduler>>
+        +registerScriptJobs(TenantJobRegistry registry, ScriptExecutionDependencies deps) ReconciliationReport
+        +removeUndeclaredJobs(TenantJobRegistry emptyRegistry, Path jobsRootDir)
+        +reconciler() JobReconciler
+    }
+    class TenantJobRegistry {
+        <<job-scheduler>>
+        +allJobs() List
+        +incompleteTenants() Set
+    }
+    class ConfigWatcher {
+        <<kernel>>
+    }
+    class ISecurityService {
+        <<foundation>>
+        +check(Request request, List roles) Response
+        +getCurrentPrincipal(Request request) Map
+        +resolveTenantId(Map principal) String
+    }
+    class AuditLogger {
+        <<kernel>>
+        +logEvent(AuditEvent event)$
+    }
+    class Scheduler {
+        <<quartz>>
+    }
+
+    SchedulerBootstrap *-- JobReconciler
+    JobReconciler ..> Mode
+    JobReconciler ..> TenantJobRegistry : état désiré
+    JobReconciler ..> ReconciliationReport : retourne
+    JobReconciler ..> Scheduler : scheduleJob / rescheduleJob / addJob / deleteJob
+    JobsSynchronizer o-- JobReconciler
+    JobsSynchronizer ..> TenantDirectoryProvisioner : avant chaque chargement
+    JobsSynchronizer o-- TenantSource
+    JobsSynchronizer ..> TenantJobRegistry : JobConfigLoader.load
+    JobsHotReloader o-- JobsSynchronizer
+    JobsHotReloader *-- ConfigWatcher
+    JobAdminService o-- JobsSynchronizer
+    JobAdminService ..> Scheduler : triggerJob / getJobKeys
+    JobAdminService ..> JobSummary
+    JobAdminService ..> AuditLogger : TSS_JOB_TRIGGERED, TSS_JOBS_SYNCHRONIZED
+    AdminHttpServer o-- JobAdminService
+    AdminHttpServer *-- AdminAccessPolicy
+    AdminHttpServer ..> AdminSettings
+    AdminHttpServer ..> AuditLogger : TSS_ADMIN_DENIED
+    AdminAccessPolicy o-- ISecurityService
+    AdminAccessPolicy ..> Caller
+```
+
+`StandaloneMain` et `RuntimeIntegrationHook` assemblent ces classes ; ils ne sont pas répétés dans le diagramme (voir §16.5).
+
+### 16.3 `JobReconciler` — l'algorithme
+
+`reconcile(registry, mode)` (`synchronized`) lit d'abord tous les jobs Quartz dont la classe est `ScriptJob` ou une sous-classe (les jobs d'autres classes sont ignorés, donc jamais supprimés), puis traite chaque `JobDefinition` de `registry.allJobs()` :
+
+1. En mode `LIVE`, un job de tenant dont le groupe n'existe pas encore dans Quartz est ignoré (`skipped`) : la session base de données d'un tenant n'est ouverte qu'au démarrage d'un nœud, un tel job échouerait à chaque exécution. Il sera planifié au prochain démarrage (mode `STARTUP`).
+2. Absent de Quartz : `scheduleJob(detail, trigger)` → `added`.
+3. Tenant incomplet (`custom-jobs.json` illisible, voir §16.4) : le job existant n'est pas touché → `skipped`.
+4. `JobDetail` différent (comparaison `sameDetail` : classe, `requestsRecovery`, et les quatre clés `jobId`, `tenantId`, `scriptPath`, `arguments` du `JobDataMap`) : `addJob(detail, true, true)` remplace le job **en conservant ses triggers** → `updated`. C'est ce qui permet de basculer `parallelizable` (changement de classe `ScriptJob` ↔ `ExclusiveScriptJob`) sans perdre la planification.
+5. Expression cron différente : `rescheduleJob(triggerKey, nouveauTrigger)` ; trigger absent : `scheduleJob(trigger)` → `rescheduled`.
+
+Ensuite, chaque job Quartz qui n'est plus déclaré est supprimé (`deleteJob`, log WARN « no longer declared in any jobs file ») → `deleted`, sauf s'il appartient à un tenant incomplet (→ `skipped`). Une `ObjectAlreadyExistsException` (un autre nœud a enregistré le même job entre la lecture et l'écriture) n'est pas comptée comme un échec ; toute autre exception est consignée dans `failed` et la passe continue avec le job suivant.
+
+Les helpers statiques fixent la convention de clés, utilisée aussi par `JobAdminService` : `groupOf(null)` = `"platform"` (jamais le groupe `DEFAULT` de Quartz), `jobKey(job)` = `JobKey(scriptPath, groupOf(tenantId))`, et le `TriggerKey` est identique.
+
+`buildJobDetail` construit un `JobDetail` `ScriptJob` (ou `ExclusiveScriptJob` si `parallelizable = false`) avec `requestRecovery(true)` et un `JobDataMap` contenant `jobId`, `tenantId`, `scriptPath` et `arguments` (sérialisés en JSON, voir §16.6).
+
+### 16.4 Garde-fous contre une suppression involontaire
+
+Trois mécanismes empêchent qu'un registre vide ou partiel efface les jobs du cluster :
+
+- **`TenantJobRegistry.incompleteTenants()`** (nouveau, alimenté par `JobConfigLoader`) : `mergeCustomJobs` retourne désormais `boolean`, `false` quand `custom-jobs.json` est illisible ; le tenant est alors marqué incomplet et le réconciliateur ne modifie ni ne supprime aucun de ses jobs existants (il ajoute seulement les manquants). Un `jobs.json` ou `platform-jobs.json` illisible, lui, fait échouer tout le chargement : la passe est abandonnée avant de toucher Quartz.
+- **`SchedulerBootstrap.removeUndeclaredJobs(emptyRegistry, jobsRootDir)`** : appelé au démarrage quand aucun job n'est déclaré (pour supprimer les jobs devenus orphelins), il refuse d'agir si `jobsRootDir` n'existe pas — un chemin erroné ou un volume non monté ne doit pas vider le cluster.
+- **`JobsSynchronizer.synchronize()`** lève une `IOException` si `jobs/` n'existe pas, pour la même raison.
+
+### 16.5 Assemblage dans les deux modes de déploiement
+
+**Standalone (`StandaloneMain`).** `main` choisit une commande (`resolveCommand`) : `run` (défaut), `sync`, `trigger`, `list`.
+
+- `run` : provisionne les répertoires tenant (`TenantDirectoryProvisioner.provision` avec les tenants de `TenantDatabaseRegistryLoader.loadPayOSSettings(payosConfigFile)`, qui inclut les `IConfigLoader`), charge le registre, appelle la nouvelle surcharge `StandaloneJobRegistration.registerJobs(bootstrap, registry, ...)` (qui retourne `null` et appelle `removeUndeclaredJobs` si le registre est vide), démarre Quartz, puis, si des dépendances ont été construites, démarre `JobsHotReloader` (si `hotReloadEnabled`) et `AdminHttpServer` (si `admin.httpPort > 0`). Pour l'endpoint, `PayOSConfig.settings` reçoit la configuration PayOS rechargée, avec `security.sessionStoreType` forcé à `memory` (`settingsForAdminSecurity`) car le module de session Redis n'est pas embarqué dans le jar standalone. Le shutdown hook ferme le tout.
+- `sync`, `trigger`, `list` (`runAdminCommand`) : construisent un `SchedulerBootstrap` **jamais démarré** — un client du job store du cluster, qui ne fait pas de check-in et ne déclenche aucun job — puis appellent `JobAdminService` sous le nom d'utilisateur système, canal `cli`. Codes de sortie : 0 succès, 1 `sync` avec des échecs, 2 erreur d'usage, 3 job inconnu.
+
+**Embarqué (`RuntimeIntegrationHook`).** `registerJobs` provisionne les répertoires à partir de `PayOSConfig.settings` (configuration live de l'hôte), charge le registre, enregistre les jobs, puis construit un `JobsSynchronizer` avec un `TenantSource` qui relit `PayOSConfig.settings` à chaque passe. La nouvelle méthode `startOperations(hotReloadEnabled, adminSettings)`, appelée par `TaskSchedulerRuntimeIntegration` avec les clés `task-scheduler.scheduler.hotReloadEnabled` et `task-scheduler.admin.*`, démarre le `JobsHotReloader` et l'`AdminHttpServer` ; `stop` les ferme. TSS utilise **sa propre instance** de `ConfigWatcher`, distincte de celle de `BootServer` (privée et statique côté PayOS), et l'endpoint réutilise la configuration `security` de l'hôte.
+
+### 16.6 Arguments et `triggerType` dans le `JobDataMap`
+
+Nouvelles constantes `IJobConfigSpec.JobData` : `DATA_ARGUMENTS = "arguments"`, `DATA_TRIGGER_TYPE = "triggerType"`, `DATA_TRIGGERED_BY = "triggeredBy"`, `TRIGGER_TYPE_CRON = "cron"`, `TRIGGER_TYPE_MANUAL = "manual"`. Nouvelles clés de configuration : `IJobConfigSpec.Scheduler.HOT_RELOAD_ENABLED` et le bloc `IJobConfigSpec.Admin` (`httpPort`, `platformRole`, `tenantRole`).
+
+- **Arguments.** Stockés en JSON dans le `JobDataMap` du job (donc dans la base Quartz partagée) : tous les nœuds exécutent un job avec les mêmes arguments, et une modification les atteint tous à la fois via la réconciliation. `ScriptJob.execute` les relit avec Jackson ; s'ils sont absents (job enregistré avant ce changement), il retombe sur `dependencies.jobArguments()`, le registre chargé au démarrage. Le script les reçoit par `context.getArguments()`.
+- **Déclenchement manuel.** `JobAdminService.trigger` vérifie que le job existe (`NoSuchElementException` sinon), puis appelle `Scheduler.triggerJob(jobKey, data)` avec `triggerType = manual` et `triggeredBy`. Quartz fusionne ces données avec celles du job pour cette seule exécution ; n'importe quel nœud du cluster peut l'exécuter, avec les mêmes règles qu'une exécution planifiée (quota par tenant, `@DisallowConcurrentExecution`, historique, métriques).
+- **`ScriptJob.runJob`** gagne une surcharge à 8 paramètres `(..., Map arguments, String triggerType)` ; l'ancienne surcharge à 6 paramètres délègue avec `(null, "cron")`.
+- **`JobExecutionEvent`** gagne un dernier composant `triggerType` (les fabriques existantes valent `cron` par défaut) et `withTriggerType(String)`. `ScriptJob` étiquette ses événements, `MisfireExecutionListener` lit le type dans le `JobDataMap` du trigger, et `JobMetricsEmitter` prend le tag `triggerType` dans l'événement au lieu d'une constante. La table d'historique `tss_job_execution` n'a pas changé (aucune migration).
+
+### 16.7 `TenantDirectoryProvisioner` et `JobsHotReloader`
+
+**`TenantDirectoryProvisioner`** (classe utilitaire, uniquement statique) :
+
+- `declaredTenantIds(settings)` retourne les clés de `multitenancy.tenants`.
+- `provision(root, tenantIds)` ne fait rien si `root` n'existe pas, lit `template.json` une seule fois, ignore `platform` et les identifiants qui ne sont pas des noms de répertoire sûrs (`[A-Za-z0-9][A-Za-z0-9._-]*`), ne touche jamais un répertoire existant, crée le répertoire et y écrit `forTenant(template, tenantId)` en UTF-8 — ou le laisse vide sans modèle.
+- `forTenant` remplace chaque `{{tenantId}}` dans le texte brut du modèle. `readTemplate` valide le modèle **après** substitution par un identifiant d'exemple (il doit être un objet JSON, sinon il n'est jamais copié) et signale par un WARN tout autre marqueur `{{...}}`, laissé tel quel.
+
+**`JobsHotReloader`** : `start(synchronizer)` enregistre un `ConfigWatcher` sur la racine `jobs/` et sur chaque répertoire tenant présent au démarrage (le `WatchService` n'est pas récursif et ne signale que les fichiers `.json`). Chaque événement (re)programme une passe sur un exécuteur mono-thread après 2 s de calme (`DEFAULT_DEBOUNCE_MILLIS`), ce qui regroupe une rafale d'écritures en une seule réconciliation. `reload()` capture et journalise toute erreur : le scheduler continue tel quel. `close()` arrête le watcher et l'exécuteur.
+
+### 16.8 `AdminHttpServer` et `AdminAccessPolicy`
+
+Routes sous `/tss/admin` :
+
+| Méthode et chemin | Opération | Réponses |
+| --- | --- | --- |
+| `GET /tss/admin/jobs[?tenantId=…]` | `list` | 200 `{"jobs": [...]}` |
+| `POST /tss/admin/jobs/trigger`, corps `{"tenantId": "...", "scriptPath": "..."}` (`tenantId` absent = job plateforme) | `trigger` | 202 `{"status": "TRIGGERED", ...}`, 400 sans `scriptPath`, 404 job inconnu |
+| `POST /tss/admin/sync` | `sync` | 200 avec le `ReconciliationReport` |
+
+Pour chaque requête, `AdminHttpServer` place l'identifiant de corrélation (en-tête de PayOS ou UUID) dans le MDC, convertit l'échange en `Request` PayOS (en-têtes dans une `TreeMap` insensible à la casse, car `Request.getHeader` est sensible à la casse) et appelle `AdminAccessPolicy.authenticate` :
+
+1. Pas d'en-tête `Authorization: Bearer …` → 401. Ce pré-contrôle est nécessaire car `check()` sans principal déclencherait une redirection de login OIDC.
+2. `ISecurityService.check(request, [platformRole, tenantRole])` valide le jeton (JWKS, émetteur, expiration) et les rôles, et écrit les enregistrements d'autorisation de PayOS ; un refus devient 401 ou 403.
+3. Le principal donne les rôles et `resolveTenantId(principal)` le tenant (dérivé du realm de l'émetteur). Un administrateur tenant sans tenant → 403.
+
+`Caller` décide ensuite : un administrateur plateforme peut tout faire ; un administrateur tenant peut `list` et `trigger` sur son propre tenant uniquement (un `list` sans filtre est restreint à son tenant) et jamais `sync`. Un tel refus de périmètre donne 403 et l'événement d'audit `TSS_ADMIN_DENIED` (`operation`, `targetTenantId`, `channel`).
+
+`JobAdminService` audite chaque opération avec `AuditLogger` : `TSS_JOB_TRIGGERED` (résultat `SUCCESS`, `FAILURE` ou `NOT_FOUND`) et `TSS_JOBS_SYNCHRONIZED` (`SUCCESS`, `PARTIAL` ou `FAILURE`), type de ressource `tss-job`, ressource `<groupe>/<scriptPath>`, champ `channel` (`cli` ou `http`). Un échec d'écriture d'audit est journalisé en ERROR mais ne transforme pas une action réussie en échec.
+
+### 16.9 Tests
+
+| Classe de test | Ce qu'elle prouve |
+| --- | --- |
+| `reconciliation/JobReconcilerTest` | Ajout sur un scheduler vide, job inchangé laissé tel quel, cron replanifié, bascule `parallelizable` qui change la classe en gardant le trigger, arguments stockés dans le `JobDataMap`, suppression d'un job non déclaré, tenant incomplet (ajouts seulement), mode `LIVE` qui ignore un nouveau tenant mais pas les jobs plateforme, cron invalide qui n'échoue que pour ce job. |
+| `bootstrap/JobsHotReloaderTest` | Un cron modifié est appliqué par `synchronize()` et par le rechargement à chaud, sans redémarrage ; un fichier illisible ou un `jobs/` absent ne touche pas Quartz ; un nouveau tenant est provisionné à chaud mais planifié au redémarrage. |
+| `admin/AdminHttpServerTest` | 401 sans jeton, 403 hors périmètre, 202/404/400 pour `trigger`, `sync` réservé à la plateforme, filtrage de `list` (avec un `ISecurityService` factice). |
+| `ManualTriggerEndToEndTest` | Un job déclenché à la main s'exécute immédiatement, avec les arguments stockés dans le `JobDataMap`. |
+| `registration/TenantDirectoryProvisionerTest` | Copie du modèle, personnalisation `{{tenantId}}`, répertoire vide sans modèle, répertoires existants intacts, modèle invalide jamais copié, identifiants dangereux refusés, `jobs/` absent non créé. |
+| `StandaloneMainTest`, `ScriptJobTest`, `JobConfigLoaderTest` (étendus) | Commandes CLI et codes de sortie ; arguments lus depuis le `JobDataMap` ; `incompleteTenants`. |
+
+### 16.10 Limites connues
+
+- Les jobs d'un nouveau tenant et un changement de `mappingFiles` exigent le redémarrage des nœuds (le `JobsSynchronizer` journalise un avertissement pour les `mappingFiles`).
+- Le rechargement à chaud dépend des événements du système de fichiers, que NFS et les mises à jour de ConfigMap Kubernetes ne délivrent pas de façon fiable ; `sync` est alors la voie à suivre.
+- Tous les nœuds doivent voir un contenu `jobs/` identique.
+- Un tenant retiré de la configuration PayOS garde son répertoire ; au démarrage suivant, ses jobs sont refusés (« tenant non déclaré »).
+- Une clé `default` sous `multitenancy.tenants` serait traitée comme un tenant par le provisionnement.
+- En mode embarqué, l'ajout d'un tenant dans PayOS ne déclenche pas à lui seul une passe TSS : il est pris en compte à la prochaine modification de `jobs/`, au prochain `sync` ou au redémarrage.

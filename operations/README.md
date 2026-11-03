@@ -8,7 +8,7 @@ For **operators** running PayOS in production: deployment, bundle encryption, se
 | --- | --- |
 | Deploying the runtime and bundles | [deployment.md](deployment.md) |
 | Running the notification service daemon | [notification-service.md](notification-service.md) |
-| Running the Task Scheduling System (TSS) — standalone or embedded | [task-scheduling-system-v16-2026-10-28.md](task-scheduling-system-v16-2026-10-28.md) |
+| Running the Task Scheduling System (TSS) — standalone or embedded, applying `jobs.json` changes without a restart (reconciliation, hot reload, `sync`), manual trigger from the command line or the secured admin HTTP endpoint | [task-scheduling-system-v17-2026-11-03.md](task-scheduling-system-v17-2026-11-03.md) |
 | TSS standalone smoke-test walkthrough — one worked example against a real bundle, plus 3 findings a real run surfaced (one fixed) | [tss-standalone-smoke-test-walkthrough-v2-2026-10-08.md](tss-standalone-smoke-test-walkthrough-v2-2026-10-08.md) |
 | Encrypting/packing bundles (`edc`) | [bundle-encryption.md](bundle-encryption.md) |
 | Managing secrets (Vault, rotation, `spm`) | [secrets-management.md](secrets-management.md) |
@@ -17,7 +17,7 @@ For **operators** running PayOS in production: deployment, bundle encryption, se
 | Exhaustive Micrometer/Prometheus metrics catalog | [metrics-catalog-v2-2026-09-11.md](metrics-catalog-v2-2026-09-11.md) |
 | Zero-downtime configuration reload | [hot-reload.md](hot-reload.md) |
 | Guide of all CLI tools | [cli-tools-guide.md](./cli-tools-guide.md) |
-| `payos-license-generator` setup guide — build, configure, run, generate a signed license, scrape its Prometheus `/metrics`, and optionally enable persistence to any JDBC database (H2 by default), verified against a real build and real HTTP requests | [payos-license-generator-setup-guide-v4-2026-10-29.md](payos-license-generator-setup-guide-v4-2026-10-29.md) |
+| `payos-license-generator` setup guide — build, configure, run, generate a signed license, scrape its Prometheus `/metrics`, and optionally enable persistence to any JDBC database (H2 by default), verified against a real build and real HTTP requests | [payos-license-generator-setup-guide-v7-2026-11-01.md](payos-license-generator-setup-guide-v7-2026-11-01.md) |
 
 ## Related references
 

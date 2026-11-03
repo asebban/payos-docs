@@ -3,6 +3,8 @@
 ## Status
 **<span style="color: orange;">Proposed</span>**
 
+> **Superseded (2026-11-02)** by [ADR-0009 v4](0009-task-scheduling-system-v4-2026-11-03.md), which adds JobRunr and Spring Batch to the evaluated options and re-scores all choices.
+
 ---
 
 ## Title

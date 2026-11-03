@@ -1,7 +1,7 @@
 # PayOS — Inventaire des aspects de sécurité implémentés
 
 Créé: 2026-06-07
-Dernier alignement: 2026-09-16
+Dernier alignement: 2026-11-03
 
 ## 1. Authentification
 
@@ -77,7 +77,7 @@ IAuditLogger  (interface) : Slf4jAuditLogger  (implémentation par défaut → J
 | Authentification | `logAuthSuccess()`, `logAuthFailure()` |
 | Autorisation | `logAuthorizationGranted()`, `logAuthorizationDenied()` |
 | Sessions | `logSessionCreated()`, `logSessionDestroyed()` |
-| Opérations privilégiées | `logTenantSimulatorActivated()` |
+| Opérations privilégiées | `logTenantSimulatorActivated()` ; Task Scheduling System : `TSS_JOB_TRIGGERED`, `TSS_JOBS_SYNCHRONIZED`, `TSS_ADMIN_DENIED` (voir §9) |
 | Cryptographie | `logDecryptionFailure()` |
 | Système | `logStartup()`, `logShutdown()`, `logApiExecution()` |
 
@@ -165,6 +165,40 @@ ma.s2m.payos.resources.api      → ApiResourceHandler (injection des bindings)
 
 ---
 
+## 9. Task Scheduling System — administration des jobs
+
+`payos-job-scheduler` (TSS) expose un endpoint HTTP d'administration (`/tss/admin/...`) et des commandes en ligne (`trigger`, `sync`, `list`) pour déclencher un job à la main, réaligner le scheduler sur les fichiers `jobs/` et lister les jobs planifiés. Détail : [operations §Administration](../../operations/task-scheduling-system-v17-2026-11-03.md#administration-manual-trigger-sync-and-list) et [ADR-0009 v4](../adr/0009-task-scheduling-system-v4-2026-11-03.md#administration-manual-trigger-sync-and-list).
+
+### Exposition
+
+- Endpoint désactivé par défaut (`task-scheduler.admin.httpPort` / `TSS_ADMIN_HTTP_PORT` = `0`), sur son propre port, séparé du trafic métier, pour pouvoir être filtré par pare-feu.
+- La CLI n'est accessible qu'avec un accès à l'hôte TSS et aux identifiants de son job store ; elle agit sous le nom d'utilisateur système.
+
+### Authentification et autorisation
+
+- Jeton OIDC obligatoire (`Authorization: Bearer ...`) ; sans jeton → **401**. Aucune redirection de login, aucun cookie de session.
+- Validation par l'`ISecurityService` de PayOS (`NimbusSecurityService` via `SecurityServiceFactory`) : signature (JWKS), émetteur, expiration, rôles. La configuration est celle du bloc `security` de PayOS (de l'hôte en mode embarqué).
+- RBAC à deux rôles, configurables : `tss-platform-admin` (toutes opérations, tous tenants, jobs plateforme, `sync`) et `tss-tenant-admin` (`list` et `trigger` sur **son propre tenant uniquement**, tenant déduit du realm émetteur du jeton). Hors périmètre → **403**.
+- Un déclenchement manuel suit les mêmes règles qu'une exécution planifiée : quota de concurrence par tenant, non-concurrence (`parallelizable: false`), historique, métriques.
+
+### Traçabilité
+
+| Événement | Résultat | Quand |
+| --- | --- | --- |
+| `TSS_JOB_TRIGGERED` | `SUCCESS`, `FAILURE`, `NOT_FOUND` | Chaque déclenchement manuel (CLI ou HTTP) |
+| `TSS_JOBS_SYNCHRONIZED` | `SUCCESS`, `PARTIAL`, `FAILURE` | Chaque `sync` (CLI ou HTTP) |
+| `TSS_ADMIN_DENIED` | `DENIED` | Appelant authentifié agissant hors de son périmètre (autre tenant, `sync` sans rôle plateforme) |
+
+Champs : `userId`, `tenantId`, `resourceType` = `tss-job`, `resourceId` = `<tenant ou platform>/<scriptPath>`, `channel` (`cli` ou `http`). Un jeton refusé par `check()` est tracé par les enregistrements d'autorisation de PayOS (`logAuthorizationDenied`). L'identifiant de corrélation (`X-Correlation-Id`) est placé dans le MDC.
+
+### Classes clés
+
+```
+ma.s2m.payos.scheduler.admin  → AdminHttpServer, AdminAccessPolicy, JobAdminService, AdminSettings
+```
+
+---
+
 ## Synthèse — Couverture PCI-DSS
 
 | Exigence PCI-DSS | Couverture PayOS |
@@ -174,5 +208,5 @@ ma.s2m.payos.resources.api      → ApiResourceHandler (injection des bindings)
 | **Req 7** — Restriction d'accès | RBAC, `requiredRoles`, tenant isolation |
 | **Req 8** — Identification et authentification | OIDC Nimbus, sessions, cookies sécurisés |
 | **Req 10** — Journalisation et surveillance | `AuditLogger`, tous événements critiques tracés |
-| **Req 10.2.1.5** — Actions administrateurs | `logTenantSimulatorActivated()` |
+| **Req 10.2.1.5** — Actions administrateurs | `logTenantSimulatorActivated()`, déclenchements manuels et `sync` TSS (`TSS_JOB_TRIGGERED`, `TSS_JOBS_SYNCHRONIZED`, `TSS_ADMIN_DENIED`) |
 | **Req 10.5 / 10.7** — Rétention des logs | Recommandations documentées (12 mois) |

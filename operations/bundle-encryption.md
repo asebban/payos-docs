@@ -96,6 +96,35 @@ avoid keys on the command line or in scripts:
 This mirrors the runtime's [secret service](../configuration/secret-service.md), so the same
 Vault or filesystem store can hold the bundle key.
 
+## Sourcing the key from a license file
+
+When `--key` is omitted, `edc` first checks for a license file before falling back to the secret
+provider above: if exactly one `*.lic` file is found directly under `--inputdir` (or
+`PAYOS_LICENSE_FILE_PATH` points to one — the same variable and convention `payos-kernel` itself
+uses to find its own license at boot, see
+[configuration/license-service-v2-2026-11-01.md](../configuration/license-service-v2-2026-11-01.md)),
+its `key_envelope.encrypted_key` is unwrapped via the configured secret provider's private key
+(the provider must support the asymmetric operations — i.e. it must be the editor's own key pair,
+not an arbitrary vault secret) and used as the encryption key instead of `encryptionKey`. No
+license found (and no override set) silently falls back to the pre-existing behavior, so every
+bundle packed before this capability existed keeps working unchanged.
+
+```bash
+edc --encryption pack --inputdir ./bundle \
+    --secret-provider filesystem --root ./editor-secrets \
+    --editor-id editor --editor-key-name editor-signing-key
+```
+
+| Flag | Env var | Default | Purpose |
+| --- | --- | --- | --- |
+| `--editor-id` | `PAYOS_EDITOR_ID` | `editor` | Namespace/id of the editor's signing key pair in the secret provider — not a PayOS tenant. |
+| `--editor-key-name` | `PAYOS_EDITOR_KEY_NAME` | `editor-signing-key` | Key pair name. |
+
+A license-derived key is AES-256 (32 raw bytes) — unlike the 16-character `--key`/`encryptionKey`
+path below, it is never typed or stored as text. `.lic` files themselves are never
+encrypted/decrypted by `pack`/`unpack` — the kernel must be able to read one in plaintext before
+it has any key at all, so `edc` always copies it through unchanged.
+
 ## Operational guidance
 
 - Treat the bundle key as a high-value secret: store it in Vault, restrict access, and rotate
@@ -110,3 +139,4 @@ Vault or filesystem store can hold the bundle key.
 - [cli-tools/edc.md](../cli-tools/edc.md)
 - [secrets-management.md](secrets-management.md)
 - [architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md) — the full key lifecycle this page's CLI reference fits into: generating the key, deciding custody, delivering to a client, and rotating it.
+- [architecture/license-validation-architecture-v3-2026-11-01.md](../architecture/license-validation-architecture-v3-2026-11-01.md) — how the license-derived key path above fits into license validation on the `payos-kernel` side.

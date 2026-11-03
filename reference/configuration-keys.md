@@ -294,3 +294,31 @@ Resolution order for each: system property → env var → bootstrap/server key.
 Wired into `BootServer` since 2026-07-27 (`ConnectorFrameworkInitializer`). Do not confuse with the
 `service-adapters-dir` legacy SPI loader above (formerly `service-adapters-dir`) — see the linked doc's
 "Distinguishing this from the service-adapter loader" section.
+
+## `task-scheduler` (Task Scheduling System) — [task-scheduling-system-v8-2026-11-03.md](../configuration/task-scheduling-system-v8-2026-11-03.md)
+
+Defined in `ma.s2m.payos.scheduler.config.IJobConfigSpec` (`payos-job-scheduler`), not in `IConfigSpec`. In embedded mode these fields are read from the `task-scheduler` block of `payos.json`; in standalone mode the same fields are read from `tss-config.json` (blocks `database`, `scheduler`, `jobs`, `admin`), each overridable by the environment variable or system property shown.
+
+| Key (embedded: `task-scheduler.` + key) | Standalone env var | Default | Purpose |
+| --- | --- | --- | --- |
+| `enabled` | — (embedded only) | `false` | Start TSS inside `payos-runtime`. |
+| `database.dbUrl` | `TSS_DB_URL` | *(required)* | JDBC URL of TSS's own schema (`QRTZ_*`, `tss_job_execution`). |
+| `database.dbUser` | `TSS_DB_USER` | — | Username. |
+| `database.dbPassword` | `TSS_DB_PASSWORD` | — | Password. |
+| `database.dbDriver` | `TSS_DB_DRIVER` | *(required)* | JDBC driver class. |
+| `database.dbVendor` | `TSS_DB_VENDOR` | generic | `postgresql` or `oracle` (Quartz delegate). |
+| `database.dbSchema` | `TSS_DB_SCHEMA` | — | Schema name. |
+| `database.dbMaxPoolSize` | `TSS_DB_MAX_POOL_SIZE` | `5` | TSS connection pool size. |
+| `scheduler.schedulerInstanceName` | `TSS_SCHEDULER_INSTANCE_NAME` | `TSS-Cluster` | Cluster name, identical on every node. |
+| `scheduler.threadCount` | `TSS_THREAD_COUNT` | `5` | Quartz worker threads per node. |
+| `scheduler.maxConcurrentExecutionsPerTenant` | `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` | `0` (off) | Per-tenant concurrency quota, cluster-wide. |
+| `scheduler.maxParallelWorkersPerJob` | `TSS_MAX_PARALLEL_WORKERS_PER_JOB` | `4` | `$Parallel.forEach` worker ceiling. |
+| `scheduler.metricsHttpPort` | `TSS_METRICS_HTTP_PORT` | `0` (off) | Standalone only: Prometheus `/metrics` port. |
+| `scheduler.hotReloadEnabled` | `TSS_HOT_RELOAD_ENABLED` | `true` | Apply `jobs/` edits without a restart. |
+| `jobs.rootDir` | `TSS_JOBS_ROOT_DIR` | `jobs` | Standalone only: jobs root (embedded: always `<bundle>/jobs`). |
+| `jobs.payosConfigFile` | `TSS_PAYOS_CONFIG_FILE` | `payos.json` | Standalone only: PayOS configuration read for tenants and databases. |
+| `admin.httpPort` | `TSS_ADMIN_HTTP_PORT` | `0` (off) | Admin endpoint port (`/tss/admin/...`). |
+| `admin.platformRole` | `TSS_ADMIN_PLATFORM_ROLE` | `tss-platform-admin` | Role allowed every admin operation. |
+| `admin.tenantRole` | `TSS_ADMIN_TENANT_ROLE` | `tss-tenant-admin` | Role allowed `list`/`trigger` on its own tenant. |
+
+The standalone config file itself is located by `TSS_CONFIG_FILE` (default `tss-config.json`). Job declarations (`jobs/<tenantId>/jobs.json`, `custom-jobs.json`, `jobs/platform-jobs.json`, `jobs/template.json`) are a separate file format, described in the linked page.

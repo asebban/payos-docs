@@ -90,6 +90,17 @@ only, then switch) — that finer-grained mechanism exists and is tested (see
 For everything else, perform a controlled restart (e.g. `/stop` then relaunch, or your
 service manager). See [deployment.md](deployment.md).
 
+## Task Scheduling System jobs (`jobs/`)
+
+The Task Scheduling System (TSS, `payos-job-scheduler`) reloads its own job declarations (`jobs/<tenantId>/jobs.json`, `custom-jobs.json`, `jobs/platform-jobs.json`) without a restart, with the same `ConfigWatcher` mechanism but **its own watcher instance**, separate from the one described above, in both standalone and embedded modes. A change to `payos.json` does not reload TSS jobs, and a change to `jobs/` does not trigger `BootServer.reloadConfiguration()`.
+
+- About 2 s after the last change, TSS re-reads `jobs/` and reconciles its scheduler: new jobs are scheduled, changed cron expressions, `parallelizable` flags and `arguments` are applied, and jobs no longer declared are deleted. The change reaches every node of the cluster at once.
+- A file that cannot be parsed abandons the pass; the scheduler keeps running as it was.
+- Controlled by `task-scheduler.scheduler.hotReloadEnabled` (embedded) or `TSS_HOT_RELOAD_ENABLED` (standalone), on by default, independent of `config-hot-reload-enabled`. When it is off, or on volumes that do not deliver file events (NFS, Kubernetes ConfigMaps), run the TSS `sync` command instead.
+- Still requires a TSS restart: the first jobs of a brand-new tenant, and a change of a tenant's `mappingFiles`.
+
+See [operations §Changing jobs without a restart](task-scheduling-system-v17-2026-11-03.md#changing-jobs-without-a-restart).
+
 ## Next
 
 - [deployment.md](deployment.md)

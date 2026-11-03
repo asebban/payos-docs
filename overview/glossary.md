@@ -115,3 +115,20 @@ response, payload)` emits optional analytics/business insight. See [developer/wr
 
 **Webhook dispatcher** (`$WebHooks`)
 : The `IWebhookDispatcher` implementation that delivers webhook events over HTTP. See [developer/webhooks-and-hooks.md](../developer/webhooks-and-hooks.md).
+
+## Task scheduling concepts
+
+**Task Scheduling System (TSS)**
+: `payos-job-scheduler`, the platform's clustered job scheduler built on Quartz. Runs standalone (its own process) or embedded in `payos-runtime`. See [ADR-0009 v4](../architecture/adr/0009-task-scheduling-system-v4-2026-11-03.md) and [operations/task-scheduling-system-v17-2026-11-03.md](../operations/task-scheduling-system-v17-2026-11-03.md).
+
+**Job script**
+: A JavaScript file exporting `execute(context)`, run by TSS on a cron schedule or on demand, with `$DB`, `$PlatformDB`, `$Parallel` and `$Logger`. Declared in `jobs/<tenantId>/jobs.json`, `custom-jobs.json` or `jobs/platform-jobs.json`. See [developer/task-scheduler-guide-v15-2026-11-03.md](../developer/task-scheduler-guide-v15-2026-11-03.md).
+
+**Job reconciliation**
+: The TSS step that aligns the scheduler with the `jobs/` files (the source of truth): it adds new jobs, applies changed cron expressions, `parallelizable` flags and arguments, and deletes jobs no longer declared. Runs at startup, on hot reload and on `sync`.
+
+**Manual trigger**
+: Running one TSS job now, outside its schedule, with the `trigger` command or the secured `/tss/admin/jobs/trigger` endpoint. The run is tagged `triggerType = manual` and audited as `TSS_JOB_TRIGGERED`.
+
+**Jobs template** (`jobs/template.json`)
+: The model TSS copies into `jobs/<tenantId>/jobs.json` when it creates the directory of a newly declared tenant, with every `{{tenantId}}` replaced by the tenant id. See [configuration/task-scheduling-system-v8-2026-11-03.md](../configuration/task-scheduling-system-v8-2026-11-03.md#jobstemplatejson--model-for-new-tenants).

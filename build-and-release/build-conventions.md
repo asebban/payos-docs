@@ -76,4 +76,4 @@ mvn -q -DskipTests -f payos-runtime/pom.xml package
 
 - [versioning.md](versioning.md)
 - [module-map.md](module-map.md)
-- [kernel-build-profiles.md](kernel-build-profiles.md) — dev vs production build profiles for payos-kernel
+- [license-validator-mode-v1-2026-10-31.md](license-validator-mode-v1-2026-10-31.md) — dev vs production license validator selection for payos-kernel (a runtime toggle, not a build profile)

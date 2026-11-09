@@ -167,7 +167,7 @@ ma.s2m.payos.resources.api      → ApiResourceHandler (injection des bindings)
 
 ## 9. Task Scheduling System — administration des jobs
 
-`payos-job-scheduler` (TSS) expose un endpoint HTTP d'administration (`/tss/admin/...`) et des commandes en ligne (`trigger`, `sync`, `list`) pour déclencher un job à la main, réaligner le scheduler sur les fichiers `jobs/` et lister les jobs planifiés. Détail : [operations §Administration](../../operations/task-scheduling-system-v17-2026-11-03.md#administration-manual-trigger-sync-and-list) et [ADR-0009 v4](../adr/0009-task-scheduling-system-v4-2026-11-03.md#administration-manual-trigger-sync-and-list).
+`payos-job-scheduler` (TSS) expose un endpoint HTTP d'administration (`/tss/admin/...`) et des commandes en ligne (`trigger`, `sync`, `list`) pour déclencher un job à la main, réaligner le scheduler sur les fichiers `jobs/` et lister les jobs planifiés. Détail : [operations §Administration](../../operations/task-scheduling-system-v19-2026-11-09.md#administration-manual-trigger-sync-and-list) et [ADR-0009 v4](../adr/0009-task-scheduling-system-v4-2026-11-03.md#administration-manual-trigger-sync-and-list).
 
 ### Exposition
 

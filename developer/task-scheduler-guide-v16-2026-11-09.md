@@ -1,14 +1,14 @@
 Created: 2026-10-06
-Last updated: 2026-11-03
-Version: 15
+Last updated: 2026-11-09
+Version: 16
 
 # Task Scheduling System: developer guide
 
-A self-contained, start-to-finish guide to writing and configuring job scripts for the Task Scheduling System (`payos-job-scheduler`, "TSS") — a Quartz-backed, clustered scheduler that fires your script on a cron schedule, separate from the HTTP/TCP/queue request path the rest of this guide otherwise covers. This page covers everything you need as a developer: how to configure TSS itself, where your job's own configuration lives, every field your script's `execute(context)` function can use, a realistic batch-job example, and what happens to an execution that your script never even gets to run. The condensed config-key reference (for a quick lookup once you already know this material) is [configuration/task-scheduling-system-v8-2026-11-03.md](../configuration/task-scheduling-system-v8-2026-11-03.md); the full day-2 operational picture (clustering, deployment modes, starting/stopping) is [operations/task-scheduling-system-v17-2026-11-03.md](../operations/task-scheduling-system-v17-2026-11-03.md).
+A self-contained, start-to-finish guide to writing and configuring job scripts for the Task Scheduling System (`payos-job-scheduler`, "TSS") — a Quartz-backed, clustered scheduler that fires your script on a cron schedule, separate from the HTTP/TCP/queue request path the rest of this guide otherwise covers. This page covers everything you need as a developer: how to configure TSS itself, where your job's own configuration lives, every field your script's `execute(context)` function can use, a realistic batch-job example, and what happens to an execution that your script never even gets to run. The condensed config-key reference (for a quick lookup once you already know this material) is [configuration/task-scheduling-system-v9-2026-11-09.md](../configuration/task-scheduling-system-v9-2026-11-09.md); the full day-2 operational picture (clustering, deployment modes, starting/stopping) is [operations/task-scheduling-system-v19-2026-11-09.md](../operations/task-scheduling-system-v19-2026-11-09.md).
 
 ## 1. Configuring TSS itself (`tss-config.json`)
 
-TSS is its own standalone deployable — it does **not** read `bootstrap.json` or go through `PayOSConfig`. Its own config file (default `tss-config.json`, overridable via the `TSS_CONFIG_FILE` environment variable or system property) is resolved relative to `--scheduler-base-dir` (the directory you pass when launching `payos-job-scheduler`'s own jar; defaults to the process's working directory).
+TSS is its own standalone deployable — it does **not** read `bootstrap.json` or go through `PayOSConfig`. Its own config file (default `tss-config.json`, overridable via the `TSS_CONFIG_FILE` environment variable or system property) is resolved relative to `--scheduler-base-dir` (the directory you pass when launching `payos-job-scheduler`'s own jar; defaults to the process's working directory) unless it is an absolute path. Builds before 2026-11-09 resolved it against the working directory: a file found only there is still used, with a `WARN` asking to move it. When no file is found, TSS logs `No TSS config file at '<path>'` and reads every value from environment variables and system properties. Full start-up procedure: [operations/tss-startup-and-cli-guide-v1-2026-11-09.md](../operations/tss-startup-and-cli-guide-v1-2026-11-09.md).
 
 Every key below resolves across three tiers, in priority order: **environment variable** → **system property** (same name) → **a field in `tss-config.json`**, nested under the block named below. The first tier with a non-blank value wins — so you can override any single field with an env var without touching the file at all, which is exactly how you'd keep `TSS_DB_PASSWORD` out of the file entirely (see below).
 
@@ -35,7 +35,7 @@ TSS's own isolated schema (Quartz's own `QRTZ_*` tables, plus `tss_job_execution
 | `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` | `maxConcurrentExecutionsPerTenant` | `0` (disabled) | Global default for the per-tenant concurrency quota — §8 covers this in full. |
 | `TSS_MAX_PARALLEL_WORKERS_PER_JOB` | `maxParallelWorkersPerJob` | `4` | Ceiling on how many worker threads a single `$Parallel.forEach` call may use to fan a **single execution's own batch** out — a completely different knob from the per-tenant quota above: that one limits how many whole job executions a tenant may have running at once, this one limits how much fan-out happens *inside* one of them. See §4. |
 | `TSS_METRICS_HTTP_PORT` | `metricsHttpPort` | `0` (disabled) | **Standalone mode only** — see §12 for why. A positive value starts a tiny Prometheus scrape HTTP server on that port. |
-| `TSS_HOT_RELOAD_ENABLED` | `hotReloadEnabled` | `true` | Applies your edits to `jobs.json`/`custom-jobs.json`/`platform-jobs.json` (new job, cron expression, `parallelizable`, `arguments`, removed job) about 2 s after you save, without restarting TSS. A brand-new tenant still needs a restart. See [operations §Changing jobs without a restart](../operations/task-scheduling-system-v17-2026-11-03.md#changing-jobs-without-a-restart). |
+| `TSS_HOT_RELOAD_ENABLED` | `hotReloadEnabled` | `true` | Applies your edits to `jobs.json`/`custom-jobs.json`/`platform-jobs.json` (new job, cron expression, `parallelizable`, `arguments`, removed job) about 2 s after you save, without restarting TSS. A brand-new tenant still needs a restart. See [operations §Changing jobs without a restart](../operations/task-scheduling-system-v19-2026-11-09.md#changing-jobs-without-a-restart). |
 
 ### Full `tss-config.json` example
 
@@ -69,7 +69,7 @@ TSS's own isolated schema (Quartz's own `QRTZ_*` tables, plus `tss_job_execution
 | Key | JSON field | Default | Effect |
 | --- | --- | --- | --- |
 | `TSS_JOBS_ROOT_DIR` | `rootDir` | `jobs` | The directory TSS walks for your job definitions — §2 covers its exact layout. Resolved relative to `--scheduler-base-dir`. |
-| `TSS_PAYOS_CONFIG_FILE` | `payosConfigFile` | `payos.json` | The PayOS config file TSS reads your tenant's database credentials from — **standalone mode only**. Tenants contributed by a PayOS config loader plugin (e.g. `tenant-config-loader-database`, which declares tenants from a registry table in the platform database) are picked up too, exactly as the runtime sees them — see the [operations guide](../operations/task-scheduling-system-v17-2026-11-03.md#tenant-and-platform-database-resolution). In embedded mode (TSS running inside `payos-runtime`), this is never read; TSS reuses the host's already-loaded tenant configuration directly, so this key has no effect there at all. |
+| `TSS_PAYOS_CONFIG_FILE` | `payosConfigFile` | `payos.json` | The PayOS config file TSS reads your tenant's database credentials from — **standalone mode only**. Tenants contributed by a PayOS config loader plugin (e.g. `tenant-config-loader-database`, which declares tenants from a registry table in the platform database) are picked up too, exactly as the runtime sees them — see the [operations guide](../operations/task-scheduling-system-v19-2026-11-09.md#tenant-and-platform-database-resolution). In embedded mode (TSS running inside `payos-runtime`), this is never read; TSS reuses the host's already-loaded tenant configuration directly, so this key has no effect there at all. |
 
 ### Running TSS locally to try your script
 
@@ -86,7 +86,7 @@ java -jar target/payos-job-scheduler-<version>-standalone.jar --scheduler-base-d
   trigger --tenant acme-corp --script jobs/reconciliation.js
 ```
 
-Use `--platform` instead of `--tenant` for a platform-level job, and `list` to see every scheduled job with its next fire time. The same operations exist as a secured HTTP endpoint — see [operations §Administration](../operations/task-scheduling-system-v17-2026-11-03.md#administration-manual-trigger-sync-and-list).
+Use `--platform` instead of `--tenant` for a platform-level job, and `list` to see every scheduled job with its next fire time. The same operations exist as a secured HTTP endpoint — see [operations §Administration](../operations/task-scheduling-system-v19-2026-11-09.md#administration-manual-trigger-sync-and-list).
 
 `--scheduler-base-dir` is the one directory everything else (`tss-config.json`, `jobs/`, your script files, the PayOS config file) is resolved relative to. For local testing, H2 works fine as `TSS_DB_VENDOR` (or just omit it).
 
@@ -108,7 +108,7 @@ jobs/
 - **One subdirectory per tenant**, named exactly as the tenant id. TSS walks every immediate subdirectory of the jobs root and treats each as a tenant — a directory literally named `platform` is rejected (that name is reserved).
 - **`jobs.json`** — a tenant's own baseline job set. This is where you register a new job for a tenant in the normal case.
 - **`custom-jobs.json`** (optional, same directory) — for overriding or adding to what `jobs.json` already declares, without editing that file directly. Loaded *after* `jobs.json`; a matching `scriptPath` is replaced, a new one is added. Every entry here must declare a `tenant` field matching the directory exactly, or it's rejected.
-- **`template.json`** (optional, at the jobs root) — the model for new tenants. At startup, hot reload and `sync`, TSS creates `jobs/<tenantId>/` for every tenant declared in the PayOS configuration (`multitenancy.tenants`) that doesn't have one yet, with a `jobs.json` made from this file, every `{{tenantId}}` replaced by that tenant's id (e.g. `"arguments": {"folder": "/exports/{{tenantId}}"}`) — so declaring a tenant in PayOS is enough to give it its default jobs. An existing tenant directory is never touched, and editing `template.json` later doesn't change tenants already created. The new tenant's jobs are scheduled at the next restart (§ operations, [Safety rules](../operations/task-scheduling-system-v17-2026-11-03.md#safety-rules)).
+- **`template.json`** (optional, at the jobs root) — the model for new tenants. At startup, hot reload and `sync`, TSS creates `jobs/<tenantId>/` for every tenant declared in the PayOS configuration (`multitenancy.tenants`) that doesn't have one yet, with a `jobs.json` made from this file, every `{{tenantId}}` replaced by that tenant's id (e.g. `"arguments": {"folder": "/exports/{{tenantId}}"}`) — so declaring a tenant in PayOS is enough to give it its default jobs. An existing tenant directory is never touched, and editing `template.json` later doesn't change tenants already created. The new tenant's jobs are scheduled at the next restart (§ operations, [Safety rules](../operations/task-scheduling-system-v19-2026-11-09.md#safety-rules)).
 - **`platform-jobs.json`** (optional, at the jobs root, not nested in any tenant directory) — jobs with no tenant owner at all. Only `platform-jobs.json` jobs get the read+write `$PlatformDB`; every tenant job's `$PlatformDB` is read-only (§3). A platform-level job also never gets `$Parallel` at all — see §4.
 
 Only `implementation.type: "script"` + `trigger.type: "cron"` entries are loaded today; other combinations are silently skipped (reserved for a future phase), not rejected.
@@ -121,7 +121,7 @@ Only `implementation.type: "script"` + `trigger.type: "cron"` entries are loaded
 | `jobs[].id` | Yes | Log-display identifier only. The job's real unique key is `(tenantId, scriptPath)`, not `id` — two different tenants (or a tenant and the platform) can reuse the same `id` with no conflict. |
 | `jobs[].implementation.type` | Yes | Must be `"script"`. |
 | `jobs[].implementation.script` | Yes | The script path. Resolved at execution time against a **shared, flat script pool** under the scheduler base directory — not nested per tenant. Two tenants can declare the exact same `script` path; they read the identical file, scheduled independently, each against their own `$DB`. |
-| `jobs[].implementation.mappingFiles` | No | Array of Hibernate mapping files this job's script needs on `$DB`. A tenant's *effective* mapping-file set is the union across every one of that tenant's jobs — declare only what this specific job touches, you don't need to repeat mappings another of the tenant's jobs already declared. |
+| `jobs[].implementation.mappingFiles` | No | Array of Hibernate mapping files this job's script needs on `$DB`. A tenant's *effective* mapping-file set is the union across every one of that tenant's jobs — declare only what this specific job touches, you don't need to repeat mappings another of the tenant's jobs already declared. An entry that is not a file on disk is loaded as a classpath resource, including from the connector JARs of the PayOS `service-adapters-dir` — so a mapping shipped in a connector is declared by its resource path, e.g. `mappings/PayosAuditEvent.hbm.xml`. |
 | `jobs[].trigger.type` | Yes | Must be `"cron"`. |
 | `jobs[].trigger.expression` | Yes | A standard Quartz cron expression (`"0 0 2 * * ?"` = every day at 02:00). |
 | `jobs[].arguments` | No | A free-form JSON object handed to your script as `context.getArguments()` — see §6.1. Absent means an empty object; anything that isn't a JSON object is logged and ignored (the job itself still registers). |
@@ -580,8 +580,8 @@ password=*** invalid
 
 ## Next
 
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v8-2026-11-03.md) — condensed config-key reference, for a quick lookup once you know this material.
-- [Operations: Task Scheduling System](../operations/task-scheduling-system-v17-2026-11-03.md) — deployment modes, clustering, starting/stopping, operational troubleshooting.
-- [Architecture: Task Scheduling System class diagram](../architecture/job-scheduler-class-diagram-v19-2026-11-03.md) — internal design, every production class (French).
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v9-2026-11-09.md) — condensed config-key reference, for a quick lookup once you know this material.
+- [Operations: Task Scheduling System](../operations/task-scheduling-system-v19-2026-11-09.md) — deployment modes, clustering, starting/stopping, operational troubleshooting.
+- [Architecture: Task Scheduling System class diagram](../architecture/job-scheduler-class-diagram-v20-2026-11-09.md) — internal design, every production class (French).
 - [Data access](data-access.md) / [Platform database usage](platform-database-usage.md) — the same `$DB`/`$PlatformDB` concepts as used by API scripts, for comparison.
 - [Tenant quota enforcement](tenant-quota-enforcement.md) — the separate, HTTP-request-side quota mechanism.

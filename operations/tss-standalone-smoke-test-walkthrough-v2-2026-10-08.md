@@ -4,7 +4,7 @@ Version: 2
 
 # TSS standalone smoke-test walkthrough (`client2` bundle)
 
-A worked example of preparing and running a real Task Scheduling System (TSS) deployment against an existing PayOS bundle, plus three real findings live runs surfaced — one of them (a scheduler startup-ordering race) fixed along the way. This is a walkthrough of one concrete setup, not a reference — for the general configuration contract see [Running the Task Scheduling System (TSS)](task-scheduling-system-v17-2026-11-03.md) and its [class diagram](../architecture/job-scheduler-class-diagram-v19-2026-11-03.md).
+A worked example of preparing and running a real Task Scheduling System (TSS) deployment against an existing PayOS bundle, plus three real findings live runs surfaced — one of them (a scheduler startup-ordering race) fixed along the way. This is a walkthrough of one concrete setup, not a reference — for the general configuration contract see [Running the Task Scheduling System (TSS)](task-scheduling-system-v19-2026-11-09.md) and its [class diagram](../architecture/job-scheduler-class-diagram-v20-2026-11-09.md).
 
 ## Goal and target
 

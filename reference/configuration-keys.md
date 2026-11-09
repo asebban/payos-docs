@@ -295,7 +295,7 @@ Wired into `BootServer` since 2026-07-27 (`ConnectorFrameworkInitializer`). Do n
 `service-adapters-dir` legacy SPI loader above (formerly `service-adapters-dir`) — see the linked doc's
 "Distinguishing this from the service-adapter loader" section.
 
-## `task-scheduler` (Task Scheduling System) — [task-scheduling-system-v8-2026-11-03.md](../configuration/task-scheduling-system-v8-2026-11-03.md)
+## `task-scheduler` (Task Scheduling System) — [task-scheduling-system-v9-2026-11-09.md](../configuration/task-scheduling-system-v9-2026-11-09.md)
 
 Defined in `ma.s2m.payos.scheduler.config.IJobConfigSpec` (`payos-job-scheduler`), not in `IConfigSpec`. In embedded mode these fields are read from the `task-scheduler` block of `payos.json`; in standalone mode the same fields are read from `tss-config.json` (blocks `database`, `scheduler`, `jobs`, `admin`), each overridable by the environment variable or system property shown.
 
@@ -321,4 +321,4 @@ Defined in `ma.s2m.payos.scheduler.config.IJobConfigSpec` (`payos-job-scheduler`
 | `admin.platformRole` | `TSS_ADMIN_PLATFORM_ROLE` | `tss-platform-admin` | Role allowed every admin operation. |
 | `admin.tenantRole` | `TSS_ADMIN_TENANT_ROLE` | `tss-tenant-admin` | Role allowed `list`/`trigger` on its own tenant. |
 
-The standalone config file itself is located by `TSS_CONFIG_FILE` (default `tss-config.json`). Job declarations (`jobs/<tenantId>/jobs.json`, `custom-jobs.json`, `jobs/platform-jobs.json`, `jobs/template.json`) are a separate file format, described in the linked page.
+The standalone config file itself is located by `TSS_CONFIG_FILE` (default `tss-config.json`); a relative path resolves against the scheduler base directory (`--scheduler-base-dir`), an absolute one is used as is. Job declarations (`jobs/<tenantId>/jobs.json`, `custom-jobs.json`, `jobs/platform-jobs.json`, `jobs/template.json`) are a separate file format, described in the linked page.

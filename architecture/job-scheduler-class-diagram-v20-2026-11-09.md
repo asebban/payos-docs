@@ -1,11 +1,11 @@
 Created : 2026-09-30
-Dernière mise à jour : 2026-11-03
-Version : v19
+Dernière mise à jour : 2026-11-09
+Version : v20
 
 # Diagramme de classes — Task Scheduling System (`payos-job-scheduler`)
 
 **Audience :** architectes, tech leads, contributeurs à `payos-job-scheduler`, `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`
-**Périmètre :** les Stories 1.1 et 1.2 (§4-8, 10-11, y compris la résolution du gap AC1), **plus les Stories 2.1 et 2.2 de l'Epic 2** (§13 — package `history/`, détection de misfire, quota de concurrence par tenant, requêtes d'historique), **plus la Story 2.3** (§14 — package `metrics/`, émission `PayOSMetrics`, exposition HTTP Prometheus en mode standalone), **plus la Story 2.4** (§15 — masquage des données sensibles via `history/SensitiveDataScrubber`, réutilisation de `SensitiveFieldMasker`), **plus la gestion du cycle de vie des jobs** (§16, ajouté 2026-11-03 — packages `reconciliation/` et `admin/`, rechargement à chaud de `jobs/`, provisionnement des répertoires tenant depuis `jobs/template.json`, arguments stockés dans le `JobDataMap`, déclenchement manuel et `triggerType`), plus les classes d'appui touchées dans `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`.
+**Périmètre :** les Stories 1.1 et 1.2 (§4-8, 10-11, y compris la résolution du gap AC1), **plus les Stories 2.1 et 2.2 de l'Epic 2** (§13 — package `history/`, détection de misfire, quota de concurrence par tenant, requêtes d'historique), **plus la Story 2.3** (§14 — package `metrics/`, émission `PayOSMetrics`, exposition HTTP Prometheus en mode standalone), **plus la Story 2.4** (§15 — masquage des données sensibles via `history/SensitiveDataScrubber`, réutilisation de `SensitiveFieldMasker`), **plus la gestion du cycle de vie des jobs** (§16, ajouté 2026-11-03 — packages `reconciliation/` et `admin/`, rechargement à chaud de `jobs/`, provisionnement des répertoires tenant depuis `jobs/template.json`, arguments stockés dans le `JobDataMap`, déclenchement manuel et `triggerType`), **plus le chargement de `service-adapters-dir` en mode standalone et la correction de la réconciliation des jobs plateforme** (§16.11, ajouté 2026-11-09), **plus la résolution de `tss-config.json` par rapport au répertoire de base** (§16.12, ajouté 2026-11-09), plus les classes d'appui touchées dans `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`.
 **Trou connu, assumé, pas caché :** les Stories 1.3, 1.4 et 1.5 de l'Epic 1 (jobs de niveau plateforme, `custom-jobs.json`, `ExclusiveScriptJob`/`@DisallowConcurrentExecution`) ne sont **pas encore** couvertes par ce diagramme malgré leur statut `done` — ce document n'a pas été tenu à jour entre la Story 1.2 et la Story 2.1/2.2. Voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour le détail exact de ce qui manque. Les classes citées au §13 qui dépendent de mécanismes introduits par ces stories manquantes (ex. `ExclusiveScriptJob`) sont signalées comme telles plutôt que silencieusement supposées déjà connues.
 **Document vivant :** ce diagramme sera mis à jour au fil des prochaines stories — voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour ce qui manque encore.
 
@@ -384,13 +384,16 @@ classDiagram
         -envLookup Function~String,String~
         -propertyLookup Function~String,String~
         -configFileContents JsonNode
-        +load() StandaloneConfigLoader$
+        +load(schedulerBaseDir) StandaloneConfigLoader$
         +load(envLookup, propertyLookup) StandaloneConfigLoader$
+        +load(envLookup, propertyLookup, schedulerBaseDir) StandaloneConfigLoader$
+        ~resolveConfigFile(configuredPath, schedulerBaseDir) File$
         +resolve(key, jsonBlockName, jsonFieldName) String
     }
     class TenantDatabaseRegistryLoader {
         <<job-scheduler>>
         +loadPayOSSettings(payosConfigFile) Map$
+        ~initializeServiceAdapters(bootstrapConfig, settings, bootstrapDirectory) void$
         +resolveForTenants(payosSettings, jobRegistry) Map~String, DatabaseTenantDefinition~$
         +createDatabaseService(tenantRegistry) IDatabaseService$
     }
@@ -528,13 +531,13 @@ classDiagram
 **`RuntimeIntegrationHook`** est le point d'intégration pour un déploiement embarqué dans `payos-runtime` — mêmes garanties de construction que `StandaloneMain`, via `SchedulerBootstrap`. **Diffère de `StandaloneMain` sur un point clé :** il réutilise directement la configuration déjà chargée par l'hôte — `PayOSConfig.getRuntimeBaseDirectory()` (le `--bundle-path` de `payos-runtime`) pour `jobs/`/les scripts, et `PayOSConfig.settings`/`getPlatformDatabaseService()` pour le registre tenant — sans jamais relire de fichier lui-même. Une erreur de câblage ici est **journalisée, pas propagée** : TSS est un sous-système secondaire dans `payos-runtime`, une mauvaise configuration qui ne concerne que TSS ne doit jamais faire échouer le démarrage de tout le runtime.
 
 **`TenantDatabaseRegistryLoader`** (nouvelle classe, résolution du gap AC1) construit ce qui alimente `$DB` côté TSS — **entièrement program-to-interfaces** (correction utilisateur, 2026-10-01 : la première version instanciait directement `ma.s2m.DynamicDataAccessService`, une classe concrète de `database-service`) :
-- **`loadPayOSSettings(File)`** reproduit le comportement réel de `ConfigLoader.loadServerConfig` du kernel : le fichier passé (`payos.json`/`bootstrap.json`) n'est lu que pour sa clé `configDir` (défaut `"."`) — les vrais réglages (`database-service`, `multitenancy`, `applications`, ...) vivent dans les fichiers `*.json` de ce répertoire, pas forcément dans `payos.json` lui-même. Délègue le scan/fusion du répertoire à `ConfigLoader.loadConfigByDirectory` (la même méthode que le kernel, pas une réimplémentation), sans jamais appeler `ConfigLoader.loadServerConfig` lui-même — cette méthode déclenche aussi des effets de bord propres au boot du kernel (chargement des service adapters, initialisation du secret service/de la clé de chiffrement, chargement des `applications`) que TSS ne doit pas reproduire. *Limite connue, documentée plutôt que silencieuse :* les URL `jdbc:h2:file:...` relatives ne sont pas renormalisées par rapport au répertoire de base du runtime (mécanisme privé du kernel, non réutilisable ici) — ne concerne que les déploiements H2 fichier avec chemin relatif, pas les bases réseau (PostgreSQL/Oracle/...) des déploiements multi-tenant réels.
+- **`loadPayOSSettings(File)`** reproduit le comportement réel de `ConfigLoader.loadServerConfig` du kernel : le fichier passé (`payos.json`/`bootstrap.json`) n'est lu que pour sa clé `configDir` (défaut `"."`) — les vrais réglages (`database-service`, `multitenancy`, `applications`, ...) vivent dans les fichiers `*.json` de ce répertoire, pas forcément dans `payos.json` lui-même. Délègue le scan/fusion du répertoire à `ConfigLoader.loadConfigByDirectory` (la même méthode que le kernel, pas une réimplémentation), sans jamais appeler `ConfigLoader.loadServerConfig` lui-même — cette méthode déclenche aussi des effets de bord propres au boot du kernel (chargement des service adapters, initialisation du secret service/de la clé de chiffrement, chargement des `applications`) que TSS ne doit pas reproduire. **Exception depuis le 2026-11-09 :** le chargement des service adapters (`service-adapters-dir`) est reproduit, via le `ServiceAdapterLoader` du kernel, parce que les fournisseurs SPI et les fichiers de mapping livrés dans ces JARs en dépendent — voir §16.11. *Limite connue, documentée plutôt que silencieuse :* les URL `jdbc:h2:file:...` relatives ne sont pas renormalisées par rapport au répertoire de base du runtime (mécanisme privé du kernel, non réutilisable ici) — ne concerne que les déploiements H2 fichier avec chemin relatif, pas les bases réseau (PostgreSQL/Oracle/...) des déploiements multi-tenant réels.
 - **`resolveForTenants(payosSettings, jobRegistry)`** appelle `DatabaseServiceInitializer.resolveTenantDatabaseConnections` (voir ci-dessous) pour **tous** les tenants déclarés dans `payosSettings`, puis ne conserve que ceux présents dans `jobRegistry` (les tenants qui ont réellement des jobs sous `jobs/`) — construisant pour chacun un `DatabaseTenantDefinition` (**type `payos-foundation`, neutre vis-à-vis du framework** — pas `DynamicDataAccessService.TenantConfig`), avec pour `hibernateMappingFiles` l'union des `mappingFiles` déclarés par les jobs de ce tenant (`TenantConfig.allMappingFiles()`, §8) et `maxRequestsPerMinute = -1` (« pas de limite » — un champ que `DynamicDataAccessService` ne lit de toute façon jamais lui-même, le quota étant un concern au niveau requête API, pas exécution de job). Lève `IllegalStateException` si un tenant de `jobRegistry` n'a pas d'entrée correspondante sous `multitenancy.tenants`.
 - **`createDatabaseService(tenantRegistry)`** construit l'`IDatabaseService` réel à partir de ce `Map<String, DatabaseTenantDefinition>`, via `ServiceLoader<IDatabaseServiceFactory>` — **exactement le même mécanisme SPI, et le même fournisseur** (`DynamicDatabaseServiceFactory` de `dynamic-database-service`, déjà déclaré dans son `META-INF/services`), que `DatabaseServiceInitializer.createDatabaseService` utilise côté kernel. `payos-job-scheduler` ne nomme ainsi **plus jamais** l'implémentation concrète `database-service` nulle part dans son code de production — vérifié par grep (seuls des commentaires Javadoc expliquant cette absence mentionnent encore `DynamicDataAccessService`).
 
 **`DatabaseServiceInitializer.resolveTenantDatabaseConnections(settings)`** (kernel, `payos` — méthode ajoutée pour TSS, 2026-10-01) est une extraction **pure, sans effet de bord**, de la logique de résolution tenant→base de données que `initialize()` exécutait déjà en interne, tenant par tenant : résolution d'une référence explicite par nom (`database-service.name`), repli sur la base par défaut si absente, puis lecture des champs de connexion (`url`/`username`/`password`/`driverClass`/`dialect`/`ddlAuto`/`schema`). Aucune construction de `DataSource`, aucune écriture dans `PayOSConfig`, aucun `ServiceLoader` — c'est pour cela qu'elle est sûre à appeler depuis `payos-job-scheduler`. `initialize()` a été refactorée pour appeler cette même logique extraite en interne (`resolveOneTenantConnection`) — comportement observable inchangé, vérifié par 11 nouveaux tests de régression (`DatabaseServiceInitializerTest`, cette classe n'avait aucune couverture avant). Ne résout **pas** les fichiers de mapping Hibernate — ce sous-système (`applications`/`authorized-tenants`) reste délibérément hors périmètre pour TSS (voir le choix hybride ci-dessous).
 
-**`StandaloneConfigLoader`** résout chaque clé de config à travers trois niveaux, dans l'ordre : variable d'environnement → propriété système → fichier JSON. Les lookups sont injectés (`Function<String,String>`) plutôt que d'appeler `System.getenv`/`System.getProperty` directement, pour rester testable.
+**`StandaloneConfigLoader`** résout chaque clé de config à travers trois niveaux, dans l'ordre : variable d'environnement → propriété système → fichier JSON. Les lookups sont injectés (`Function<String,String>`) plutôt que d'appeler `System.getenv`/`System.getProperty` directement, pour rester testable. Le fichier JSON est localisé par `resolveConfigFile` par rapport au répertoire de base du scheduler, que `StandaloneMain` lui transmet — voir §16.12.
 
 **`IJobConfigSpec`** (`config/`, ajoutée post-Story 1.2 ; renommée depuis `ITSSConfigSpec` à la demande de l'utilisateur, le nom initial ne reflétant plus bien son périmètre une fois `JobsFile` ajoutée) centralise **tous** les noms de clés utilisés par TSS, de trois natures distinctes volontairement regroupées dans une seule interface :
 - **Configuration externe** (`tss-config.json`, via `StandaloneConfigLoader`) — `Database` (`name = "database"`, puis `URL`/`USER`/`PASSWORD`/`DRIVER`/`VENDOR`/`SCHEMA`/`MAX_POOL_SIZE`, chacune avec son couple clé-env-ou-propriété + nom de champ JSON correspondant, ex. `URL = "TSS_DB_URL"` / `URL_JSON_FIELD = "dbUrl"`), `Scheduler` (`name = "scheduler"`, puis `INSTANCE_NAME`, `THREAD_COUNT`, avec leurs valeurs par défaut), et **`Jobs`** (`name = "jobs"`, ajoutée avec la résolution du gap AC1 — `ROOT_DIR`/`ROOT_DIR_JSON_FIELD`/`DEFAULT_ROOT_DIR` pour l'emplacement de `jobs/`, `PAYOS_CONFIG_FILE`/`PAYOS_CONFIG_FILE_JSON_FIELD`/`DEFAULT_PAYOS_CONFIG_FILE` pour le fichier de config PayOS — les deux résolus relativement au répertoire de base du scheduler, uniquement en mode standalone), plus `CONFIG_FILE_KEY`/`DEFAULT_CONFIG_FILE` au niveau racine.
@@ -770,7 +773,7 @@ Une troisième source de confusion possible, apparue avec la résolution du gap 
 ## 12. Références
 
 - [ADR-0009 — Task Scheduling System](adr/0009-task-scheduling-system.md) (v1) et sa révision courante [ADR-0009 v4](adr/0009-task-scheduling-system-v4-2026-11-03.md), qui contient le diagramme de classes d'ensemble du module
-- [Operations: Task Scheduling System](../operations/task-scheduling-system-v17-2026-11-03.md) — le pendant opérationnel de ce document : comment configurer et démarrer TSS (standalone ou embarqué), tss-config.json, jobs.json, résolution tenant/plateforme, limitations connues
+- [Operations: Task Scheduling System](../operations/task-scheduling-system-v19-2026-11-09.md) — le pendant opérationnel de ce document : comment configurer et démarrer TSS (standalone ou embarqué), tss-config.json, jobs.json, résolution tenant/plateforme, limitations connues
 - `payos-job-scheduler/_bmad-output/planning-artifacts/architecture.md` — architecture narrative complète du module, tenue par le workflow BMad (décisions, corrections, séquence d'implémentation)
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/1-1-resilient-clustered-scheduling-infrastructure.md` — Story 1.1 (infrastructure de clustering)
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/1-2-register-and-run-a-script-job-on-a-cron-schedule.md` — Story 1.2 (enregistrement + exécution), y compris le journal de correction architecturale (Debug Log) menant à `IDatabaseService.openDedicatedSessionFor`, et la note de résolution de la Task 5 (gap AC1 — choix hybride, extraction kernel, câblage complet)
@@ -895,14 +898,14 @@ Comme pour les tables `QRTZ_*` de Quartz elles-mêmes, **TSS ne crée jamais cet
 | `outcome` | `SUCCESS`, `SCRIPT_ERROR`, `MISFIRE`, `QUOTA_REJECTED`, ou `ABANDONED` (ligne d'un nœud crashé, clôturée par l'exécution de récupération qui l'a remplacée — Story 2.2, suivi de revue round 1, `JobExecutionListener.onRecoveryStarted`). |
 | `failure_message` | Tronqué en Java à 2000 caractères avant l'écriture (correctif de revue de code, Story 2.1 round 1) pour que jamais un message trop long ne fasse échouer l'écriture elle-même. |
 
-Voir [configuration/task-scheduling-system-v8-2026-11-03.md](../configuration/task-scheduling-system-v8-2026-11-03.md) et [operations/task-scheduling-system-v17-2026-11-03.md](../operations/task-scheduling-system-v17-2026-11-03.md) pour les requêtes directes types.
+Voir [configuration/task-scheduling-system-v9-2026-11-09.md](../configuration/task-scheduling-system-v9-2026-11-09.md) et [operations/task-scheduling-system-v19-2026-11-09.md](../operations/task-scheduling-system-v19-2026-11-09.md) pour les requêtes directes types.
 
 ### 13.9 Références (Stories 2.1/2.2)
 
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-1-live-and-point-in-time-view-of-job-executions.md` — Story 2.1, y compris la correction du design de pool de connexions et le déplacement de `JobExecutionListener`.
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-2-query-execution-history-and-failure-diagnosis.md` — Story 2.2, y compris la recherche sur le quota (`TenantPolicyService`/`ISlidingWindowCounter` écarté), le constat empirique sur la récupération après crash, et le suivi same-day sur la surcharge par tenant.
-- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v15-2026-11-03.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`/`$Parallel`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v8-2026-11-03.md) — référence de configuration (quota global/par tenant, récupération après crash).
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v16-2026-11-09.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`/`$Parallel`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v9-2026-11-09.md) — référence de configuration (quota global/par tenant, récupération après crash).
 
 ## 14. Story 2.3 — métriques (`metrics/`) et exposition HTTP standalone
 
@@ -1031,7 +1034,7 @@ public final class StandaloneMetricsServer implements Closeable {
 
 ### 14.6 Référence
 
-Voir [configuration/task-scheduling-system-v8-2026-11-03.md](../configuration/task-scheduling-system-v8-2026-11-03.md), [developer guide §12](../developer/task-scheduler-guide-v15-2026-11-03.md#12-metrics) et [operations guide](../operations/task-scheduling-system-v17-2026-11-03.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
+Voir [configuration/task-scheduling-system-v9-2026-11-09.md](../configuration/task-scheduling-system-v9-2026-11-09.md), [developer guide §12](../developer/task-scheduler-guide-v16-2026-11-09.md#12-metrics) et [operations guide](../operations/task-scheduling-system-v19-2026-11-09.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
 
 ### 14.7 Références (Story 2.3)
 
@@ -1079,7 +1082,7 @@ Repère les fragments `key: value`/`key=value` dont la clé correspond à `Sensi
 
 ### 15.5 Référence
 
-Voir [developer guide §13](../developer/task-scheduler-guide-v15-2026-11-03.md#13-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v17-2026-11-03.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
+Voir [developer guide §13](../developer/task-scheduler-guide-v16-2026-11-09.md#13-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v19-2026-11-09.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
 
 ### 15.6 Références (Story 2.4)
 
@@ -1092,7 +1095,7 @@ Voir [developer guide §13](../developer/task-scheduler-guide-v15-2026-11-03.md#
 
 ## 16. Cycle de vie des jobs — réconciliation, rechargement à chaud, administration, provisionnement
 
-**Ajouté 2026-11-03.** Ce paragraphe couvre un ensemble de changements demandés ensemble, sans story BMad dédiée : modifier un job (cron, `parallelizable`, `arguments`) ou en supprimer un sans redémarrer, déclencher un job à la main (CLI et HTTP sécurisé), et créer automatiquement le répertoire `jobs/<tenantId>/` d'un nouveau tenant. Le principe directeur : **les fichiers de `jobs/` sont l'unique source de vérité**, et un seul composant (`JobReconciler`) aligne Quartz sur eux. La décision et ses conséquences sont dans [ADR-0009 v4](adr/0009-task-scheduling-system-v4-2026-11-03.md) ; le mode d'emploi est dans [operations §Changing jobs without a restart](../operations/task-scheduling-system-v17-2026-11-03.md#changing-jobs-without-a-restart) et [operations §Administration](../operations/task-scheduling-system-v17-2026-11-03.md#administration-manual-trigger-sync-and-list).
+**Ajouté 2026-11-03.** Ce paragraphe couvre un ensemble de changements demandés ensemble, sans story BMad dédiée : modifier un job (cron, `parallelizable`, `arguments`) ou en supprimer un sans redémarrer, déclencher un job à la main (CLI et HTTP sécurisé), et créer automatiquement le répertoire `jobs/<tenantId>/` d'un nouveau tenant. Le principe directeur : **les fichiers de `jobs/` sont l'unique source de vérité**, et un seul composant (`JobReconciler`) aligne Quartz sur eux. La décision et ses conséquences sont dans [ADR-0009 v4](adr/0009-task-scheduling-system-v4-2026-11-03.md) ; le mode d'emploi est dans [operations §Changing jobs without a restart](../operations/task-scheduling-system-v19-2026-11-09.md#changing-jobs-without-a-restart) et [operations §Administration](../operations/task-scheduling-system-v19-2026-11-09.md#administration-manual-trigger-sync-and-list).
 
 ### 16.1 Vue d'ensemble — nouvelles classes
 
@@ -1266,7 +1269,7 @@ classDiagram
 
 1. En mode `LIVE`, un job de tenant dont le groupe n'existe pas encore dans Quartz est ignoré (`skipped`) : la session base de données d'un tenant n'est ouverte qu'au démarrage d'un nœud, un tel job échouerait à chaque exécution. Il sera planifié au prochain démarrage (mode `STARTUP`).
 2. Absent de Quartz : `scheduleJob(detail, trigger)` → `added`.
-3. Tenant incomplet (`custom-jobs.json` illisible, voir §16.4) : le job existant n'est pas touché → `skipped`.
+3. Tenant incomplet (`custom-jobs.json` illisible, voir §16.4) : le job existant n'est pas touché → `skipped`. Un job plateforme (`tenantId == null`) n'est jamais concerné : le test vérifie d'abord que le tenant n'est pas nul, car l'ensemble immuable `incompleteTenants()` (`Set.copyOf`) lève une `NullPointerException` sur `contains(null)` — défaut corrigé le 2026-11-06, qui faisait échouer chaque passe pour tout job plateforme déjà planifié.
 4. `JobDetail` différent (comparaison `sameDetail` : classe, `requestsRecovery`, et les quatre clés `jobId`, `tenantId`, `scriptPath`, `arguments` du `JobDataMap`) : `addJob(detail, true, true)` remplace le job **en conservant ses triggers** → `updated`. C'est ce qui permet de basculer `parallelizable` (changement de classe `ScriptJob` ↔ `ExclusiveScriptJob`) sans perdre la planification.
 5. Expression cron différente : `rescheduleJob(triggerKey, nouveauTrigger)` ; trigger absent : `scheduleJob(trigger)` → `rescheduled`.
 
@@ -1336,7 +1339,9 @@ Pour chaque requête, `AdminHttpServer` place l'identifiant de corrélation (en-
 
 | Classe de test | Ce qu'elle prouve |
 | --- | --- |
-| `reconciliation/JobReconcilerTest` | Ajout sur un scheduler vide, job inchangé laissé tel quel, cron replanifié, bascule `parallelizable` qui change la classe en gardant le trigger, arguments stockés dans le `JobDataMap`, suppression d'un job non déclaré, tenant incomplet (ajouts seulement), mode `LIVE` qui ignore un nouveau tenant mais pas les jobs plateforme, cron invalide qui n'échoue que pour ce job. |
+| `reconciliation/JobReconcilerTest` | Ajout sur un scheduler vide, job inchangé laissé tel quel, cron replanifié, bascule `parallelizable` qui change la classe en gardant le trigger, arguments stockés dans le `JobDataMap`, suppression d'un job non déclaré, tenant incomplet (ajouts seulement), mode `LIVE` qui ignore un nouveau tenant mais pas les jobs plateforme, cron invalide qui n'échoue que pour ce job, job plateforme déjà planifié replanifié sans échec (régression de la `NullPointerException`, §16.3). |
+| `bootstrap/StandaloneConfigLoaderTest` (étendu) | `tss-config.json` par défaut lu dans le répertoire de base et non dans le répertoire de travail ; `TSS_CONFIG_FILE` relatif résolu sous le répertoire de base ; repli sur un fichier présent seulement dans le répertoire de travail ; fichier absent résolu sous le répertoire de base (§16.12). |
+| `bootstrap/TenantDatabaseRegistryLoaderTest` (étendu) | Un fichier de mapping livré comme ressource dans un JAR de `service-adapters-dir`, déclaré avec un chemin relatif à `payos.json`, est visible du classloader des service adapters après `loadPayOSSettings`. |
 | `bootstrap/JobsHotReloaderTest` | Un cron modifié est appliqué par `synchronize()` et par le rechargement à chaud, sans redémarrage ; un fichier illisible ou un `jobs/` absent ne touche pas Quartz ; un nouveau tenant est provisionné à chaud mais planifié au redémarrage. |
 | `admin/AdminHttpServerTest` | 401 sans jeton, 403 hors périmètre, 202/404/400 pour `trigger`, `sync` réservé à la plateforme, filtrage de `list` (avec un `ISecurityService` factice). |
 | `ManualTriggerEndToEndTest` | Un job déclenché à la main s'exécute immédiatement, avec les arguments stockés dans le `JobDataMap`. |
@@ -1349,5 +1354,36 @@ Pour chaque requête, `AdminHttpServer` place l'identifiant de corrélation (en-
 - Le rechargement à chaud dépend des événements du système de fichiers, que NFS et les mises à jour de ConfigMap Kubernetes ne délivrent pas de façon fiable ; `sync` est alors la voie à suivre.
 - Tous les nœuds doivent voir un contenu `jobs/` identique.
 - Un tenant retiré de la configuration PayOS garde son répertoire ; au démarrage suivant, ses jobs sont refusés (« tenant non déclaré »).
+
+### 16.11 Classloader des service adapters en mode standalone (2026-11-06)
+
+**Problème constaté.** Sur un bundle réel, le TSS standalone échouait au démarrage avec `MappingNotFoundException: Mapping (RESOURCE) not found : mappings/PayosAuditEvent.hbm.xml`. La configuration plateforme listait deux mappings livrés comme ressources dans des JARs, et non comme fichiers :
+- `PayosAuditEvent.hbm.xml` est livré dans le connecteur `payos-database-audit-trail` (répertoire `service-adapters-dir`) ;
+- `PayosQueueOutbox.hbm.xml` est livré dans `payos-server-queue`, intégré au jar de `payos-runtime`.
+
+Le runtime les trouve parce que `BootServer` construit le classloader des service adapters et en fait le classloader de contexte. `HibernateUtil` (`database-service`) cherche chaque mapping d'abord comme fichier, puis comme ressource du classpath via ce classloader de contexte. Le TSS standalone ne construisait pas ce classloader : `PayOSConfig.getServiceAdapterClassLoader()` retombait sur le classloader de contexte du thread, sans les JARs de `connectors/`.
+
+**Corrections :**
+- **`TenantDatabaseRegistryLoader.initializeServiceAdapters(bootstrapConfig, settings, bootstrapDirectory)`**, appelée par `loadPayOSSettings` avant la boucle des `IConfigLoader`, lit `service-adapters-dir` (dans `payos.json`, sinon dans les réglages fusionnés). Un chemin relatif est résolu par rapport au répertoire de `payos.json`, comme le `--bundle-path` du runtime, et non par rapport au répertoire de travail. Elle délègue ensuite à `ServiceAdapterLoader.initialize` du kernel, qui garde sa priorité propriété système → `PAYOS_SERVICE_ADAPTERS_DIR` → réglage. Le classloader n'est reconstruit que si le répertoire résolu change, car `sync` et le provisionnement des tenants relisent la configuration. Les `IConfigLoader` et `IDatabaseServiceFactory` de ces JARs sont désormais découverts en standalone, ce qui supprime la limite « seuls les fournisseurs inclus dans le jar standalone ».
+- **`StandaloneJobRegistration.registerJobs`** installe `PayOSConfig.getServiceAdapterClassLoader()` comme classloader de contexte pendant `createDatabaseService` et `DatabaseServiceInitializer.initializePlatform`, puis restaure le précédent dans un `finally`. Les mappings ne sont lus qu'à la construction des `SessionFactory`, donc le changement n'a pas besoin de durer au-delà.
+- **`payos-server-queue`** devient une dépendance `optional` de `payos-job-scheduler`, sans son `payos-kernel` transitif, uniquement pour embarquer `mappings/PayosQueueOutbox.hbm.xml` dans le jar standalone. `optional` évite de modifier l'arbre de dépendances de `payos-runtime`, qui l'intègre déjà, sur le même modèle que `tenant-config-loader-database`.
+
+Le mode embarqué n'est pas concerné : `RuntimeIntegrationHook` s'exécute sur le thread principal de `BootServer`, dont le classloader de contexte est déjà celui des service adapters, et il réutilise les bases déjà ouvertes par l'hôte.
+
+### 16.12 Emplacement de `tss-config.json` (2026-11-09)
+
+**Avant.** `StandaloneConfigLoader.load()` ne recevait pas le répertoire de base du scheduler : `tss-config.json`, ou un `TSS_CONFIG_FILE` relatif, était cherché dans le répertoire de travail du processus, contrairement à `jobs/`, aux scripts et au fichier PayOS, tous résolus par rapport à `--scheduler-base-dir`. Un fichier introuvable était ignoré sans message, et le démarrage échouait ensuite sur `Missing required configuration 'TSS_DB_URL'`.
+
+**Maintenant.**
+- `StandaloneMain` résout d'abord le répertoire de base (`resolveSchedulerBaseDir`), puis appelle `StandaloneConfigLoader.load(schedulerBaseDir)`, pour `run` comme pour les commandes `sync`, `list` et `trigger`.
+- `resolveConfigFile(configuredPath, schedulerBaseDir)` applique les règles dans l'ordre :
+  - un chemin absolu est utilisé tel quel ;
+  - sinon, le chemin (ou `tss-config.json`) est cherché sous le répertoire de base ;
+  - s'il n'y est pas mais existe par rapport au répertoire de travail, c'est l'ancien emplacement : il est utilisé avec un `WARN` qui invite à le déplacer, pour ne pas casser les déploiements existants ;
+  - à défaut, le chemin retenu est celui sous le répertoire de base.
+- Quand ce fichier n'existe pas, `load` le journalise en INFO (`No TSS config file at '<chemin>'`). Ce n'est pas une erreur, car toutes les valeurs peuvent venir de l'environnement.
+- La surcharge `load(envLookup, propertyLookup)`, utilisée par les tests, garde le répertoire de travail comme base.
+
+Les URL H2 `file:` relatives et les chemins relatifs des fichiers de mapping restent résolus par rapport au répertoire de travail : ce comportement vient du kernel (`HibernateUtil`, JDBC) et n'est pas modifié ici.
 - Une clé `default` sous `multitenancy.tenants` serait traitée comme un tenant par le provisionnement.
 - En mode embarqué, l'ajout d'un tenant dans PayOS ne déclenche pas à lui seul une passe TSS : il est pris en compte à la prochaine modification de `jobs/`, au prochain `sync` ou au redémarrage.

@@ -159,4 +159,4 @@ edc --encryption pack --inputdir ./bundle \
 
 - [operations/bundle-encryption.md](../operations/bundle-encryption.md)
 - [operations/secrets-management.md](../operations/secrets-management.md)
-- [architecture/license-validation-architecture-v3-2026-11-01.md](../architecture/license-validation-architecture-v3-2026-11-01.md)
+- [architecture/license-validation-architecture-v4-2026-11-16.md](../architecture/license-validation-architecture-v4-2026-11-16.md)

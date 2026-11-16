@@ -1,16 +1,18 @@
 # Architecture — Validation de licence
 
 **Créé le :** 2026-08-19
-**Dernière mise à jour :** 2026-11-01
-**Version :** v3
-**Audience :** architectes, tech leads, contributeurs à `payos-kernel`, `payos-foundation`, `payosv2-packer`, `payos-license-generator`
-**Périmètre :** `ma.s2m.payos.license` (kernel), `ma.s2m.payos.license.LicenseFileLocator` + `ma.s2m.payos.security.SplitKeyGuard`/`CryptoService` (foundation), `ma.s2m.Main`/`PayOSPacker` (packer), `ma.s2m.payos.license.core` (generator)
+**Dernière mise à jour :** 2026-11-16
+**Version :** v4
+**Audience :** architectes, tech leads, contributeurs à `payos-kernel`, `payos-foundation`, `payosv2-packer`, `payos-license-generator`, `payos-pm`
+**Périmètre :** `ma.s2m.payos.license` (kernel), `ma.s2m.payos.license.LicenseFileLocator` + `ma.s2m.payos.security.SplitKeyGuard`/`CryptoService` (foundation), `ma.s2m.Main`/`PayOSPacker` (packer), `ma.s2m.payos.license.core` (generator), `ma.s2m.payos.pm.cpm.CapabilityManager`/`Cpm` (pm)
 
 > Remplace intégralement la version v0 (2026-08-19) de ce document, qui décrivait un `BootServer` câblant `DevLicenseValidator` en dur et un `LicenseValidator` ne vérifiant que l'existence du fichier. Le mécanisme décrit ci-dessous (sélection par variable d'environnement, validation cryptographique réelle, convention de localisation du fichier de licence, intégration avec `payosv2-packer`) est celui effectivement implémenté et testé (94 tests `payos-license-generator`, 649 tests `payos-kernel`, 22 tests `payosv2-packer`, tous verts).
 >
 > **v2 (2026-10-31)** : remplace le triplet matériel (`mac_address`/`cpu_id`/`motherboard_uuid`) de §11 par un identifiant unique fourni par l'OS (`MachineGuid` Windows, `/etc/machine-id` Linux) — découvert en préparant un test réel que l'ancien mécanisme ne fonctionne plus du tout sur un Windows moderne (`wmic` supprimé) et exige root sous Linux (`dmidecode`). Changement de contrat avec `payos-license-generator` (`machine_bindings.identifiers[]`), implémenté et testé des deux côtés.
 >
 > **v3 (2026-11-01)** : renomme `editor-tenant-id`/`PAYOS_EDITOR_TENANT_ID`/`--editor-tenant-id` en `editor-id`/`PAYOS_EDITOR_ID`/`--editor-id` partout (§3, §7, §10) — ce n'est pas un tenant PayOS (un client peut avoir plusieurs tenants ; il n'y a qu'un seul éditeur), juste le namespace de l'éditeur dans le secret provider, réutilisant par accident le paramètre générique `tenantId` du SPI `IAsymmetricCryptoSecretProvider`.
+>
+> **v4 (2026-11-16)** : §14 annonçait l'enforcement des entitlements/quotas comme hors scope — ce n'est plus le cas. Nouvelle §16 : `LicenseQuotaAuditor` (boot, kernel) compare la somme des quotas `requestsPerMinute` de tous les tenants déclarés à `entitlements.quotas.requests_per_minute` de la licence ; `cpm --install` (`payos-pm`, qui dépend déjà de `payos-kernel`) refuse d'installer une capability dont l'id de base n'est pas dans `entitlements.services[]` ; `ResourceLocator` (kernel) applique la même vérification à chaque résolution de ressource appartenant à une capability, au runtime. `LicenseContext` gagne `entitledCapabilityIds()` (§8), dérivé une fois de `entitlements.services[]` — `entitlements` entièrement absent du document (licence antérieure à ce concept) donne `null` (aucune restriction) ; `entitlements` présent mais sans `services[]` donne un ensemble vide (zéro capability entitlée), une distinction délibérée pour ne jamais casser silencieusement une licence existante qui n'a jamais eu ce champ.
 
 ---
 
@@ -31,6 +33,7 @@
 13. [Ajouter un validateur custom](#13-ajouter-un-validateur-custom)
 14. [Hors scope / limites connues](#14-hors-scope--limites-connues)
 15. [Considérations de sécurité](#15-considérations-de-sécurité)
+16. [Enforcement des entitlements et des quotas](#16-enforcement-des-entitlements-et-des-quotas)
 
 ---
 
@@ -193,7 +196,7 @@ if (sourceDecryptionKey != null) {
 
 `CryptoService.setKey(...)` zéroise à son tour le tableau reçu avant de retourner (il protège la clé dans *son propre* `SplitKeyGuard`) — à aucun moment la clé ne traîne dans une variable locale non nettoyée. C'est cette clé, maintenant dans `CryptoService`, qui permettra à `ConfigLoader.loadServerConfig()` de déchiffrer `payos.json` s'il est chiffré.
 
-`entitlements()`/`quotas()` sont conservés mais n'ont aujourd'hui aucun consommateur — voir §14.
+`quotas()` est lu par `LicenseQuotaAuditor` au boot (§16). `entitlements()` lui-même reste un accès brut, mais `entitledCapabilityIds()` en dérive une fois, à la population, l'ensemble des ids de `entitlements.services[]` — lu par `cpm` à l'installation et par `ResourceLocator` à chaque résolution de ressource de capability (§16). La distinction `null`/ensemble vide est délibérée et porte un sens métier précis, pas juste « pas de licence » : `null` signifie « aucune restriction » — soit aucune licence validée pour ce process (mode dev), soit une licence valide dont le document n'a **pas du tout** de champ `entitlements` (licence antérieure à ce concept, ou éditeur qui ne le déclare pas) ; un ensemble vide (non-null) signifie l'inverse — la licence déclare bien `entitlements`, donc un `services[]` absent ou vide veut dire littéralement « zéro capability entitlée », et doit tout refuser. Les deux consommateurs (`cpm`, `ResourceLocator`) ignorent la vérification uniquement sur `null`, jamais sur un ensemble vide.
 
 ---
 
@@ -263,7 +266,6 @@ Voir [developer/license-validation-v2-2026-11-01.md](../developer/license-valida
 
 ## 14. Hors scope / limites connues
 
-- **Enforcement des entitlements/quotas** — `LicenseContext.entitlements()`/`quotas()` sont peuplés mais ne sont lus par aucune logique métier (`CapabilityRegistry`, `TenantPolicyService`) ; câblage réel différé.
 - **Le repli vault `editor-secret-service`/`encryptionKey`** n'a pas été retiré — décision explicite (voir §9).
 - **Collecte manuelle de `machine_bindings.identifiers` à la génération** — contrairement à l'ancien triplet matériel, les commandes (`reg query .../MachineGuid`, `/etc/machine-id`) sont désormais standard et triviales à exécuter soi-même, mais rien n'automatise encore leur collecte ni leur envoi vers `payos-license-generator` (voir §11) — processus manuel aujourd'hui.
 - **La validation de licence ne se re-déclenche jamais au hot-reload** — comme avant ce travail, le résultat vaut pour la durée de vie du process.
@@ -277,6 +279,18 @@ Voir [developer/license-validation-v2-2026-11-01.md](../developer/license-valida
 - L'identité du signataire (`tenantId`/`keyName`) vient toujours de la configuration du kernel vérificateur, jamais d'un champ du document sous vérification (§5, point 3).
 - La clé de déchiffrement du code source n'existe jamais en clair plus longtemps qu'un appel de méthode : `SplitKeyGuard` la fragmente immédiatement, et chaque tableau d'octets intermédiaire est explicitement zéroisé (`Arrays.fill`) dès qu'il n'est plus nécessaire.
 - Un jar shadé non classifié comme dépendance de bibliothèque est un risque de supply-chain silencieux (§12) — toujours classifier l'artefact déployable (`shadedClassifierName`) quand un module shadé est aussi consommé comme dépendance.
+
+---
+
+## 16. Enforcement des entitlements et des quotas
+
+Trois mécanismes distincts, tous dérivés du même `LicenseContext` peuplé par `LicenseValidator` (§5, §8) — aucun ne réimplémente une lecture ou une validation cryptographique de la licence.
+
+**Quotas — somme au boot (`LicenseQuotaAuditor`, kernel).** Après la validation de licence et le chargement de `payos.json` (`BootServer`, juste avant l'audit de compatibilité runtime), `LicenseQuotaAuditor.audit(config, LicenseContext.getInstance().quotas())` additionne le plafond `requestsPerMinute` effectif de chaque tenant déclaré sous `multitenancy.tenants` — résolu par `TenantPolicyService.resolveEffectiveQuotaLimit(tenantId)`, extrait de l'ancienne logique de `validateQuota` pour être réutilisable en lecture pure — et la compare à `entitlements.quotas.requests_per_minute`. Un tenant dont le quota n'est pas borné et activé (`default-tenant-quotas.enabled=false`, ou un plafond résolu `<= 0`) est lui-même rapporté comme un problème, plutôt que d'être silencieusement exclu de la somme — un tenant non borné ne peut jamais être concilié avec une licence qui, elle, est forcément finie. `licenseQuotas == null` (mode dev, pas de licence validée) court-circuite l'audit entièrement. Contrairement à l'audit de compatibilité runtime juste après, il n'y a pas d'échappatoire `warnOnly` : dépasser ce que la licence autorise est toujours un échec dur au boot, comme chaque autre vérification de `LicenseValidator`.
+
+**Entitlements — à l'installation (`cpm --install`, `payos-pm`).** `payos-pm` dépend déjà de `payos-kernel` en artefact Maven (pour les classes `capabilities`), donc `cpm` réutilise directement `ma.s2m.payos.license.LicenseValidator`/`LicenseContext`/`LicenseFileLocator` — aucune logique de validation ni de dérivation dupliquée : `Cpm.resolveLicenseEntitlements` délègue entièrement à `LicenseContext.getInstance().entitledCapabilityIds()` après validation, plutôt que de relire `entitlements.services[]` lui-même. `Cpm.buildManager()` cherche un `*.lic` à la racine du bundle via `LicenseFileLocator.tryLocate` (même convention que `payosv2-packer`, §10) ; absent → pas de licence pour ce bundle, vérification ignorée (même bypass que `DevLicenseValidator`) ; présent mais invalide → échec dur, jamais dégradé silencieusement en « pas de licence ». Si présent et valide, `entitledCapabilityIds()` (§8 — `null` si le document n'a pas de champ `entitlements` du tout, ensemble possiblement vide sinon) devient directement `licenseEntitlements` sur `CapabilityManager`, qui refuse `install(...)` (avant tout effet de bord — copie, `bootstrap.json`, `registry.json`) si l'id de **base** de la capability (`baseIdOf(capabilityId)`, jamais l'id composite `<id>@<version>` — une licence entitle une capability, pas une version épinglée) n'en fait pas partie, sauf si `licenseEntitlements` est `null`. Pas d'échappatoire `--allow-*` : contrairement à l'incompatibilité runtime, ce n'est jamais un simple avertissement.
+
+**Entitlements — au runtime (`ResourceLocator`, kernel).** `ResourceLocator.locate` vérifie déjà l'état d'activation (`IActivationStore`) de toute application étendue de catégorie `capability` avant d'y récurser, et ignore silencieusement (`continue`, comme si absente) celle qui n'est pas active. La vérification d'entitlement se greffe immédiatement à côté, avec la même sémantique : `LicenseContext.getInstance().entitledCapabilityIds()` doit contenir `appId` — la valeur brute lue dans `extends[]`, toujours un id de base par construction (`CapabilityManager.activate` n'y écrit jamais de composite), exactement la granularité que nomme `entitlements.services[]`. `entitledCapabilityIds() == null` ignore la vérification entièrement (toute capability autorisée) ; un ensemble vide non-null refuse tout.
 
 ---
 

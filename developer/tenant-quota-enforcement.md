@@ -24,6 +24,8 @@ Quota enforcement now prefers an exact sliding-window counter (`ISlidingWindowCo
 
 You don't select any of this — it's resolved automatically at startup. In practice, almost every deployment today lands on tier 1 or 2. The only thing you can actually configure is whether tier 1 applies: enable `sliding-window-service` (ideally with `storeType: "redis"`) if you need the quota to be correct across a multi-instance deployment, rather than approximately-per-instance.
 
+This per-request enforcement is a separate concern from the one-time, boot-level check that sums every tenant's configured `requestsPerMinute` against the deployment's license and aborts startup if it's over — see [architecture: license validation §16](../architecture/license-validation-architecture-v4-2026-11-16.md#16-enforcement-des-entitlements-et-des-quotas).
+
 ## This is not the same counter you can read from a script
 
 The tenant quota counter and the `$SlidingWindow` script binding (see [sliding-window-usage.md](sliding-window-usage.md)) can share the same underlying `ISlidingWindowCounter` instance when `sliding-window-service` is configured — but they use different keys, so you can't read your own tenant's quota usage through `$SlidingWindow`:

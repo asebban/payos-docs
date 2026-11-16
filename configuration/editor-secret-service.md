@@ -5,7 +5,7 @@ The `editor-secret-service` block configures the secret provider that backs `ma.
 This block is **required by default** in every `bootstrap.json`, not just bundles that ship encrypted config files — *unless* a valid license has already supplied a key (see below). `ConfigLoader.loadServerConfig()` only invokes `EditorEncryptionKeyInitializer` (environment-variable path, then JSON-block path) when `CryptoService.getInstance().hasKey()` is still `false` at that point; a missing or malformed `editor-secret-service.configuration` block then fails boot outright with a `ResourceException` (surfaced as `ConfigNotFoundException`), rather than deferring the failure to whenever an encrypted file is first loaded. Bundles that never load encrypted config files can opt out explicitly with `"enabled": false` — see the key table below.
 
 **Since 2026-10, this is the fallback path, not the only path.** When `payos-kernel`'s real `LicenseValidator` is active (see
-[architecture/license-validation-architecture-v3-2026-11-01.md](../architecture/license-validation-architecture-v3-2026-11-01.md)),
+[architecture/license-validation-architecture-v4-2026-11-16.md](../architecture/license-validation-architecture-v4-2026-11-16.md)),
 `BootServer` resolves and sets `CryptoService`'s key from the license's own `key_envelope` *before* `ConfigLoader` even starts — in
 that case everything on this page is skipped entirely. This page's mechanism remains active for bundles with no license (dev mode)
 or for decrypting application-specific config unrelated to the license's own key.
@@ -102,5 +102,5 @@ This only covers `editor-secret-service` — the classical `secret-service` bloc
 - [secret-service.md](secret-service.md) — the general-purpose `$Secrets` binding this block is deliberately kept separate from.
 - [architecture/tenant-bundle-encryption-key-lifecycle](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md) — the full key lifecycle (generation, custody, delivery, rotation) this configuration block fits into.
 - [operations/bundle-encryption.md](../operations/bundle-encryption.md) — the `edc` CLI that produces the encrypted payloads this key decrypts.
-- [architecture/license-validation-architecture-v3-2026-11-01.md](../architecture/license-validation-architecture-v3-2026-11-01.md) — how license validation takes priority over this fallback, and the signing key pair variables above.
+- [architecture/license-validation-architecture-v4-2026-11-16.md](../architecture/license-validation-architecture-v4-2026-11-16.md) — how license validation takes priority over this fallback, and the signing key pair variables above.
 - [configuration/license-service-v2-2026-11-01.md](license-service-v2-2026-11-01.md) — full environment-variable reference for license validation.

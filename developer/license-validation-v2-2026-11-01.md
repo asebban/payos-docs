@@ -4,7 +4,7 @@
 **Last updated:** 2026-11-01
 **Version:** v2
 
-> Supersedes the v0 revision of this page (2026-08-19), which still described `DevLicenseValidator` as hard-wired in `BootServer` and `LicenseValidator` as a file-existence check only. See [architecture/license-validation-architecture-v3-2026-11-01.md](../architecture/license-validation-architecture-v3-2026-11-01.md) for the full design this page is a practical companion to.
+> Supersedes the v0 revision of this page (2026-08-19), which still described `DevLicenseValidator` as hard-wired in `BootServer` and `LicenseValidator` as a file-existence check only. See [architecture/license-validation-architecture-v4-2026-11-16.md](../architecture/license-validation-architecture-v4-2026-11-16.md) for the full design this page is a practical companion to.
 >
 > **v2 (2026-11-01)**: `editor-tenant-id` renamed to `editor-id` in the security guidelines below — not a PayOS tenant.
 
@@ -101,5 +101,5 @@ There is no single wiring point to edit anymore — `BootServer` calls `LicenseV
 
 ## Next
 
-- [architecture/license-validation-architecture-v3-2026-11-01.md](../architecture/license-validation-architecture-v3-2026-11-01.md) — full design.
+- [architecture/license-validation-architecture-v4-2026-11-16.md](../architecture/license-validation-architecture-v4-2026-11-16.md) — full design.
 - [configuration/license-service-v2-2026-11-01.md](../configuration/license-service-v2-2026-11-01.md) — configuration/environment-variable reference.

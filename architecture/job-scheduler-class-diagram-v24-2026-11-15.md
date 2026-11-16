@@ -1,13 +1,13 @@
 Created : 2026-09-30
-Dernière mise à jour : 2026-11-09
-Version : v20
+Dernière mise à jour : 2026-11-15
+Version : v24
 
 # Diagramme de classes — Task Scheduling System (`payos-job-scheduler`)
 
 **Audience :** architectes, tech leads, contributeurs à `payos-job-scheduler`, `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`
-**Périmètre :** les Stories 1.1 et 1.2 (§4-8, 10-11, y compris la résolution du gap AC1), **plus les Stories 2.1 et 2.2 de l'Epic 2** (§13 — package `history/`, détection de misfire, quota de concurrence par tenant, requêtes d'historique), **plus la Story 2.3** (§14 — package `metrics/`, émission `PayOSMetrics`, exposition HTTP Prometheus en mode standalone), **plus la Story 2.4** (§15 — masquage des données sensibles via `history/SensitiveDataScrubber`, réutilisation de `SensitiveFieldMasker`), **plus la gestion du cycle de vie des jobs** (§16, ajouté 2026-11-03 — packages `reconciliation/` et `admin/`, rechargement à chaud de `jobs/`, provisionnement des répertoires tenant depuis `jobs/template.json`, arguments stockés dans le `JobDataMap`, déclenchement manuel et `triggerType`), **plus le chargement de `service-adapters-dir` en mode standalone et la correction de la réconciliation des jobs plateforme** (§16.11, ajouté 2026-11-09), **plus la résolution de `tss-config.json` par rapport au répertoire de base** (§16.12, ajouté 2026-11-09), plus les classes d'appui touchées dans `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`.
-**Trou connu, assumé, pas caché :** les Stories 1.3, 1.4 et 1.5 de l'Epic 1 (jobs de niveau plateforme, `custom-jobs.json`, `ExclusiveScriptJob`/`@DisallowConcurrentExecution`) ne sont **pas encore** couvertes par ce diagramme malgré leur statut `done` — ce document n'a pas été tenu à jour entre la Story 1.2 et la Story 2.1/2.2. Voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour le détail exact de ce qui manque. Les classes citées au §13 qui dépendent de mécanismes introduits par ces stories manquantes (ex. `ExclusiveScriptJob`) sont signalées comme telles plutôt que silencieusement supposées déjà connues.
-**Document vivant :** ce diagramme sera mis à jour au fil des prochaines stories — voir [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit) pour ce qui manque encore.
+**Périmètre :** les Stories 1.1 et 1.2 (§4-8, 10-11, y compris la résolution du gap AC1), **plus les Stories 2.1 et 2.2 de l'Epic 2** (§13 — package `history/`, détection de misfire, quota de concurrence par tenant, requêtes d'historique), **plus la Story 2.3** (§14 — package `metrics/`, émission `PayOSMetrics`, exposition HTTP Prometheus en mode standalone), **plus la Story 2.4** (§15 — masquage des données sensibles via `history/SensitiveDataScrubber`, réutilisation de `SensitiveFieldMasker`), **plus la gestion du cycle de vie des jobs** (§16, ajouté 2026-11-03 — packages `reconciliation/` et `admin/`, rechargement à chaud de `jobs/`, provisionnement des répertoires tenant depuis `jobs/template.json`, arguments stockés dans le `JobDataMap`, déclenchement manuel et `triggerType`), **plus le chargement de `service-adapters-dir` en mode standalone et la correction de la réconciliation des jobs plateforme** (§16.11, ajouté 2026-11-09), **plus la résolution de `tss-config.json` par rapport au répertoire de base** (§16.12, ajouté 2026-11-09), **plus les déclencheurs génériques** (§17, ajouté 2026-11-13 — packages `trigger`/`trigger.types`, six types de déclencheur dont les nouveaux `queue` et `dependency`, remplaçant le schéma cron unique et le déclenchement manuel décrits au §16 — voir aussi [ADR-0009 v5](adr/0009-task-scheduling-system-v5-2026-11-13.md)), plus les classes d'appui touchées dans `database-service`, `payos-foundation`, `payos` (kernel), `payos-server-http` et `payos-connector-api`.
+**Trou comblé le 2026-11-13 :** les Stories 1.3, 1.4 et 1.5 de l'Epic 1 (jobs de niveau plateforme, `custom-jobs.json`, `ExclusiveScriptJob`/`@DisallowConcurrentExecution`) étaient `done` depuis la Story 1.2 mais n'avaient jamais été décrites ici — voir [§9](#9-historique-de-la-couverture--stories-13-15-documentées-en-retard) pour leur description et pour l'historique de ce retard.
+**Document vivant :** ce diagramme sera mis à jour au fil des prochaines stories.
 
 ---
 
@@ -21,7 +21,7 @@ Version : v20
 6. [`payos-job-scheduler/jobstore` — configuration du `JobStore` Quartz](#6-payos-job-schedulerjobstore--configuration-du-jobstore-quartz)
 7. [`payos-job-scheduler/bootstrap` — points d'entrée et cycle de vie](#7-payos-job-schedulerbootstrap--points-dentrée-et-cycle-de-vie)
 8. [`payos-job-scheduler/registration` et `execution` — chargement et exécution des jobs](#8-payos-job-schedulerregistration-et-execution--chargement-et-exécution-des-jobs)
-9. [État d'avancement — ce qui n'est pas encore construit](#9-état-davancement--ce-qui-nest-pas-encore-construit)
+9. [Historique de la couverture — Stories 1.3-1.5 documentées en retard](#9-historique-de-la-couverture--stories-13-15-documentées-en-retard)
 10. [Flux d'exécution complet, pas à pas](#10-flux-dexécution-complet-pas-à-pas)
 11. [Un piège de nommage à connaître](#11-un-piège-de-nommage-à-connaître)
 12. [Références](#12-références)
@@ -29,6 +29,7 @@ Version : v20
 14. [Story 2.3 — métriques (`metrics/`) et exposition HTTP standalone](#14-story-23--métriques-metrics-et-exposition-http-standalone)
 15. [Story 2.4 — masquage des données sensibles (`history/SensitiveDataScrubber`)](#15-story-24--masquage-des-données-sensibles-historysensitivedatascrubber)
 16. [Cycle de vie des jobs — réconciliation, rechargement à chaud, administration, provisionnement](#16-cycle-de-vie-des-jobs--réconciliation-rechargement-à-chaud-administration-provisionnement)
+17. [Déclencheurs génériques — packages `trigger`/`trigger.types`](#17-déclencheurs-génériques--packages-triggertriggertypes-2026-11-11-à-2026-11-15)
 
 ---
 
@@ -721,20 +722,20 @@ classDiagram
 
 ---
 
-## 9. État d'avancement — ce qui n'est pas encore construit
+## 9. Historique de la couverture — Stories 1.3-1.5 documentées en retard
 
-Les §4-8 et 10-11 couvrent les Stories 1.1 (infrastructure de clustering) et 1.2 (enregistrement + exécution d'un job script sur planification cron), y compris la résolution du gap AC1. Le §13 couvre les Stories 2.1 et 2.2 de l'Epic 2 (ajouté 2026-10-06). **Restent non documentées ici, malgré un statut `done`** — un vrai trou, pas une omission mineure :
+Les §4-8 et 10-11 couvrent les Stories 1.1 (infrastructure de clustering) et 1.2 (enregistrement + exécution d'un job script sur planification cron), y compris la résolution du gap AC1. Le §13 couvre les Stories 2.1 et 2.2 de l'Epic 2 (ajouté 2026-10-06). **Mise à jour 2026-11-13 : le trou ci-dessous (Stories 1.3-1.5, repéré entre le 2026-10-02 et le 2026-10-06) est désormais comblé** — les trois étaient déjà `done` et déjà utilisées par le code montré plus loin (§13/§16), seule leur description manquait ici :
 
 - ~~**Câblage `registerScriptJobs` en production.**~~ **Résolu 2026-10-01.** `StandaloneMain`/`RuntimeIntegrationHook` chargent désormais `jobs/`, résolvent le registre tenant (`TenantDatabaseRegistryLoader` + `DatabaseServiceInitializer.resolveTenantDatabaseConnections`, kernel) et appellent `registerScriptJobs(...)` — voir §7 pour le détail complet et la Story 1.2 (note de résolution de la Task 5) pour l'historique de la décision (options considérées, choix hybride de l'utilisateur).
-- **Story 1.3** — enregistrement de niveau plateforme (jobs sans tenant) et accès cross-tenant en lecture seule (`PlatformDatabaseBinding`/`PlatformJobDatabaseBinding`).
-- **Story 1.4** — `custom-jobs.json`, logique de surcharge tenant-scopée.
-- **Story 1.5** — application réelle du flag `parallelizable` via une deuxième classe de job (`ExclusiveScriptJob`, avec `@DisallowConcurrentExecution`) — **le §13 ci-dessous l'utilise déjà** (`SchedulerBootstrap.registerOne` choisit entre `ScriptJob`/`ExclusiveScriptJob`) sans que cette story elle-même soit détaillée dans ce document ; voir plutôt `payos-job-scheduler/_bmad-output/implementation-artifacts/1-5-concurrency-control-for-non-parallelizable-jobs.md`.
+- **Story 1.3 — jobs de niveau plateforme.** `JobConfigLoader.load` lit, en plus de chaque répertoire tenant, un fichier unique `platform-jobs.json` à la racine de `jobs/` (jamais niché dans un répertoire tenant, puisqu'un job plateforme n'a pas de tenant dont dériver une identité) et l'enregistre sous `IJobConfigSpec.PLATFORM_LABEL` (`"platform"`) ; un répertoire tenant littéralement nommé `platform` est rejeté (log + ignoré, pas une erreur), ce nom étant réservé au groupe Quartz `JobKey`/`TriggerKey` des jobs plateforme. Côté exécution, `JobContext` choisit la classe de `$PlatformDB` sur `tenantId == null` : un job **tenant** reçoit `PlatformDatabaseBinding`, lecture seule (il lit une donnée de référence hors de son propre périmètre — les méthodes d'écriture sont absentes de la classe, pas seulement refusées à l'exécution) ; un job **plateforme** reçoit la sous-classe `PlatformJobDatabaseBinding`, qui ajoute `save`/`update`/`delete`/`deleteById`/`executeUpdate` (écrire sa propre donnée plateforme est exactement son rôle) — sans contrôle de transaction partagée : chaque écriture valide indépendamment dès son retour, donc une séquence de plusieurs écritures n'a aucune atomicité inter-appels.
+- **Story 1.4 — `custom-jobs.json`.** Chargé en second, après `jobs.json` du même répertoire tenant, et fusionné dans la **même** table par `scriptPath` (`JobConfigLoader.mergeCustomJobs`) : une entrée dont le `scriptPath` correspond déjà remplace l'entrée `jobs.json` d'origine (log d'info), une nouvelle l'ajoute. Chaque entrée doit déclarer son propre champ `tenant`, revérifié contre le répertoire qui la contient — une entrée absente de ce champ ou visant un autre tenant est rejetée (log + ignorée), jamais appliquée ; c'est l'inverse de `jobs.json`, où le tenant est pris du nom du répertoire sans aucune vérification (choix délibéré de la Story 1.2). Un `custom-jobs.json` illisible (JSON invalide, erreur d'E/S) ne fait échouer que ce fichier : ses apports sont ignorés, le `jobs.json` du même tenant reste chargé normalement.
+- **Story 1.5 — `parallelizable`.** `JobReconciler` (ligne `job.parallelizable() ? ScriptJob.class : ExclusiveScriptJob.class`, §16.3) choisit la classe Quartz concrète enregistrée pour chaque job : `ExclusiveScriptJob` est un `ScriptJob` sans aucune surcharge, portant uniquement l'annotation `@DisallowConcurrentExecution` — lue par `JobBuilder` sur la classe concrète exacte passée à `JobBuilder.newJob(...)`, puis appliquée par le `JDBCJobStore` clusterisé comme une exclusion mutuelle **à l'échelle du cluster**, pas seulement du nœud (FR15). Changer `parallelizable` sur un job existant remplace son `JobDetail` (donc sa classe concrète) à la prochaine réconciliation, sans perdre l'historique de ses exécutions passées.
 
 Restent aussi, dans l'Epic 2 : émission `PayOSMetrics` (Story 2.3), masquage des données sensibles dans les logs/historique/métriques (Story 2.4).
 
-**Mise à jour 2026-11-03 :** les Stories 2.3 et 2.4 sont désormais couvertes (§14, §15). Le §16 décrit la gestion du cycle de vie des jobs (réconciliation, rechargement à chaud, administration, provisionnement des tenants) ; il remplace aussi la logique d'enregistrement décrite au §7, à l'étape 5 du §10 et au §13 (`SchedulerBootstrap.registerOne` n'existe plus : tout passe par `JobReconciler`). Le §16 montre au passage `ExclusiveScriptJob` et `custom-jobs.json` tels qu'ils sont utilisés aujourd'hui, sans retracer l'historique des Stories 1.3-1.5, qui reste à documenter ici.
+**Mise à jour 2026-11-03 :** les Stories 2.3 et 2.4 sont désormais couvertes (§14, §15). Le §16 décrit la gestion du cycle de vie des jobs (réconciliation, rechargement à chaud, administration, provisionnement des tenants) ; il remplace aussi la logique d'enregistrement décrite au §7 et à l'étape 5 du §10 (`SchedulerBootstrap.registerOne` n'existe plus : tout passe par `JobReconciler`, qui porte désormais lui-même le choix `ScriptJob`/`ExclusiveScriptJob` décrit ci-dessus pour la Story 1.5).
 
-Ce document sera mis à jour à chaque nouvelle story qui ajoute ou modifie des classes de production — mais ce trou (1.3-1.5) montre que cette intention n'a pas été suivie de façon fiable entre le 2026-10-02 et le 2026-10-06 ; à garder à l'esprit avant de faire confiance à ce document comme source unique de vérité.
+Ce document sera mis à jour à chaque nouvelle story qui ajoute ou modifie des classes de production — l'écart ci-dessus (Stories 1.3-1.5 documentées sept semaines après leur statut `done`) montre que cette intention n'a pas toujours été suivie de façon fiable ; gardé ici comme rappel avant de faire confiance à ce document comme source unique de vérité sans vérifier le code pour une story récente.
 
 ---
 
@@ -772,8 +773,8 @@ Une troisième source de confusion possible, apparue avec la résolution du gap 
 
 ## 12. Références
 
-- [ADR-0009 — Task Scheduling System](adr/0009-task-scheduling-system.md) (v1) et sa révision courante [ADR-0009 v4](adr/0009-task-scheduling-system-v4-2026-11-03.md), qui contient le diagramme de classes d'ensemble du module
-- [Operations: Task Scheduling System](../operations/task-scheduling-system-v19-2026-11-09.md) — le pendant opérationnel de ce document : comment configurer et démarrer TSS (standalone ou embarqué), tss-config.json, jobs.json, résolution tenant/plateforme, limitations connues
+- [ADR-0009 — Task Scheduling System](adr/0009-task-scheduling-system.md) (v1) et sa révision courante [ADR-0009 v5](adr/0009-task-scheduling-system-v5-2026-11-13.md), qui contient le diagramme de classes d'ensemble du module
+- [Operations: Task Scheduling System](../operations/task-scheduling-system-v21-2026-11-15.md) — le pendant opérationnel de ce document : comment configurer et démarrer TSS (standalone ou embarqué), tss-config.json, jobs.json, résolution tenant/plateforme, limitations connues
 - `payos-job-scheduler/_bmad-output/planning-artifacts/architecture.md` — architecture narrative complète du module, tenue par le workflow BMad (décisions, corrections, séquence d'implémentation)
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/1-1-resilient-clustered-scheduling-infrastructure.md` — Story 1.1 (infrastructure de clustering)
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/1-2-register-and-run-a-script-job-on-a-cron-schedule.md` — Story 1.2 (enregistrement + exécution), y compris le journal de correction architecturale (Debug Log) menant à `IDatabaseService.openDedicatedSessionFor`, et la note de résolution de la Task 5 (gap AC1 — choix hybride, extraction kernel, câblage complet)
@@ -784,7 +785,7 @@ Une troisième source de confusion possible, apparue avec la résolution du gap 
 
 ## 13. Stories 2.1 et 2.2 — le package `history/`, misfire, quota de concurrence
 
-**Ajouté 2026-10-06.** Ce paragraphe couvre deux stories ensemble (2.1 puis 2.2, étroitement liées — 2.2 étend directement les classes que 2.1 introduit) plus un suivi same-day sur 2.2 (surcharge par tenant du quota de concurrence, demandée par l'utilisateur après la fin de la story elle-même). **Dépendance non documentée ailleurs dans ce diagramme :** ce paragraphe utilise `ExclusiveScriptJob` (Story 1.5) sans le détailler — voir le trou signalé en [§9](#9-état-davancement--ce-qui-nest-pas-encore-construit).
+**Ajouté 2026-10-06.** Ce paragraphe couvre deux stories ensemble (2.1 puis 2.2, étroitement liées — 2.2 étend directement les classes que 2.1 introduit) plus un suivi same-day sur 2.2 (surcharge par tenant du quota de concurrence, demandée par l'utilisateur après la fin de la story elle-même). Ce paragraphe utilise `ExclusiveScriptJob` (Story 1.5) sans le détailler — voir [§9](#9-historique-de-la-couverture--stories-13-15-documentées-en-retard) pour sa description complète.
 
 ### 13.1 Vue d'ensemble — le package `history/`
 
@@ -818,7 +819,7 @@ public record JobExecutionEvent(
 }
 ```
 
-`fireInstanceId` est la clé de corrélation entre l'événement `STARTED` et l'événement `COMPLETED` d'une même exécution — Quartz génère une valeur fraîche et unique à chaque déclenchement (`JobExecutionContext.getFireInstanceId()`), déjà utilisée pour exactement ce besoin par `ConcurrencyControlEndToEndTest` (Story 1.5, non documentée ailleurs dans ce diagramme — voir §9). Deux déclenchements différents du même job ne collisionnent jamais ; les deux événements d'une même exécution partagent toujours la même valeur.
+`fireInstanceId` est la clé de corrélation entre l'événement `STARTED` et l'événement `COMPLETED` d'une même exécution — Quartz génère une valeur fraîche et unique à chaque déclenchement (`JobExecutionContext.getFireInstanceId()`), déjà utilisée pour exactement ce besoin par `ConcurrencyControlEndToEndTest` (Story 1.5, voir [§9](#9-historique-de-la-couverture--stories-13-15-documentées-en-retard)). Deux déclenchements différents du même job ne collisionnent jamais ; les deux événements d'une même exécution partagent toujours la même valeur.
 
 **Pourquoi un troisième type, `REJECTED`, et pas seulement `STARTED`/`COMPLETED` :** un misfire ou un rejet de quota signifie que le script **n'a jamais démarré du tout** — il n'y a ni session à ouvrir, ni paire `fireInstanceId` à corréler. Forcer l'un ou l'autre cas à passer par `recordStarted`+`recordCompleted` aurait soit inséré une ligne que rien ne complète jamais, soit (pire) déclenché la garde anti-perte-silencieuse ajoutée en revue de code de la Story 2.1 elle-même (`recordCompleted` lève désormais une exception si l'`UPDATE` ne touche aucune ligne), puisqu'aucune ligne `STARTED` n'existerait à mettre à jour. `REJECTED` est donc un écrit en un seul coup, déjà terminal (`recordRejected` — §13.4).
 
@@ -880,7 +881,7 @@ public final class TenantConcurrencyQuotaGuard implements ExecutionQuotaGuard {
 
 ### 13.7 `SchedulerBootstrap` — récupération après crash
 
-**Trou vérifié dans le code, pas supposé :** `registerOne` n'appelait jamais `.requestRecovery(true)` — la récupération après crash en cluster de Quartz (`JobStoreSupport.recoverJobs()`) ne s'applique qu'aux jobs qui l'ont explicitement demandé ; aucun ne le faisait, donc le scénario même de l'AC3 de la Story 2.2 (« après un crash de nœud et une récupération de cluster ») ne pouvait pas se produire. Ajout d'une ligne : `.requestRecovery(true)` dans la chaîne `JobBuilder` de `registerOne`, pour `ScriptJob` et `ExclusiveScriptJob` (Story 1.5, non documentée ailleurs — §9) indifféremment.
+**Trou vérifié dans le code, pas supposé :** `registerOne` n'appelait jamais `.requestRecovery(true)` — la récupération après crash en cluster de Quartz (`JobStoreSupport.recoverJobs()`) ne s'applique qu'aux jobs qui l'ont explicitement demandé ; aucun ne le faisait, donc le scénario même de l'AC3 de la Story 2.2 (« après un crash de nœud et une récupération de cluster ») ne pouvait pas se produire. Ajout d'une ligne : `.requestRecovery(true)` dans la chaîne `JobBuilder` de `registerOne`, pour `ScriptJob` et `ExclusiveScriptJob` (Story 1.5, voir [§9](#9-historique-de-la-couverture--stories-13-15-documentées-en-retard)) indifféremment.
 
 Une fois activée, chaque re-déclenchement de récupération est un déclenchement Quartz authentiquement nouveau — son propre `fireInstanceId` frais, sa propre paire `STARTED`/`COMPLETED` — donc l'AC3 (« chaque tentative visible séparément, jamais fusionnée ») est satisfaite **par construction**, dans le même sens que l'AC2 de la Story 2.1 l'était déjà pour le caractère « cluster-wide » de la vue en direct. La ligne de la tentative qui a crashé reste pour toujours avec `completed_at IS NULL` — reflet exact, pas un bug, de ce qui s'est réellement passé.
 
@@ -898,14 +899,14 @@ Comme pour les tables `QRTZ_*` de Quartz elles-mêmes, **TSS ne crée jamais cet
 | `outcome` | `SUCCESS`, `SCRIPT_ERROR`, `MISFIRE`, `QUOTA_REJECTED`, ou `ABANDONED` (ligne d'un nœud crashé, clôturée par l'exécution de récupération qui l'a remplacée — Story 2.2, suivi de revue round 1, `JobExecutionListener.onRecoveryStarted`). |
 | `failure_message` | Tronqué en Java à 2000 caractères avant l'écriture (correctif de revue de code, Story 2.1 round 1) pour que jamais un message trop long ne fasse échouer l'écriture elle-même. |
 
-Voir [configuration/task-scheduling-system-v9-2026-11-09.md](../configuration/task-scheduling-system-v9-2026-11-09.md) et [operations/task-scheduling-system-v19-2026-11-09.md](../operations/task-scheduling-system-v19-2026-11-09.md) pour les requêtes directes types.
+Voir [configuration/task-scheduling-system-v11-2026-11-15.md](../configuration/task-scheduling-system-v11-2026-11-15.md) et [operations/task-scheduling-system-v21-2026-11-15.md](../operations/task-scheduling-system-v21-2026-11-15.md) pour les requêtes directes types.
 
 ### 13.9 Références (Stories 2.1/2.2)
 
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-1-live-and-point-in-time-view-of-job-executions.md` — Story 2.1, y compris la correction du design de pool de connexions et le déplacement de `JobExecutionListener`.
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-2-query-execution-history-and-failure-diagnosis.md` — Story 2.2, y compris la recherche sur le quota (`TenantPolicyService`/`ISlidingWindowCounter` écarté), le constat empirique sur la récupération après crash, et le suivi same-day sur la surcharge par tenant.
-- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v16-2026-11-09.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`/`$Parallel`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v9-2026-11-09.md) — référence de configuration (quota global/par tenant, récupération après crash).
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v18-2026-11-15.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`/`$Parallel`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v11-2026-11-15.md) — référence de configuration (quota global/par tenant, récupération après crash).
 
 ## 14. Story 2.3 — métriques (`metrics/`) et exposition HTTP standalone
 
@@ -1034,7 +1035,7 @@ public final class StandaloneMetricsServer implements Closeable {
 
 ### 14.6 Référence
 
-Voir [configuration/task-scheduling-system-v9-2026-11-09.md](../configuration/task-scheduling-system-v9-2026-11-09.md), [developer guide §12](../developer/task-scheduler-guide-v16-2026-11-09.md#12-metrics) et [operations guide](../operations/task-scheduling-system-v19-2026-11-09.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
+Voir [configuration/task-scheduling-system-v11-2026-11-15.md](../configuration/task-scheduling-system-v11-2026-11-15.md), [developer guide §12](../developer/task-scheduler-guide-v18-2026-11-15.md#12-metrics) et [operations guide](../operations/task-scheduling-system-v21-2026-11-15.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
 
 ### 14.7 Références (Story 2.3)
 
@@ -1082,7 +1083,7 @@ Repère les fragments `key: value`/`key=value` dont la clé correspond à `Sensi
 
 ### 15.5 Référence
 
-Voir [developer guide §13](../developer/task-scheduler-guide-v16-2026-11-09.md#13-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v19-2026-11-09.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
+Voir [developer guide §13](../developer/task-scheduler-guide-v18-2026-11-15.md#13-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v21-2026-11-15.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
 
 ### 15.6 Références (Story 2.4)
 
@@ -1095,7 +1096,7 @@ Voir [developer guide §13](../developer/task-scheduler-guide-v16-2026-11-09.md#
 
 ## 16. Cycle de vie des jobs — réconciliation, rechargement à chaud, administration, provisionnement
 
-**Ajouté 2026-11-03.** Ce paragraphe couvre un ensemble de changements demandés ensemble, sans story BMad dédiée : modifier un job (cron, `parallelizable`, `arguments`) ou en supprimer un sans redémarrer, déclencher un job à la main (CLI et HTTP sécurisé), et créer automatiquement le répertoire `jobs/<tenantId>/` d'un nouveau tenant. Le principe directeur : **les fichiers de `jobs/` sont l'unique source de vérité**, et un seul composant (`JobReconciler`) aligne Quartz sur eux. La décision et ses conséquences sont dans [ADR-0009 v4](adr/0009-task-scheduling-system-v4-2026-11-03.md) ; le mode d'emploi est dans [operations §Changing jobs without a restart](../operations/task-scheduling-system-v19-2026-11-09.md#changing-jobs-without-a-restart) et [operations §Administration](../operations/task-scheduling-system-v19-2026-11-09.md#administration-manual-trigger-sync-and-list).
+**Ajouté 2026-11-03.** Ce paragraphe couvre un ensemble de changements demandés ensemble, sans story BMad dédiée : modifier un job (cron, `parallelizable`, `arguments`) ou en supprimer un sans redémarrer, déclencher un job à la main (CLI et HTTP sécurisé), et créer automatiquement le répertoire `jobs/<tenantId>/` d'un nouveau tenant. Le principe directeur : **les fichiers de `jobs/` sont l'unique source de vérité**, et un seul composant (`JobReconciler`) aligne Quartz sur eux. La décision et ses conséquences sont dans [ADR-0009 v5](adr/0009-task-scheduling-system-v5-2026-11-13.md) ; le mode d'emploi est dans [operations §Changing jobs without a restart](../operations/task-scheduling-system-v21-2026-11-15.md#changing-jobs-without-a-restart) et [operations §Administration](../operations/task-scheduling-system-v21-2026-11-15.md#administration-manual-trigger-sync-and-list).
 
 ### 16.1 Vue d'ensemble — nouvelles classes
 
@@ -1387,3 +1388,265 @@ Le mode embarqué n'est pas concerné : `RuntimeIntegrationHook` s'exécute sur 
 Les URL H2 `file:` relatives et les chemins relatifs des fichiers de mapping restent résolus par rapport au répertoire de travail : ce comportement vient du kernel (`HibernateUtil`, JDBC) et n'est pas modifié ici.
 - Une clé `default` sous `multitenancy.tenants` serait traitée comme un tenant par le provisionnement.
 - En mode embarqué, l'ajout d'un tenant dans PayOS ne déclenche pas à lui seul une passe TSS : il est pris en compte à la prochaine modification de `jobs/`, au prochain `sync` ou au redémarrage.
+
+## 17. Déclencheurs génériques — packages `trigger`/`trigger.types` (2026-11-11 à 2026-11-15)
+
+**Ajouté 2026-11-13**, en quatre phases relisables séparément. Remplace le schéma cron unique de `JobDefinition` et le mécanisme de déclenchement manuel du §16 par une notion générique, `TssTrigger` : un job porte désormais un tableau `triggers`, de six types possibles (`cron`, `interval`, `once`, `manual`, `queue`, `dependency`), chacun tenant dans **une seule classe** (deux pour `dependency`, qui a besoin de SQL). Conception complète, diagrammes de séquence détaillés et justification de chaque décision : `payos-job-scheduler/docs/generic-triggers-implementation-plan-v4-2026-11-10.md`. L'historique complet de la conception, y compris une version antérieure à ~50 classes implémentée puis annulée pour cause d'illisibilité, est dans ce document ; il n'est pas répété ici.
+
+L'ancien objet unique `jobs.json`/`trigger: {...}` n'est plus accepté : une entrée qui l'utilise encore est rejetée, avec un avertissement qui la nomme — les autres entrées du fichier chargent normalement. `JobDefinition.cronExpression` (§8, ci-dessus) et `JobAdminService.JobSummary.cronExpression` (§16.2, ci-dessus) sont donc **superseded** par, respectivement, une liste de `TssTrigger` et un tableau `TriggerSummary` ; ces deux schémas restent affichés plus haut comme un instantané de leur état avant cette section, non mis à jour rétroactivement (même convention que le trou connu du §9).
+
+### 17.1 Vue d'ensemble — nouvelles classes
+
+| Package | Classe | Rôle |
+| --- | --- | --- |
+| `trigger` | `TssTrigger` (interface) | `id()`, `type()`, `definition()` (JSON complet), `validate(owner, allJobs)` (défaut : rien). Tout le reste de TSS (chargeur, réconciliateur, `list`, runtime) ne manipule que cette interface. |
+| `trigger` | `TemporalTrigger` (interface, étend `TssTrigger`) | `schedule()` (`ScheduleBuilder` Quartz), `startAt()`, `expired(now)`. Seul point où un déclencheur parle Quartz. |
+| `trigger` | `EventTrigger` (interface, étend `TssTrigger`) | `start(TriggerContext)`, `stop()` (défaut : rien — le contexte referme déjà ce qu'il a ouvert). |
+| `trigger` | `TriggerContext` | Instance par déclencheur actif sur un nœud. `jobId()`/`tenantId()`/`scriptPath()`/`triggerId()`/`label()`, `fire(eventId, triggeredBy, data, dedupKey)` → `FireResult` (`FIRED`/`DUPLICATE`/`FAILED`), `subscribe(destination, handler)` (ajouté phase 4), `onJobCompleted(listener)`, `database()`, `close()` (package-privé, appelé par le runtime). |
+| `trigger` | `TriggerTypes` | Registre type → `parse(id, map)`. `builtIns()`, `register(type, parser)`, `parseAll(definitions)` (ids par défaut, doublons refusés, `manual` implicite ajouté), `toJson`/`fromJson` (stockage/relecture dans le `JobDataMap`, clé `triggers`). |
+| `trigger` | `EventTriggerRuntime` | Un par nœud. `refresh()` (démarrage, fin de réconciliation locale, minuteur `eventTriggerRefreshSeconds`) aligne les `EventTrigger` démarrés en mémoire sur ce qui est déclaré ; `onEvent(JobExecutionEvent)` relaie les fins de job aux écouteurs `onJobCompleted` ; `manual(tenantId, scriptPath)` relit le `JobDetail` et rend le `ManualTrigger` du job, sans jamais appeler `refresh()` (c'est ce qui remplace le mode `MANUAL_ONLY` initialement prévu — la CLI ne démarre donc jamais de déclencheur) ; `close()`. |
+| `trigger.types` | `CronTrigger`, `IntervalTrigger`, `OnceTrigger` (records) | Inchangés en substance par rapport au cron unique du §8 — simplement un `TemporalTrigger` par entrée du tableau au lieu d'un champ `cronExpression` unique. |
+| `trigger.types` | `ManualTrigger` | `request(user, arguments)` → `FireResult`, lève `Refused` (énum interne `Reason` : `DISABLED`/`ARGUMENTS_NOT_ALLOWED`) si désactivé ou si des arguments sont passés sans `allowArguments`. |
+| `trigger.types` | `QueueTrigger` (record) | `destination`, `attributeFilter`, `maxPayloadBytes` (défaut 64 Ko). `start` s'abonne via `context.subscribe` ; le handler vérifie le tenant (`sameTenant` — un job de tenant n'accepte qu'un message dont les métadonnées portent `tenantId` égal au sien ; un job plateforme accepte tout), le filtre d'attributs puis la taille, avant d'appeler `context.fire`. |
+| `trigger.types` | `QueueClientConnector` | Non prévue à la conception initiale. Connecte le `IQueueClient` propre à TSS — jamais celui de l'application hôte, jamais via `ma.s2m.payos.queue.QueueClients` du kernel (dépend de `PayOSConfig`). `connect(type, host, port[, adaptersDir])` (standalone), `connectFromEnvironment()` (embarqué, env/propriété système seulement). `adaptersDir` (`TSS_QUEUE_ADAPTERS_DIR`) construit un `URLClassLoader` sur un répertoire de JARs connecteurs supplémentaires, en plus du classpath — même service que `service-adapters-dir` côté kernel, réimplanté indépendamment pour ne jamais dépendre de `PayOSConfig` ; ce `URLClassLoader`, quand il en construit un, est explicitement refermé juste après avoir instancié la fabrique (les classes déjà chargées restent utilisables après `close()` — nécessaire sous Windows, où un `URLClassLoader` non fermé garde le fichier JAR verrouillé). |
+| `trigger.types` | `DependencyTrigger` (record) | `upstream`, `on` (`SUCCESS`/`COMPLETED`), `maxAge`. `start` enregistre un `onJobCompleted` qui filtre les amonts et l'issue, passe par `DependencyJoinTable.record(...)` (verrou pris), vérifie `isComplete`, et n'appelle `context.fire` qu'**après** la fermeture du bloc `try` qui tient le verrou — jamais pendant. `validate(owner, allJobs)` vérifie l'existence de chaque amont et l'absence de cycle. |
+| `trigger.types` | `DependencyJoinTable` | Le SQL de l'état des dépendances. `record(upstreamKey, event)` : crée la ligne de verrou si absente (violation de clé ignorée), `SELECT ... FOR UPDATE`, écrit la case de l'amont, relit la feuille, rend un `Join` (`AutoCloseable` imbriqué : `isComplete`, `completions`, `clear`, `close()` qui valide et relâche le verrou). |
+| `execution` | `TriggerBinding` | `$Trigger` dans le script. `getType()`/`getId()`/`getEventId()`/`getTriggeredBy()`/`getPayload()`/`getAttributes()`/`getUpstream()`. Pour une exécution cron, seuls type et id sont renseignés. |
+
+Classes existantes modifiées : `IJobConfigSpec` (bloc `Queue`, clé `Scheduler.EVENT_TRIGGER_REFRESH_SECONDS`, `JobsFile.Entry.LEGACY_TRIGGER`), `JobDefinition`, `JobConfigLoader`, `JobReconciler`, `JobsSynchronizer`, `SchedulerBootstrap`, `JobAdminService` (`list`, `TriggerSummary`), `AdminHttpServer`, `StandaloneMain`, `RuntimeIntegrationHook`, `ScriptJob`. Fichier SQL ajouté : `db/migration/tss_dependency.sql`. Hors de ce module : `queue-service-nats/NatsQueueClient.subscribe` gagne un `deliverGroup` (voir §17.4).
+
+### 17.2 Diagramme de classes
+
+```mermaid
+classDiagram
+    direction TB
+
+    namespace trigger {
+        class TssTrigger {
+            <<interface>>
+            +id() String
+            +type() String
+            +definition() Map
+            +validate(owner, allJobs)
+        }
+        class TemporalTrigger {
+            <<interface>>
+            +schedule() ScheduleBuilder
+            +startAt() Instant
+        }
+        class EventTrigger {
+            <<interface>>
+            +start(TriggerContext context)
+            +stop()
+        }
+        class TriggerContext {
+            <<job-scheduler>>
+            +fire(eventId, triggeredBy, data, dedupKey) FireResult
+            +subscribe(destination, handler)
+            +onJobCompleted(listener)
+            +database() ConnectionSource
+            ~close()
+        }
+        class TriggerTypes {
+            <<job-scheduler>>
+            +builtIns()$ TriggerTypes
+            +register(type, parser)
+            +parseAll(definitions) List
+            +toJson(triggers)$ String
+            +fromJson(json)$ List
+        }
+        class EventTriggerRuntime {
+            <<job-scheduler>>
+            +refresh()
+            +onEvent(JobExecutionEvent event)
+            +manual(tenantId, scriptPath) Optional~ManualTrigger~
+            +close()
+        }
+    }
+    TssTrigger <|-- TemporalTrigger
+    TssTrigger <|-- EventTrigger
+    EventTrigger ..> TriggerContext : reçoit au start
+    EventTriggerRuntime --> TriggerTypes : lit les définitions
+    EventTriggerRuntime --> EventTrigger : start / stop
+    EventTriggerRuntime --> TriggerContext : un par déclencheur actif
+
+    namespace trigger.types {
+        class CronTrigger
+        class IntervalTrigger
+        class OnceTrigger
+        class ManualTrigger {
+            <<job-scheduler>>
+            +request(user, arguments) FireResult
+        }
+        class QueueTrigger {
+            <<job-scheduler>>
+        }
+        class QueueClientConnector {
+            <<job-scheduler>>
+            +connect(type, host, port, adaptersDir)$ IQueueClient
+            +connectFromEnvironment()$ IQueueClient
+        }
+        class DependencyTrigger {
+            <<job-scheduler>>
+        }
+        class DependencyJoinTable {
+            <<job-scheduler>>
+            +record(upstreamKey, event) Join
+        }
+    }
+    TemporalTrigger <|.. CronTrigger
+    TemporalTrigger <|.. IntervalTrigger
+    TemporalTrigger <|.. OnceTrigger
+    EventTrigger <|.. ManualTrigger
+    EventTrigger <|.. QueueTrigger
+    EventTrigger <|.. DependencyTrigger
+    QueueClientConnector ..> QueueTrigger : lui fournit le IQueueClient
+    DependencyTrigger --> DependencyJoinTable : utilise
+
+    namespace execution {
+        class TriggerBinding {
+            <<job-scheduler>>
+            +getType() String
+            +getId() String
+            +getPayload() Object
+            +getAttributes() Map
+            +getUpstream() List
+        }
+    }
+
+    class IQueueClient {
+        <<foundation>>
+    }
+    class IQueueClientFactory {
+        <<foundation>>
+    }
+    QueueClientConnector ..> IQueueClientFactory : ServiceLoader
+    QueueTrigger ..> IQueueClient : context.subscribe
+```
+
+### 17.3 Deux familles, un seul point d'entrée vers Quartz
+
+Un déclencheur **temporel** (`cron`/`interval`/`once`) ne fait que donner son calendrier une fois, à la réconciliation (`JobReconciler`, §16.3) : Quartz gère ensuite le cluster, la persistance et les ratés, sans aucune différence avec le mécanisme du §8/§16. Un déclencheur **événementiel** (`manual`/`queue`/`dependency`) est démarré et arrêté **en mémoire, indépendamment sur chaque nœud**, par `EventTriggerRuntime.refresh()` — au démarrage, après chaque réconciliation locale, et toutes les `eventTriggerRefreshSeconds` (défaut 30 s). Il décide lui-même, dans son propre `start(context)`, quand demander l'exécution via `context.fire(...)`, qui dépose dans Quartz un trigger ponctuel et persistant — jamais le déclencheur lui-même qui exécute le script. Un changement déclaré sur un nœud (hot reload, `sync`) atteint donc les autres nœuds au prochain de leurs rafraîchissements, pas instantanément.
+
+### 17.4 `queue` — connexion propre à TSS, et limite du groupe de consommateurs
+
+TSS ouvre sa propre connexion au broker (`QueueClientConnector`), jamais celle de l'application hôte. La découverte de fabrique passe par `ServiceLoader<IQueueClientFactory>`, directement — jamais via l'utilitaire `QueueClients` du kernel, qui dépend de `PayOSConfig`. Un consommateur JetStream durable sans groupe de livraison (`NatsQueueClient.subscribe`, avant correction) refusait l'abonnement d'un deuxième nœud à la même destination ; l'ajout d'un `deliverGroup(durableName)` (même nom que le consommateur durable) dans `queue-service-nats` fait que plusieurs nœuds se répartissent la charge au lieu d'échouer. Contrepartie assumée, pas corrigée : la souscription dépend uniquement de `destination`, jamais du job — deux déclencheurs `queue` de **jobs différents** sur la **même destination** se partagent donc eux aussi la charge (chaque message n'arrive qu'à l'un des deux), au lieu que chacun reçoive tous les messages. Une destination par job (ou par petit groupe de jobs censés se la partager) est la règle à suivre.
+
+**Nommage de `destination` — confirmé contre un vrai broker, 2026-11-15.** `NatsQueueClient` n'accepte que lettres, chiffres, `_` et `-` : `destination` sert directement de nom de stream JetStream, qui ne peut pas contenir de `.` — un nom à la mode NATS (`payments.settled`, hiérarchie par points, idiomatique pour ce broker) fait échouer le démarrage du déclencheur (`destination '...' is invalid: only letters, digits, '_' and '-' are allowed`), journalisé et retenté comme tout autre échec de démarrage, jamais fatal. Règle à suivre avec ce connecteur : `payments-settled`, pas `payments.settled`.
+
+### 17.5 `dependency` — le verrou cluster, pas-à-pas
+
+`DependencyJoinTable.record(upstreamKey, event)` : `ensureJoinRow()` (crée la ligne de verrou si absente, violation de clé primaire ignorée) puis `SELECT ... FOR UPDATE` sur cette ligne — c'est ce `SELECT` qui est le verrou réel ; la tentative d'`INSERT` ne sert qu'à amorcer une ligne stable à verrouiller, une seule fois. Pendant que le verrou est tenu : écriture de la case de l'amont (`writeCell`), relecture de toute la feuille (`readCells`), construction d'un `Join` (`AutoCloseable`). `isComplete`/`completions`/`clear` s'exécutent toujours verrou tenu ; `Join.close()` (fin du bloc `try (...)`) valide la transaction et relâche le verrou — et c'est seulement **après**, en dehors du bloc `try`, que `DependencyTrigger` appelle `context.fire(...)`. Lancer le job verrou tenu aurait gardé une connexion bloquée pendant que Quartz en demande une deuxième au même pool ; plusieurs fins simultanées auraient pu épuiser le pool. Deux nœuds dont les fins d'amont arrivent au même instant (A sur le nœud 1, B sur le nœud 2) passent donc l'un après l'autre par ce verrou : un seul des deux voit la feuille complète et déclenche C.
+
+### 17.6 `$Trigger` dans les scripts
+
+`ScriptJob` construit un `TriggerBinding` à partir du `JobDataMap` de l'exécution (`triggerType`, `triggerId`, `eventId`, `triggeredBy`, `data` en JSON) et le publie sous `$Trigger`. Pour une exécution cron, seuls `getType()`/`getId()` sont renseignés ; pour `dependency`, `getUpstream()` rend une entrée par amont déclaré (`job`, `fireInstanceId`, `outcome`, `completedAt`, `completions`), copiée sous verrou avant que la feuille soit vidée.
+
+### 17.7 Tests
+
+| Classe de test | Ce qu'elle prouve |
+| --- | --- |
+| `trigger/TriggerTypesTest`, `trigger/EventTriggerRuntimeTest` | Parsing des six types, ids par défaut et doublons refusés, `manual` implicite, `toJson`/`fromJson`, démarrage/arrêt différentiel au `refresh()` (ajout, retrait, modification d'un déclencheur). |
+| `ManualTriggerEndToEndTest` | Déclenchement accepté, désactivé, arguments interdits, job inconnu, en CLI comme en HTTP. |
+| `trigger/types/DependencyTriggerTest`, `DependencyTriggerEndToEndTest` | Scénario A/B/C (§17.5), `maxAge`, `on`, validation (amont inconnu, cycle), deux fins simultanées (30 passes de concurrence, H2 seulement). |
+| `trigger/types/QueueTriggerTest` | `attributeFilter`, tenant/plateforme, taille maximale, redélivrance acquittée sans relancer (`DUPLICATE`), échec de démarrage sans client connecté non fatal, parsing. |
+| `trigger/types/QueueClientConnectorTest` | Recherche de fabrique insensible à la casse, type inconnu nommant les types connus, résolution d'environnement (priorité, port par défaut), repli sur le classpath sans `adaptersDir`, connecteur trouvé uniquement via `adaptersDir` (jamais sur le classpath seul, instance enveloppée, jamais le type concret) — voir §17.9 pour pourquoi la fermeture du classloader attend `disconnect()`. |
+| `queue-service-nats` (suite propre au module) | `deliverGroup` : deux abonnements à la même destination se répartissent la charge au lieu que le second échoue (serveur NATS embarqué réel). |
+
+Suite complète de `payos-job-scheduler` : 316 tests, 0 échec, au moment de l'implémentation des quatre phases.
+
+### 17.8 Limites connues
+
+- **Une destination, un groupe de consommateurs partagé, pour tout le cluster.** Deux jobs différents sur la même destination se partagent la charge (§17.4) plutôt que de recevoir chacun tous les messages.
+- **Pas de source partagée entre deux déclencheurs `queue`.** Volontairement non traité : rare, et le groupe de consommateurs garde la livraison unique par abonnement (voir le document de conception, §9).
+- **Lignes orphelines de dépendance.** Un job aval ou un déclencheur supprimé laisse ses lignes `tss_dependency_join`/`tss_dependency_state` en base, sans effet mais jamais nettoyées.
+- **Tour perdu si `fire` échoue juste après le commit** (`dependency`) : la feuille est déjà vidée, l'occurrence est journalisée en erreur et non recomptée.
+- **Verrouillage testé sous charge concurrente sur H2 uniquement** ; le comportement de `SELECT ... FOR UPDATE` est standard sur PostgreSQL et Oracle, non encore vérifié par un test de concurrence sur ces moteurs.
+
+### 17.9 Deux corrections trouvées par un test réel, pas par la suite automatisée (2026-11-15)
+
+**Ajouté 2026-11-15**, après une mise en service pour de vrai de `queue` (bundle `client2`, broker NATS réel, `TSS_QUEUE_ADAPTERS_DIR`) — ni l'une ni l'autre n'était couverte par la suite de tests (mocks/fakes), qui ne pouvait donc pas les voir.
+
+**Le `URLClassLoader` d'`adaptersDir` était fermé trop tôt.** `QueueClientConnector.connect` le refermait juste après `factory.create()`/`client.connect(...)`, en supposant que toutes les classes dont le connecteur aurait jamais besoin étaient déjà chargées à cet instant. Faux pour `jnats` : `NatsJetStreamManagement` n'est chargée qu'au premier appel JetStream réel (le premier `subscribe` d'un déclencheur `queue`), bien après `connect()` — donc après la fermeture, d'où un `NoClassDefFoundError` au moment précis où `queue` essayait enfin de s'abonner. Corrigé en reportant la fermeture à `disconnect()` : `connect(...)` enveloppe désormais le client réel dans une petite classe interne, `AdaptersDirQueueClient` (`IQueueClient`, délègue tout, sauf `disconnect()` qui ferme aussi le classloader après avoir délégué) — le classloader vit donc aussi longtemps que la connexion elle-même, jamais moins. `SchedulerBootstrap.shutdown()` (seul appelant de `disconnect()`) n'a rien eu à changer.
+
+**La connexion initiale au broker (mode standalone) tuait tout le nœud, pas seulement le déclencheur `queue`.** `StandaloneMain.runScheduler` appelait `connectQueueClient(...)` sans filet : une erreur de connexion (broker injoignable) remontait jusqu'à `main`, arrêtant le processus avant même l'enregistrement du premier job — `cron`/`interval`/`once`/`manual`/`dependency` inclus, aucun n'ayant de rapport avec `queue`. `RuntimeIntegrationHook.start` (mode embarqué) avait déjà la bonne règle (« sous-système secondaire » : échec journalisé, jamais propagé) — `StandaloneMain` ne l'appliquait pas. Corrigé pour appliquer la même règle dans les deux modes.
+
+Les deux corrections ont été vérifiées directement (démarrage réel contre un broker NATS, avec et sans connexion disponible), pas seulement par la suite automatisée, qui reste verte (316 tests) après les deux — `QueueClientConnectorTest` a dû être ajusté pour appeler `disconnect()` avant que son répertoire temporaire ne soit nettoyé (sinon Windows refuse de supprimer le JAR encore ouvert).
+
+### 17.10 Ajouter un nouveau type de déclencheur
+
+**Ajouté 2026-11-15.** Fil rouge : un déclencheur `webhook`, qui lance le job à chaque appel HTTP authentifié sur une route donnée — le même exemple que §8 du document de conception, détaillé ici avec les vraies signatures.
+
+**1. Choisir la famille.** `TemporalTrigger` quand Quartz connaît la date/l'intervalle à l'avance (`cron`/`interval`/`once`), `EventTrigger` quand le déclencheur écoute lui-même quelque chose et décide seul quand faire tourner le job (`manual`/`queue`/`dependency`, et `webhook` ici — personne ne sait *a priori* quand un appel HTTP arrivera).
+
+**2. Écrire la classe.** Un `record` si l'état est immuable (comme `CronTrigger`/`QueueTrigger`/`DependencyTrigger`), une classe sinon (comme `ManualTrigger`, qui garde un `TriggerContext` en champ mutable) — implémentant `EventTrigger` ou `TemporalTrigger`, jamais `TssTrigger` directement :
+
+```java
+public record WebhookTrigger(String id, String path) implements EventTrigger {
+    public static final String TYPE = "webhook";
+    public static final String PATH = "path";
+
+    public static WebhookTrigger parse(String id, Map<String, Object> definition) {
+        return new WebhookTrigger(id, TriggerTypes.requiredString(definition, PATH, TYPE, id));
+    }
+
+    @Override public String type() { return TYPE; }
+
+    @Override public Map<String, Object> definition() {
+        return TriggerTypes.definition(id, TYPE, PATH, path);
+    }
+
+    @Override public void start(TriggerContext context) throws Exception {
+        context.registerRoute(path, body ->
+            context.fire(UUID.randomUUID().toString(), "webhook:" + path, Map.of("payload", body), null)
+                != TriggerContext.FireResult.FAILED);
+    }
+}
+```
+
+- **`parse(id, definition)`** : chaque option passe par un lecteur de `TriggerTypes` — `requiredString`/`optionalString`, `requiredDuration`/`optionalDuration`, `requiredInstant`, `optionalInt`, `optionalBoolean`, `optionalStringMap` — jamais une lecture JSON à la main, pour que toute erreur soit rapportée de la même façon par tous les types : `TriggerTypes.invalid(type, id, message)` produit `"trigger 'nightly' (cron): 'expression' is required"`.
+- **`definition()`** : l'inverse exact de `parse`, construit avec `TriggerTypes.definition(id, type, clé, valeur, ...)` (variadique, paires clé/valeur) — c'est ce qui est stocké sur le job dans Quartz (`JobData.DATA_TRIGGERS`), affiché par `list`, et comparé par `JobReconciler` pour détecter qu'un déclencheur a changé.
+- **`start(context)`** (événementiel seulement) : s'abonne via une primitive déjà sur `TriggerContext` — `fire`, `subscribe`, `onJobCompleted` — ou une nouvelle si aucune ne convient (point 4). Une exception laisse le déclencheur inactif ; `EventTriggerRuntime` la journalise et retente au prochain `refresh()`, jamais fatal pour le nœud.
+- **`schedule()`** (temporel seulement, pas `start`) : renvoie un `ScheduleBuilder` Quartz — voir `CronTrigger`/`IntervalTrigger`/`OnceTrigger` pour les trois façons de le construire.
+- **`validate(owner, allJobs)`** : seulement si le déclencheur a besoin de connaître les *autres* jobs déclarés, comme `DependencyTrigger` (chaque amont doit exister, pas de cycle) — ne rien surcharger sinon, le défaut (`TssTrigger`) ne fait rien.
+
+**3. Une ligne dans `TriggerTypes.builtIns()`** : `types.register(WebhookTrigger.TYPE, WebhookTrigger::parse);`. Rien d'autre ne change dans `JobConfigLoader`, `JobReconciler`, `EventTriggerRuntime`, `JobAdminService`/`list` ou `ScriptJob` — tous ne travaillent que sur `TssTrigger`/`TemporalTrigger`/`EventTrigger`, jamais sur un type concret (c'est tout l'intérêt de la conception v4 par rapport à la v3, voir §9 du document de conception).
+
+**4. Nouvelle primitive sur `TriggerContext`, seulement si vraiment nécessaire.** `fire`/`onJobCompleted`/`database` existent depuis la phase 2 ; `subscribe` n'a été ajouté qu'en phase 4, uniquement parce que `queue` en avait besoin et qu'aucune primitive existante ne convenait — jamais ajoutée par anticipation. `webhook` aurait de la même façon besoin d'une méthode comme `registerRoute(path, handler)`, à n'ajouter qu'à ce moment précis : chaque primitive doit avoir un appelant réel avant d'exister.
+
+Exactement sur le modèle de `subscribe` (§4.3, classe `TriggerContext`), qui délègue à `runtime.queueClient()` :
+
+```java
+public synchronized void registerRoute(String path, Function<String, Boolean> handler) throws Exception {
+    WebhookHttpServer server = runtime.webhookServer();
+    if (server == null) {
+        throw new IllegalStateException("no webhook HTTP server started: a webhook trigger needs TSS_WEBHOOK_HTTP_PORT configured");
+    }
+    RouteHandle handle = server.addRoute(path, body -> {
+        boolean accepted;
+        try {
+            accepted = Boolean.TRUE.equals(handler.apply(body));
+        } catch (RuntimeException e) {
+            LOG.error("Trigger '{}' of job '{}' failed to handle a call on '{}': {}", triggerId, label(), path, e.getMessage(), e);
+            accepted = false;
+        }
+        return accepted ? 202 : 500; // the HTTP status returned to the caller
+    });
+    routes.add(handle);
+}
+```
+
+`WebhookHttpServer` lui-même est un nouveau listener HTTP propre à TSS (même logique que `IQueueClient` pour `queue` : jamais le serveur HTTP de l'hôte, jamais `AdminHttpServer`), démarré une fois par nœud sur un port dédié (`TSS_WEBHOOK_HTTP_PORT`, même famille de clé que `TSS_QUEUE_*`), et injecté dans `EventTriggerRuntime` à la construction, comme `queueClient` l'est déjà. `TriggerContext.close()` doit refermer les routes ouvertes par ce déclencheur — sur le modèle de `subscribe`, dont chaque `SubscriptionHandle` est annulée dans `close()` — mais jamais arrêter `WebhookHttpServer` lui-même, qui est partagé par tous les déclencheurs `webhook` du nœud.
+
+**Qui appelle quoi, et quand — la question qui se pose vraiment pour ce genre de primitive :**
+
+1. **À l'enregistrement, pas au déclenchement.** `WebhookTrigger.start(context)` tourne une fois par nœud, dans `EventTriggerRuntime.refresh()` (démarrage, ou après qu'un `queue`/`manual`/`dependency`/`webhook` déclaré a changé — voir §17.3). Il appelle `context.registerRoute(path, ...)`, qui installe la route dans le `WebhookHttpServer` **de ce nœud**. À cet instant, rien ne se déclenche : la route devient seulement joignable. Comme tout déclencheur événementiel, **chaque nœud du cluster qui porte ce job enregistre indépendamment la même route**, sur son propre port.
+2. **Le déclenchement a lieu plus tard, à chaque appel HTTP réel, sur le nœud qui le reçoit.** Quand un appelant externe envoie effectivement une requête sur `http://<ce nœud>:<port>/<path>`, c'est le thread de traitement HTTP de `WebhookHttpServer` (son propre pool, jamais un thread Quartz) qui invoque le gestionnaire enregistré — ici, la lambda écrite dans `start` (`body -> context.fire(...)`). **C'est à ce moment précis, et seulement à ce moment, que `context.fire(...)` est appelé** — une fois par appel HTTP réel, jamais à l'enregistrement.
+3. **`fire(...)` ne lance pas le script — il dépose juste un déclencheur Quartz ponctuel et persistant**, exactement comme pour `manual`/`queue`/`dependency` (§17.3). Le thread HTTP rend sa réponse (202/500 selon `FireResult`) immédiatement après, sans attendre l'exécution du job.
+4. **L'exécution du script se fait ailleurs, de façon asynchrone — pas forcément sur le nœud qui a reçu l'appel HTTP.** Le `JDBCJobStore` clusterisé de Quartz attribue ce déclencheur ponctuel au premier nœud qui l'acquiert (verrouillage de ligne standard), qui peut être un autre nœud que celui qui a reçu la requête HTTP d'origine.
+
+**Une vraie différence avec `queue`, à ne pas manquer.** Le groupe de livraison JetStream (`deliverGroup`, §17.4) garantit qu'un message n'arrive qu'à un seul nœud abonné. HTTP n'a aucune arbitration équivalente : si l'émetteur du webhook retente le même appel sur un autre nœud (cas fréquent — la plupart des fournisseurs de webhooks retentent après un timeout), **les deux nœuds appelleront chacun `fire(...)` pour le même événement logique**. C'est exactement ce que le paramètre `dedupKey` de `fire` sert à résoudre : si le webhook porte son propre identifiant de livraison (beaucoup en fournissent un, en en-tête), `start` doit le passer comme `dedupKey` au lieu de `null` — les deux appels entrent alors en collision sur la même clé de déclencheur Quartz, et le second est reconnu comme `FireResult.DUPLICATE` plutôt que de lancer le job une seconde fois.
+
+**5. Tests.** Un test de parsing (options valides/invalides, `id` par défaut, round-trip `definition()`/`fromJson`) et un test de bout en bout du `start`/`fire` — avec un faux de ce que le déclencheur écoute si cela demande une vraie infrastructure externe (voir `FakeQueueClient`/`FakeQueueClientFactory`, §17.7, enregistrés pour les tests uniquement via `META-INF/services`). **Si le type ouvre sa propre connexion externe** (comme `queue`), prévoir en plus un test d'intégration réel contre la vraie dépendance avant de considérer le travail fini — une suite entièrement mockée n'aurait pas pu détecter les deux bugs du §17.9, trouvés uniquement par un démarrage réel contre un vrai broker.
+
+**6. Documentation, trois endroits, pas un seul.** La table et la section détaillée du [guide développeur](../developer/task-scheduler-guide-v18-2026-11-15.md#trigger-types) (options, exemple, ce que `$Trigger` porte pour ce type) ; la section correspondante de la [référence de configuration](../configuration/task-scheduling-system-v11-2026-11-15.md#trigger-types--every-option-every-example) si le type a sa propre configuration (comme `queue` avec `TSS_QUEUE_*`) ; et ce document (§17.1 pour la table des classes, §17.2 pour le diagramme).

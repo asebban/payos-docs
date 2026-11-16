@@ -1,6 +1,6 @@
 Created: 2026-11-09
-Last updated: 2026-11-09
-Version: 1
+Last updated: 2026-11-13
+Version: 2
 
 # Démarrer TSS : prérequis, commande de démarrage et ligne de commande
 
@@ -14,7 +14,7 @@ Un résumé du mode embarqué (TSS dans `payos-runtime`) figure en [§13](#13-mo
 
 Tous les comportements décrits ici ont été vérifiés dans le code de `StandaloneMain` et `StandaloneConfigLoader` (version 1.1.3-RELEASE, build du 2026-11-09 : `tss-config.json` y est résolu par rapport au répertoire de base). Les cas limites (fichier de configuration introuvable, `--help`, commande inconnue, échec au démarrage) ont été vérifiés par une exécution réelle du jar.
 
-Pour le détail de chaque fonctionnalité (réconciliation, hot reload, API d'administration, historique, métriques), voir le [guide des opérations](task-scheduling-system-v19-2026-11-09.md). Pour l'écriture des scripts de job, voir le [guide développeur](../developer/task-scheduler-guide-v16-2026-11-09.md).
+Pour le détail de chaque fonctionnalité (réconciliation, hot reload, API d'administration, historique, métriques), voir le [guide des opérations](task-scheduling-system-v21-2026-11-15.md). Pour l'écriture des scripts de job, voir le [guide développeur](../developer/task-scheduler-guide-v18-2026-11-15.md).
 
 ## 1. Vue d'ensemble : la liste à suivre dans l'ordre
 
@@ -69,11 +69,12 @@ Les scripts sont dans le jar standalone :
 | Tables Quartz, Oracle | `org/quartz/impl/jdbcjobstore/tables_oracle.sql` |
 | Tables Quartz, H2 | `org/quartz/impl/jdbcjobstore/tables_h2.sql` |
 | Table d'historique TSS (tous éditeurs) | `db/migration/tss_job_execution.sql` |
+| Tables de l'état des dépendances (tous éditeurs, **facultatif** — seulement si un job déclare un déclencheur `dependency`) | `db/migration/tss_dependency.sql` |
 
 Extraction avec l'outil `jar` du JDK, ici pour PostgreSQL :
 
 ```bash
-jar xf payos-job-scheduler-<version>-standalone.jar org/quartz/impl/jdbcjobstore/tables_postgres.sql db/migration/tss_job_execution.sql
+jar xf payos-job-scheduler-<version>-standalone.jar org/quartz/impl/jdbcjobstore/tables_postgres.sql db/migration/tss_job_execution.sql db/migration/tss_dependency.sql
 ```
 
 Les fichiers sont extraits avec leur arborescence (`org/quartz/...`, `db/migration/...`) dans le répertoire courant.
@@ -109,6 +110,8 @@ java -cp payos-job-scheduler-<version>-standalone.jar org.h2.tools.RunScript \
 ```
 
 Une URL H2 `file:` relative est résolue par rapport au **répertoire de travail** du processus. Lancez donc cette commande depuis le répertoire d'où TSS sera démarré, ou utilisez un chemin absolu.
+
+Si un job déclare un déclencheur `dependency`, appliquez aussi `db/migration/tss_dependency.sql` de la même façon (même outil, même base, après `tss_job_execution.sql`) — sans lui, chaque fin de job amont est journalisée en erreur et jamais comptée.
 
 ### 3.4 Vérifier
 
@@ -178,6 +181,11 @@ Le fichier est **facultatif** : tout peut venir de variables d'environnement. S'
 | `TSS_MAX_PARALLEL_WORKERS_PER_JOB` | `scheduler.maxParallelWorkersPerJob` | `4` | Nombre maximal de workers par appel `$Parallel.forEach`. |
 | `TSS_METRICS_HTTP_PORT` | `scheduler.metricsHttpPort` | `0` (désactivé) | Port du serveur Prometheus `GET /metrics`. |
 | `TSS_HOT_RELOAD_ENABLED` | `scheduler.hotReloadEnabled` | `true` | Applique les modifications de `jobs/` sans redémarrage. |
+| `TSS_EVENT_TRIGGER_REFRESH_SECONDS` | `scheduler.eventTriggerRefreshSeconds` | `30` | Fréquence à laquelle chaque nœud relit et démarre/arrête les déclencheurs événementiels (`manual`/`queue`/`dependency`) pour les faire correspondre à ce qui est déclaré. |
+| `TSS_QUEUE_TYPE` | `queue.queueType` | *(aucun — pas de client queue)* | Type de broker pour les déclencheurs `queue`, propre à TSS, indépendant de la connexion queue éventuelle de l'application hôte. |
+| `TSS_QUEUE_HOST` | `queue.queueHost` | **obligatoire si `TSS_QUEUE_TYPE` est défini** | Hôte du broker. |
+| `TSS_QUEUE_PORT` | `queue.queuePort` | `4222` | Port du broker. |
+| `TSS_QUEUE_ADAPTERS_DIR` | `queue.queueAdaptersDir` | *(aucun — classpath seul)* | Répertoire de JARs `IQueueClientFactory` supplémentaires, chargés en plus du classpath. Chemin relatif résolu par rapport à `--scheduler-base-dir`. |
 | `TSS_JOBS_ROOT_DIR` | `jobs.rootDir` | `jobs` | Racine des jobs, relative au répertoire de base. |
 | `TSS_PAYOS_CONFIG_FILE` | `jobs.payosConfigFile` | `payos.json` | Fichier de configuration PayOS, relatif au répertoire de base. |
 | `TSS_ADMIN_HTTP_PORT` | `admin.httpPort` | `0` (désactivé) | Port de l'API HTTP d'administration. |
@@ -209,6 +217,10 @@ Exemple de `tss-config.json` :
     "metricsHttpPort": 9404,
     "hotReloadEnabled": true
   },
+  "queue": {
+    "queueType": "nats",
+    "queueHost": "broker.internal"
+  },
   "jobs": {
     "rootDir": "jobs",
     "payosConfigFile": "payos.json"
@@ -218,6 +230,8 @@ Exemple de `tss-config.json` :
   }
 }
 ```
+
+Le bloc `queue` est facultatif : omettez-le si aucun job ne déclare de déclencheur `queue`.
 
 ## 6. La configuration PayOS lue par TSS
 
@@ -260,7 +274,7 @@ Exemple minimal, dans `configDir` :
 
 ## 7. Les jobs
 
-- **`jobs/<tenant>/jobs.json`** déclare les jobs d'un tenant. Seuls les jobs `implementation.type: "script"` avec `trigger.type: "cron"` sont chargés aujourd'hui.
+- **`jobs/<tenant>/jobs.json`** déclare les jobs d'un tenant. Seuls les jobs `implementation.type: "script"` sont chargés. Chaque job déclare un tableau `triggers` (plutôt qu'un objet `trigger` unique, supprimé) — `cron`, `interval`, `once`, `manual`, `queue` ou `dependency`, en tout nombre et en tout mélange ; schéma complet dans le [guide développeur](../developer/task-scheduler-guide-v18-2026-11-15.md#trigger-types).
 - **`jobs/platform-jobs.json`** déclare les jobs sans tenant.
 - **Les scripts** sont résolus par rapport au **répertoire de base**, qui forme un « pool » partagé entre tenants : `"script": "jobs/reconciliation.js"` désigne `<répertoire de base>/jobs/reconciliation.js`. Un script manquant n'empêche pas le démarrage : seule l'exécution concernée échoue.
 
@@ -270,7 +284,7 @@ Exemple minimal, dans `configDir` :
     {
       "id": "tenant1-reconciliation",
       "implementation": { "type": "script", "script": "jobs/tenant1-reconciliation.js" },
-      "trigger": { "type": "cron", "expression": "0 0 2 * * ?" },
+      "triggers": [{ "id": "cron", "type": "cron", "expression": "0 0 2 * * ?" }],
       "parallelizable": false,
       "arguments": { "batchSize": 500 }
     }
@@ -278,11 +292,13 @@ Exemple minimal, dans `configDir` :
 }
 ```
 
+Les déclencheurs `manual`/`queue`/`dependency` sont démarrés et arrêtés en mémoire sur chaque nœud, pas par Quartz : un changement les concernant met jusqu'à `TSS_EVENT_TRIGGER_REFRESH_SECONDS` (30 s par défaut) à atteindre tous les nœuds. `queue` a besoin de la connexion broker propre à TSS ([§5](#5-la-configuration-propre-à-tss), clés `TSS_QUEUE_*`) ; `dependency` a besoin du script `db/migration/tss_dependency.sql` appliqué sur la base TSS, en plus de `tss_job_execution.sql`.
+
 Un `jobs/` vide ou absent n'est pas une erreur : TSS démarre sans job. Dans ce cas, le hot reload et l'API d'administration restent **désactivés jusqu'au prochain redémarrage**.
 
 Au démarrage, TSS crée `jobs/<tenant>/` pour chaque tenant déclaré qui n'en a pas encore. Le répertoire est vide, ou contient un `jobs.json` tiré de `jobs/template.json` si ce fichier existe.
 
-Format complet : [guide développeur](../developer/task-scheduler-guide-v16-2026-11-09.md). Changements à chaud : [opérations](task-scheduling-system-v19-2026-11-09.md#changing-jobs-without-a-restart).
+Format complet : [guide développeur](../developer/task-scheduler-guide-v18-2026-11-15.md). Changements à chaud : [opérations](task-scheduling-system-v21-2026-11-15.md#changing-jobs-without-a-restart).
 
 ## 8. La commande de démarrage
 
@@ -412,14 +428,20 @@ java -jar payos-job-scheduler-<version>-standalone.jar --scheduler-base-dir /opt
   "tenantId" : "tenant1",
   "scriptPath" : "jobs/tenant1-db-touch.js",
   "jobId" : "tenant1-db-touch",
-  "cronExpression" : "15 * * * * ?",
+  "triggers" : [ {
+    "id" : "cron",
+    "type" : "cron",
+    "definition" : { "id" : "cron", "type" : "cron", "expression" : "15 * * * * ?" },
+    "nextFireTime" : "2026-11-13T10:13:15Z",
+    "previousFireTime" : "2026-11-13T10:12:15Z"
+  } ],
   "parallelizable" : true,
-  "nextFireTime" : "2026-11-09T10:13:15Z",
-  "previousFireTime" : "2026-11-09T10:12:15Z"
+  "nextFireTime" : "2026-11-13T10:13:15Z",
+  "previousFireTime" : "2026-11-13T10:12:15Z"
 } ]
 ```
 
-Sans `--tenant`, tous les jobs sont listés. Un job plateforme a `"tenantId" : null`.
+`triggers` liste chaque déclencheur déclaré sur ce job — un déclencheur événementiel (`manual`/`queue`/`dependency`) y apparaît avec `"nextFireTime": null`/`"previousFireTime": null`, puisqu'il n'a pas d'échéance propre dans Quartz. Les champs `nextFireTime`/`previousFireTime` au niveau du job sont le plus proche/le plus récent parmi ses seuls déclencheurs temporels. Sans `--tenant`, tous les jobs sont listés. Un job plateforme a `"tenantId" : null`.
 
 ### 11.5 `trigger`
 
@@ -486,7 +508,7 @@ Pour un cluster, démarrez plusieurs processus avec :
 - le **même `TSS_SCHEDULER_INSTANCE_NAME`** ;
 - un **contenu `jobs/` identique** sur tous les nœuds.
 
-Un seul nœud déclenche un trigger donné, et les jobs d'un nœud arrêté sont repris par les autres. Un nœud dont les fichiers `jobs/` diffèrent réconcilierait tout le cluster vers sa propre version à son démarrage. Utilisez un volume partagé, ou un artefact unique déployé par le même pipeline. Détails : [opérations, Clustering](task-scheduling-system-v19-2026-11-09.md#clustering).
+Un seul nœud déclenche un trigger donné, et les jobs d'un nœud arrêté sont repris par les autres. Un nœud dont les fichiers `jobs/` diffèrent réconcilierait tout le cluster vers sa propre version à son démarrage. Utilisez un volume partagé, ou un artefact unique déployé par le même pipeline. Détails : [opérations, Clustering](task-scheduling-system-v21-2026-11-15.md#clustering).
 
 ## 13. Mode embarqué (TSS dans `payos-runtime`)
 
@@ -510,7 +532,7 @@ TSS peut aussi tourner dans le processus du runtime. Il n'y a alors pas de comma
 4. **Démarrage.** Il se fait avec le runtime : `java -jar payos-runtime-<version>.jar --bundle-path <bundle>`. Les lignes de log de TSS apparaissent dans celles du runtime. Un problème propre à TSS est logué sans arrêter le runtime.
 5. **CLI.** Utilisez le jar standalone avec `TSS_DB_URL` (et les identifiants) **et** `TSS_SCHEDULER_INSTANCE_NAME` égaux aux valeurs du bloc `task-scheduler`.
 
-Référence des clés : [configuration](../configuration/task-scheduling-system-v9-2026-11-09.md#embedded-mode--the-task-scheduler-block-of-payosjson).
+Référence des clés : [configuration](../configuration/task-scheduling-system-v11-2026-11-15.md#embedded-mode--the-task-scheduler-block-of-payosjson).
 
 ## 14. Dépannage du démarrage
 
@@ -528,11 +550,11 @@ Référence des clés : [configuration](../configuration/task-scheduling-system-
 | Hot reload ou API d'administration absents | Aucun job n'était déclaré au démarrage ([§7](#7-les-jobs)), ou bien `TSS_HOT_RELOAD_ENABLED=false` ou `TSS_ADMIN_HTTP_PORT` absent. Pour l'API, cherchez aussi un `WARN` « Failed to start the TSS admin HTTP endpoint ». |
 | Driver Oracle introuvable | Il n'est pas inclus dans le jar : voir [§8.4](#84-ajouter-un-driver-jdbc-par-exemple-oracle). |
 
-Autres symptômes en fonctionnement : [opérations, Troubleshooting](task-scheduling-system-v19-2026-11-09.md#troubleshooting).
+Autres symptômes en fonctionnement : [opérations, Troubleshooting](task-scheduling-system-v21-2026-11-15.md#troubleshooting).
 
 ## 15. Voir aussi
 
-- [Opérations TSS](task-scheduling-system-v19-2026-11-09.md) — modes de déploiement, réconciliation, hot reload, administration, historique, métriques, cluster.
-- [Configuration TSS](../configuration/task-scheduling-system-v9-2026-11-09.md) — référence des clés.
-- [Guide développeur TSS](../developer/task-scheduler-guide-v16-2026-11-09.md) — écrire et configurer des jobs.
-- [Diagramme de classes TSS](../architecture/job-scheduler-class-diagram-v20-2026-11-09.md) — conception interne.
+- [Opérations TSS](task-scheduling-system-v21-2026-11-15.md) — modes de déploiement, réconciliation, hot reload, administration, historique, métriques, cluster.
+- [Configuration TSS](../configuration/task-scheduling-system-v11-2026-11-15.md) — référence des clés.
+- [Guide développeur TSS](../developer/task-scheduler-guide-v18-2026-11-15.md) — écrire et configurer des jobs.
+- [Diagramme de classes TSS](../architecture/job-scheduler-class-diagram-v24-2026-11-15.md) — conception interne.

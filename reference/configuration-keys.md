@@ -295,7 +295,7 @@ Wired into `BootServer` since 2026-07-27 (`ConnectorFrameworkInitializer`). Do n
 `service-adapters-dir` legacy SPI loader above (formerly `service-adapters-dir`) — see the linked doc's
 "Distinguishing this from the service-adapter loader" section.
 
-## `task-scheduler` (Task Scheduling System) — [task-scheduling-system-v9-2026-11-09.md](../configuration/task-scheduling-system-v9-2026-11-09.md)
+## `task-scheduler` (Task Scheduling System) — [task-scheduling-system-v11-2026-11-15.md](../configuration/task-scheduling-system-v11-2026-11-15.md)
 
 Defined in `ma.s2m.payos.scheduler.config.IJobConfigSpec` (`payos-job-scheduler`), not in `IConfigSpec`. In embedded mode these fields are read from the `task-scheduler` block of `payos.json`; in standalone mode the same fields are read from `tss-config.json` (blocks `database`, `scheduler`, `jobs`, `admin`), each overridable by the environment variable or system property shown.
 
@@ -315,6 +315,11 @@ Defined in `ma.s2m.payos.scheduler.config.IJobConfigSpec` (`payos-job-scheduler`
 | `scheduler.maxParallelWorkersPerJob` | `TSS_MAX_PARALLEL_WORKERS_PER_JOB` | `4` | `$Parallel.forEach` worker ceiling. |
 | `scheduler.metricsHttpPort` | `TSS_METRICS_HTTP_PORT` | `0` (off) | Standalone only: Prometheus `/metrics` port. |
 | `scheduler.hotReloadEnabled` | `TSS_HOT_RELOAD_ENABLED` | `true` | Apply `jobs/` edits without a restart. |
+| `scheduler.eventTriggerRefreshSeconds` | `TSS_EVENT_TRIGGER_REFRESH_SECONDS` | `30` | How often each node re-reads and starts/stops event-driven triggers (`manual`/`queue`/`dependency`). |
+| — (no `task-scheduler` block; env/property only in embedded mode too) | `TSS_QUEUE_TYPE` (standalone JSON: `queue.queueType`) | *(none — no queue client)* | TSS's own broker type for `queue` triggers (SPI `IQueueClientFactory#type()`), independent of the host's own queue connection. |
+| — (same as above) | `TSS_QUEUE_HOST` (standalone JSON: `queue.queueHost`) | *(required once set)* | Broker host. |
+| — (same as above) | `TSS_QUEUE_PORT` (standalone JSON: `queue.queuePort`) | `4222` | Broker port. |
+| — (same as above) | `TSS_QUEUE_ADAPTERS_DIR` (standalone JSON: `queue.queueAdaptersDir`) | *(none — classpath only)* | Directory of extra `IQueueClientFactory` JARs to load alongside the classpath (standalone: relative to `--scheduler-base-dir`). |
 | `jobs.rootDir` | `TSS_JOBS_ROOT_DIR` | `jobs` | Standalone only: jobs root (embedded: always `<bundle>/jobs`). |
 | `jobs.payosConfigFile` | `TSS_PAYOS_CONFIG_FILE` | `payos.json` | Standalone only: PayOS configuration read for tenants and databases. |
 | `admin.httpPort` | `TSS_ADMIN_HTTP_PORT` | `0` (off) | Admin endpoint port (`/tss/admin/...`). |

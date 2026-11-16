@@ -1,12 +1,23 @@
 # ADR-0009 — Task Scheduling System for the multi-product financial platform: scheduler and batch-execution framework selection
 
 **Created:** 2026-10-01 (v1)
-**Last updated:** 2026-11-03
-**Version:** 4
+**Last updated:** 2026-11-13
+**Version:** 5
 
 ## Status
 
-**<span style="color: orange;">Proposed</span>** (revision 4). Supersedes [ADR-0009 v1](0009-task-scheduling-system.md).
+**<span style="color: orange;">Proposed</span>** (revision 5). Supersedes [ADR-0009 v1](0009-task-scheduling-system.md).
+
+### What changed in v5
+
+The decision itself is unchanged. v5 records the generic trigger system (plan: `payos-job-scheduler/docs/generic-triggers-implementation-plan-v4-2026-11-10.md`), implemented in four phases between 2026-11-11 and 2026-11-13, which replaces the single implicit cron schedule + separate manual-trigger mechanism this ADR originally described with one generic `TssTrigger` concept a job can carry any number of, of any mix of six types.
+
+- **`jobs.json`'s single `trigger: {...}` object is replaced by a `triggers: [...]` array** — a breaking change, not a soft migration: TSS was deployed nowhere yet, so an entry still using the old object is rejected outright, with a warning naming it, rather than silently interpreted or deprecated. Each array entry has its own `id`, `type` and type-specific options.
+- **Two families, two engines, no third abstraction layer between them.** A *temporal* trigger (`cron`, `interval`, `once`) only ever needs to hand Quartz its own schedule once, at reconciliation — Quartz still does all the clustering, persistence and misfire handling, unchanged. An *event-driven* trigger (`manual`, the pre-existing one re-modeled as a `TssTrigger`; `queue` and `dependency`, both new) is started and stopped **in memory, independently on every node** (`EventTriggerRuntime`), and decides for itself when to ask Quartz to run the job (`TriggerContext.fire(...)`, which deposits an ordinary one-shot, persistent Quartz trigger) — Quartz still executes every job, through the exact same path either family uses; an event-driven trigger never runs the script itself.
+- **`queue` fires a job on a broker message.** TSS opens its own connection to a message broker (`QueueClientConnector`, `ServiceLoader<IQueueClientFactory>`), entirely independent of whatever queue connection the host PayOS application already has for its own purposes — deliberately never through `ma.s2m.payos.queue.QueueClients` (the kernel's own helper), which depends on `PayOSConfig` and would couple this Spring-free, independently-deployable module to the whole kernel just to find a connector on the classpath. An optional configured directory of extra connector JARs (`TSS_QUEUE_ADAPTERS_DIR`) can be loaded alongside the classpath, mirroring the kernel's own `service-adapters-dir` mechanism but reimplemented independently for the same decoupling reason. A tenant job's `queue` trigger only accepts a message tagged with that tenant's own id in its metadata (default-deny); a platform job's accepts every message on the destination, its deliberate cross-tenant integration point. One cluster-scale consequence, accepted rather than engineered around: a destination is backed by one shared, durable consumer group across the whole cluster, so two *different* jobs declaring a `queue` trigger on the *same* destination share its message load between them rather than each receiving every message — one destination per job (or per small group of jobs meant to share it) is the operating rule this implies.
+- **`dependency` fires a job once every named upstream job has completed since this job's own last firing.** State lives in two new tables (`tss_dependency_join`, `tss_dependency_state`, applied once like `tss_job_execution.sql`), with a cluster-wide `SELECT ... FOR UPDATE` row lock as the actual concurrency control — the lock is held only long enough to record one completion and check whether the set is now complete, and is always released (transaction committed) **before** the job is ever fired, so a node never holds that lock while asking Quartz for a second connection from the same pool.
+- **A ~50-class false start, and why v4/v5 stays at 15.** An earlier, more "enterprise" design (activator/dispatcher/condition/source abstractions per trigger family) was implemented and then reverted as unreadable at that size. The replacement principle — one trigger type is one class, readable top to bottom, with a single `TriggerContext` as the only door to the rest of TSS — is what let `queue` and `dependency` be added as two classes each (one, for `queue`) rather than reopening that whole abstraction layer. Full design rationale, every class, and the cluster sequence diagrams: [class diagram §17](../job-scheduler-class-diagram-v24-2026-11-15.md) and the plan document above.
+- **Consequence for this ADR's own class diagram, below.** The embedded diagram's `JobDefinition` record still shows a single `cronExpression` field and `JobSummary` a single `cronExpression`/`nextFireTime`/`previousFireTime` triple — both superseded by the `triggers` list described above. This ADR's own diagram is a dated snapshot (as its own intro note already states); the class diagram document is the one kept in sync with each change, and is authoritative over this section where the two differ.
 
 ### What changed in v4
 
@@ -370,7 +381,7 @@ Revisit this if TSS needs a full operator dashboard and building it in-house pro
 
 ## Implemented architecture
 
-*(v4)* This section describes `payos-job-scheduler` as implemented on 2026-11-03. The operational detail (commands, configuration keys, file formats) lives in the [TSS operations guide](../../operations/task-scheduling-system-v19-2026-11-09.md) and the [TSS configuration reference](../../configuration/task-scheduling-system-v9-2026-11-09.md). The detailed, per-story class walkthrough remains in the [TSS class diagram document](../job-scheduler-class-diagram-v20-2026-11-09.md).
+*(v4)* This section describes `payos-job-scheduler` as implemented on 2026-11-03. The operational detail (commands, configuration keys, file formats) lives in the [TSS operations guide](../../operations/task-scheduling-system-v21-2026-11-15.md) and the [TSS configuration reference](../../configuration/task-scheduling-system-v11-2026-11-15.md). The detailed, per-story class walkthrough remains in the [TSS class diagram document](../job-scheduler-class-diagram-v24-2026-11-15.md).
 
 ### Deployment modes
 
@@ -714,7 +725,7 @@ Reading notes:
 | Situation | Action | Report entry |
 | --- | --- | --- |
 | Declared, not in Quartz | `scheduleJob` | `added` |
-| Cron expression differs, or the trigger is missing | `rescheduleJob` / `scheduleJob(trigger)` (the job keeps its key and history) | `rescheduled` |
+| A temporal trigger's (`cron`/`interval`/`once`) definition differs, or its Quartz trigger is missing | `rescheduleJob` / `scheduleJob(trigger)` (the job keeps its key and history) | `rescheduled` |
 | Job class, recovery flag, id, tenant, script path or arguments differ | `addJob(detail, replace = true, storeNonDurableWhileAwaitingScheduling = true)`; triggers are kept | `updated` |
 | In Quartz, declared nowhere | `deleteJob`, with a warning in the log | `deleted` |
 | Cannot be applied in this mode | Nothing | `skipped` |
@@ -755,7 +766,7 @@ Before every load of the jobs files (startup, hot reload, `sync`), `TenantDirect
 
 - **`trigger`** fires one declared job once, now, through `Scheduler.triggerJob`. Any node of the cluster may execute it. The run goes through the same quota guard, history, metrics and non-concurrency rules as a scheduled run, and its events carry `triggerType = manual`. An unknown job is rejected.
 - **`sync`** runs `JobsSynchronizer.synchronize()` and returns the `ReconciliationReport`.
-- **`list`** returns the registered jobs with cron expression, `parallelizable`, next and previous fire times, optionally filtered by tenant.
+- **`list`** returns the registered jobs with their full `triggers` array (each trigger's id, type, definition and, for a temporal one, its own next/previous fire time), `parallelizable`, and the job's own next/previous fire times (the earliest/latest across its temporal triggers), optionally filtered by tenant.
 
 The **CLI** is the standalone jar with a command (`sync`, `trigger --tenant <id> | --platform --script <path>`, `list [--tenant <id>]`). It builds a Quartz scheduler that is never started: it acts as a client of the cluster's job store, does not check in and never fires a job. Exit codes are 0 (success), 1 (sync with failures), 2 (usage error) and 3 (unknown job).
 
@@ -931,5 +942,5 @@ Given a multi-product, multi-tenant, regulated platform with hybrid deployment (
 - [Spring Batch 6 announcement](https://spring.io/blog/2025/07/23/spring-batch-6)
 - TSS base specification — `payos-job-scheduler/docs/task-scheduling-system-spec-v3-2026-09-25.md`
 - `$Parallel` design proposal — `payos-job-scheduler/docs/parallel-batch-processing-proposal-v1-2026-10-13.md`
-- [TSS operations guide](../../operations/task-scheduling-system-v19-2026-11-09.md) and [TSS configuration reference](../../configuration/task-scheduling-system-v9-2026-11-09.md)
-- [TSS class diagram document](../job-scheduler-class-diagram-v20-2026-11-09.md)
+- [TSS operations guide](../../operations/task-scheduling-system-v21-2026-11-15.md) and [TSS configuration reference](../../configuration/task-scheduling-system-v11-2026-11-15.md)
+- [TSS class diagram document](../job-scheduler-class-diagram-v24-2026-11-15.md)

@@ -8,8 +8,8 @@ For **operators** running PayOS in production: deployment, bundle encryption, se
 | --- | --- |
 | Deploying the runtime and bundles | [deployment.md](deployment.md) |
 | Running the notification service daemon | [notification-service.md](notification-service.md) |
-| Running the Task Scheduling System (TSS) — standalone or embedded, applying `jobs.json` changes without a restart (reconciliation, hot reload, `sync`), manual trigger from the command line or the secured admin HTTP endpoint | [task-scheduling-system-v19-2026-11-09.md](task-scheduling-system-v19-2026-11-09.md) |
-| Starting TSS from A to Z (French) — every prerequisite, the TSS database scripts per vendor, the exact start command (Linux, Windows, extra JDBC driver), expected start-up log lines, and every command-line option, output and exit code | [tss-startup-and-cli-guide-v1-2026-11-09.md](tss-startup-and-cli-guide-v1-2026-11-09.md) |
+| Running the Task Scheduling System (TSS) — standalone or embedded, applying `jobs.json` changes without a restart (reconciliation, hot reload, `sync`), manual trigger from the command line or the secured admin HTTP endpoint, event-driven triggers (`queue`/`dependency`) started per node and their cluster caveats | [task-scheduling-system-v21-2026-11-15.md](task-scheduling-system-v21-2026-11-15.md) |
+| Starting TSS from A to Z (French) — every prerequisite, the TSS database scripts per vendor, the exact start command (Linux, Windows, extra JDBC driver), expected start-up log lines, and every command-line option, output and exit code | [tss-startup-and-cli-guide-v2-2026-11-13.md](tss-startup-and-cli-guide-v2-2026-11-13.md) |
 | TSS standalone smoke-test walkthrough — one worked example against a real bundle, plus 3 findings a real run surfaced (one fixed) | [tss-standalone-smoke-test-walkthrough-v2-2026-10-08.md](tss-standalone-smoke-test-walkthrough-v2-2026-10-08.md) |
 | Encrypting/packing bundles (`edc`) | [bundle-encryption.md](bundle-encryption.md) |
 | Managing secrets (Vault, rotation, `spm`) | [secrets-management.md](secrets-management.md) |

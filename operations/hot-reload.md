@@ -99,7 +99,7 @@ The Task Scheduling System (TSS, `payos-job-scheduler`) reloads its own job decl
 - Controlled by `task-scheduler.scheduler.hotReloadEnabled` (embedded) or `TSS_HOT_RELOAD_ENABLED` (standalone), on by default, independent of `config-hot-reload-enabled`. When it is off, or on volumes that do not deliver file events (NFS, Kubernetes ConfigMaps), run the TSS `sync` command instead.
 - Still requires a TSS restart: the first jobs of a brand-new tenant, and a change of a tenant's `mappingFiles`.
 
-See [operations §Changing jobs without a restart](task-scheduling-system-v19-2026-11-09.md#changing-jobs-without-a-restart).
+See [operations §Changing jobs without a restart](task-scheduling-system-v21-2026-11-15.md#changing-jobs-without-a-restart).
 
 ## Next
 

@@ -4,7 +4,7 @@ Version: 5 — supersedes v4: renames the `editor-tenant-id` config key to `edit
 
 # payos-license-generator configuration
 
-Configuration reference for `payos-license-generator` — a standalone service, not part of `payos-runtime`'s `payos.json`/`bootstrap.json` configuration tree. For the full build/run walkthrough see [operations/payos-license-generator-setup-guide-v7-2026-11-01.md](../operations/payos-license-generator-setup-guide-v7-2026-11-01.md).
+Configuration reference for `payos-license-generator` — a standalone service, not part of `payos-runtime`'s `payos.json`/`bootstrap.json` configuration tree. For the full build/run walkthrough see [operations/payos-license-generator-setup-guide-v8-2026-11-17.md](../operations/payos-license-generator-setup-guide-v8-2026-11-17.md).
 
 ## Resolution order
 

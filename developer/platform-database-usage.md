@@ -1,6 +1,6 @@
 Created: 2026-10-16
-Last updated: 2026-10-16
-Version: 2 — supersedes v1: `$PlatformDB`'s write surface is now gated by `atomicityScope`, not left to application convention — see [`atomicityScope` and the read-only/full split](#atomicityscope-and-the-read-onlyfull-split).
+Last updated: 2026-11-17
+Version: 3 — supersedes v2: notes that `nativeList`/`nativeQuery`/`nativeUpdate` are not part of `$PlatformDB`'s surface here, only on the TSS job-script binding — see [What `$PlatformDB` does not do](#what-platformdb-does-not-do).
 
 # Platform database usage (`$PlatformDB`)
 
@@ -65,7 +65,7 @@ This only works on an endpoint declared `atomicityScope: "platform"` — see the
 
 ## What `$PlatformDB` does not do
 
-Same restrictions as `$DB`: no `describeSecret`-equivalent metadata read, no `capabilities()` query. There is also no per-entity opt-out — every entity mapped into `platform-database-service`'s Hibernate mapping files is tenant-independent for every caller; there's no way to make some entities in that database tenant-scoped and others not. If you need both tenant-scoped and tenant-independent entities, map the tenant-scoped ones under `database-service` (reachable via `$DB`) and the tenant-independent ones under `platform-database-service` (reachable via `$PlatformDB`) — they are genuinely two different databases, not two views of the same one.
+Same restrictions as `$DB`: no `describeSecret`-equivalent metadata read, no `capabilities()` query, and no `nativeList`/`nativeQuery`/`nativeUpdate` (raw SQL via JDBC) either — that capability exists on `IDatabaseService` itself but is deliberately not delegated by the API-facing bindings (`DatabaseBinding`/`ReadOnlyDatabaseBinding`); it's only available to TSS job scripts, via `$DB`/`$PlatformDB` as described in [task-scheduler-guide.md §3](task-scheduler-guide-v19-2026-11-17.md#native-sql-nativelistnativequerynativeupdate). There is also no per-entity opt-out — every entity mapped into `platform-database-service`'s Hibernate mapping files is tenant-independent for every caller; there's no way to make some entities in that database tenant-scoped and others not. If you need both tenant-scoped and tenant-independent entities, map the tenant-scoped ones under `database-service` (reachable via `$DB`) and the tenant-independent ones under `platform-database-service` (reachable via `$PlatformDB`) — they are genuinely two different databases, not two views of the same one.
 
 ## If `$PlatformDB` is missing
 

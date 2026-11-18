@@ -40,7 +40,7 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 
 ## Task Scheduling System job scripts
 
-Job scripts run by `payos-job-scheduler` (`ScriptJob`) get a different, smaller set of bindings, plus a `context` argument passed to their `execute(context)` function. None of the API-script bindings above (`$Request`, `$Response`, `$Api`, ...) exist there. Full explanations are in the [TSS developer guide](../developer/task-scheduler-guide-v18-2026-11-15.md).
+Job scripts run by `payos-job-scheduler` (`ScriptJob`) get a different, smaller set of bindings, plus a `context` argument passed to their `execute(context)` function. None of the API-script bindings above (`$Request`, `$Response`, `$Api`, ...) exist there. Full explanations are in the [TSS developer guide](../developer/task-scheduler-guide-v19-2026-11-17.md).
 
 | Binding | Present when | Purpose |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 Created: 2026-10-06
-Last updated: 2026-11-15
-Version: 18
+Last updated: 2026-11-18
+Version: 19 — supersedes v18: documents `nativeList`/`nativeQuery`/`nativeUpdate` on `$DB`/`$PlatformDB` for jobs, that API endpoint scripts deliberately don't get them, and the per-statement tenant-isolation enforcement (WHERE-anchored for `UPDATE`/`DELETE`/`SELECT`, automatic `tenant_id` injection for the common `INSERT` shape) — see [Native SQL](#native-sql-nativelistnativequerynativeupdate).
 
 # Task Scheduling System: developer guide
 
@@ -288,13 +288,36 @@ Both are bound as globals, exactly like an API script — but which one(s) are b
 | `executeUpdate(query, params)` | Bulk update/delete by query. |
 | `markRollbackOnly()` | Flags the current transaction to roll back, without throwing. |
 | `beginTransaction()` / `commitTransaction()` / `rollbackTransaction()` / `setAutoCommit(boolean)` / `isAutoCommit()` | **Manual transaction control — available to job scripts, unlike API scripts.** An API script's transaction can be shared across several nested calls on the same thread, so none of them are allowed to end it early; a job execution owns its own session outright, with nothing else sharing it, so this restriction doesn't apply. This is exactly what you need for the batch pattern in §5. |
+| `nativeList(table, selectColumns, whereFragment, tailClause, params)` / `nativeQuery(sql, params)` / `nativeUpdate(sql, params)` | Raw SQL via JDBC instead of HQL, for cases where ORM hydration overhead or query expressiveness (joins, aggregations) is the bottleneck — see [Native SQL](#native-sql-nativelistnativequerynativeupdate) below. |
 
 ### `$PlatformDB`
 
-- **Tenant-scoped job:** **read-only** — `newParams`/`get`/`getFresh`/`findAll`/`find`/`list`/`unique`/`first` only. No `save`/`update`/`delete`/`deleteById`/`executeUpdate` — not just blocked at runtime, the methods don't exist on the binding at all. You're reading cross-tenant reference data, outside your own tenant's scope.
-- **Platform-level job:** **read + write** — everything above, plus `save`/`update`/`delete`/`deleteById`/`executeUpdate`. No transaction-control methods, though (no `beginTransaction`/etc.) — each write auto-commits the moment it returns. **No cross-write atomicity**: several writes in sequence get no rollback across them if the script later throws — a partial sequence of commits stays committed. If you need all-or-nothing across multiple platform writes, use idempotent upserts or explicit cleanup in a `catch`, not an assumed rollback.
+- **Tenant-scoped job:** **read-only** — `newParams`/`get`/`getFresh`/`findAll`/`find`/`list`/`unique`/`first`/`nativeList`/`nativeQuery` only. No `save`/`update`/`delete`/`deleteById`/`executeUpdate`/`nativeUpdate` — not just blocked at runtime, the methods don't exist on the binding at all. You're reading cross-tenant reference data, outside your own tenant's scope.
+- **Platform-level job:** **read + write** — everything above, plus `save`/`update`/`delete`/`deleteById`/`executeUpdate`/`nativeUpdate`. No transaction-control methods, though (no `beginTransaction`/etc.) — each write auto-commits the moment it returns. **No cross-write atomicity**: several writes in sequence get no rollback across them if the script later throws — a partial sequence of commits stays committed. If you need all-or-nothing across multiple platform writes, use idempotent upserts or explicit cleanup in a `catch`, not an assumed rollback.
 
 `$DB`/`$PlatformDB` are simply absent (`typeof $DB === 'undefined'`) rather than bound-but-empty when not applicable — check with `typeof` if a script might run in either context, though in practice a given script is written for one or the other, not both.
+
+### Native SQL (`nativeList`/`nativeQuery`/`nativeUpdate`)
+
+These three methods execute raw SQL via JDBC instead of HQL, returning plain column-labeled rows (`Map<String, Object>`) instead of Hibernate-hydrated entities — for cases where ORM hydration overhead, or query expressiveness HQL can't give you (joins, aggregations, window functions), is the bottleneck. They live on `IDatabaseService` itself, so both `$DB` and `$PlatformDB` can expose them, subject to the same read/write split as every other method on those bindings — see the table and bullets above for which ones you get where.
+
+`nativeList(table, selectColumns, whereFragment, tailClause, params)` is the automatic-tenant-filter mode: give it a physical table name (not an HQL entity name), a column list (or `"*"` — `DISTINCT` works too, e.g. `"distinct customer_id"`), an optional WHERE condition, and an optional tail clause (`group by`/`having`/`order by`, appended verbatim after the WHERE; `null` or blank omits it — `LIMIT`/`TOP`/`FETCH` are deliberately out of scope since their syntax isn't portable across databases, use `nativeQuery` instead if you need one). On a tenant-scoped call, the kernel ANDs `tenant_id = :tenantId` onto your `whereFragment` automatically, the same way `list()` ANDs the tenant filter onto HQL — you never write that filter yourself. On a platform-scoped call (`$PlatformDB`), no tenant filter is added at all, since there is no tenant to filter by.
+
+`nativeQuery(sql, params)` / `nativeUpdate(sql, params)` are the full, caller-authored SQL mode — write the entire statement yourself (joins, CTEs, aggregations, bulk writes). On a tenant-scoped call, isolation is enforced differently depending on what the statement is:
+
+- `nativeQuery` and an `UPDATE`/`DELETE` passed to `nativeUpdate`: `sql`'s **WHERE clause** must reference a `:tenantId` named parameter — a `:tenantId` placeholder appearing only earlier in the statement (e.g. in a `SET` or `SELECT` list) does not satisfy this, since it never actually constrains which rows are read or written; the kernel binds it to the current tenant for you. `IllegalArgumentException` if there's no WHERE clause at all, or none of its `:tenantId` usages are inside it.
+- An `INSERT` passed to `nativeUpdate`, in the common `INSERT INTO table (cols...) VALUES (...), (...)` shape: a `tenant_id` column and its value are **injected automatically** — the same way `save()` stamps `tenantId` onto an entity map — so you don't write `:tenantId` yourself at all; just don't declare a `tenant_id` column already (if you do, the kernel trusts your statement as-is and injects nothing). An `INSERT` in any other shape (`INSERT ... SELECT`, no explicit column list, ...) falls back to requiring `:tenantId` to appear somewhere in the statement, with no placement guarantee — prefer the supported shape when you can.
+- Anything else (a `MERGE`, for instance): falls back to the same "appears somewhere" requirement as the `INSERT` fallback above.
+
+On a platform-scoped call (`$PlatformDB`), none of the above applies — there is no tenant to enforce, so no placeholder or injection happens at all.
+
+This is still a textual check, not a real SQL parser: it cannot verify a WHERE-clause `:tenantId` is `AND`ed rather than `OR`ed in, for instance. Treat it as catching the common mistake (forgetting the tenant filter entirely, or putting it in the wrong clause), not as a full guarantee.
+
+Map keys in every result row are the SQL column labels (the physical column name, or the `AS` alias if you give one) — not business entity attribute names, since there is no entity mapping involved for raw SQL. Alias your columns explicitly (`select total_amount as amount`) if you want parity with the keys `$DB.list()` would give you for the same table, and be aware that unaliased column-name casing depends on the database engine (PostgreSQL lowercases unquoted identifiers, Oracle uppercases them, etc.) — HQL's entity-attribute names don't have that portability problem, raw SQL does.
+
+### Native SQL is not available to API endpoint scripts
+
+`DatabaseBinding`/`ReadOnlyDatabaseBinding` — API scripts' own `$DB`/`$PlatformDB`, documented in [data access](data-access.md) and [platform database usage](platform-database-usage.md) — deliberately do not delegate `nativeList`/`nativeQuery`/`nativeUpdate`. Native SQL is a risk the kernel takes only for scripts a platform operator authors and deploys as scheduled jobs, not ones reachable from arbitrary tenant HTTP traffic: a mistake (a hand-written join missing its `:tenantId` placeholder, say) is caught in review/testing here, rather than surfacing against a live request. If an API endpoint needs raw-SQL performance against data it owns, move that logic into a job and have the endpoint trigger or poll it, rather than expecting these methods on `$DB` inside `api/`.
 
 ### `$Logger`
 

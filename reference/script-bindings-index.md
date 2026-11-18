@@ -40,7 +40,7 @@ Quick reference for the `$` bindings injected into API scripts. Full explanation
 
 ## Task Scheduling System job scripts
 
-Job scripts run by `payos-job-scheduler` (`ScriptJob`) get a different, smaller set of bindings, plus a `context` argument passed to their `execute(context)` function. None of the API-script bindings above (`$Request`, `$Response`, `$Api`, ...) exist there. Full explanations are in the [TSS developer guide](../developer/task-scheduler-guide-v19-2026-11-17.md).
+Job scripts run by `payos-job-scheduler` (`ScriptJob`) get a different, smaller set of bindings, plus a `context` argument passed to their `execute(context)` function. None of the API-script bindings above (`$Request`, `$Response`, `$Api`, ...) exist there. Full explanations are in the [TSS developer guide](../developer/task-scheduler-guide-v20-2026-11-18.md).
 
 | Binding | Present when | Purpose |
 | --- | --- | --- |
@@ -48,8 +48,9 @@ Job scripts run by `payos-job-scheduler` (`ScriptJob`) get a different, smaller 
 | `$PlatformDB` | Platform database configured | Platform database: read-only for a tenant job, read/write for a platform job. |
 | `$Parallel` | Tenant-scoped job | `forEach(items, fn[, options])`: process a batch on worker threads, each with its own `$DB` session. |
 | `$Logger` | Always | `info`/`warn`/`error`/`debug`; lines of a tenant job are tagged with its tenant. |
+| `$Metrics` | Always | `record(name, type, value, unit, tags)` (`JobMetricsBinding`) — custom Prometheus metric, tags masked via `SensitiveFieldMasker`. |
 | `$Trigger` | Always | What caused this execution (`TriggerBinding`): `getType()`/`getId()` always set (`"cron"`/`"nightly"`, `"manual"`/`"manual"`...); `getEventId()`/`getTriggeredBy()`/`getPayload()`/`getAttributes()`/`getUpstream()` only for an event-driven firing (`manual`/`queue`/`dependency`) — `null` for a `cron`/`interval`/`once` firing. |
-| `context` (argument of `execute`) | Always | `getJobId()`, `getTenantId()`, `getScriptPath()`, `getFiredAt()`, `getArguments()` (the job's `arguments` object from `jobs.json`, stored in the scheduler and identical on every node), plus `getDb()`, `getPlatformDb()`, `getParallel()`, `getLogger()`. |
+| `context` (argument of `execute`) | Always | `getJobId()`, `getTenantId()`, `getScriptPath()`, `getFiredAt()`, `getArguments()` (the job's `arguments` object from `jobs.json`, stored in the scheduler and identical on every node), plus `getDb()`, `getPlatformDb()`, `getParallel()`, `getLogger()`, `getMetrics()`. |
 
 ## Java interop
 

@@ -1,6 +1,6 @@
 Created: 2026-10-06
 Last updated: 2026-11-18
-Version: 19 — supersedes v18: documents `nativeList`/`nativeQuery`/`nativeUpdate` on `$DB`/`$PlatformDB` for jobs, that API endpoint scripts deliberately don't get them, and the per-statement tenant-isolation enforcement (WHERE-anchored for `UPDATE`/`DELETE`/`SELECT`, automatic `tenant_id` injection for the common `INSERT` shape) — see [Native SQL](#native-sql-nativelistnativequerynativeupdate).
+Version: 20 — supersedes v19: documents the new `$Metrics` binding (`JobMetricsBinding`) for emitting custom Prometheus metrics from a job script — see [`$Metrics` — emitting a custom Prometheus metric](#metrics--emitting-a-custom-prometheus-metric).
 
 # Task Scheduling System: developer guide
 
@@ -328,6 +328,54 @@ function execute(context) {
     $Logger.info("starting reconciliation"); // -> "[tenant:acme-corp] starting reconciliation"
 }
 ```
+
+### `$Metrics` — emitting a custom Prometheus metric
+
+Always bound, for every job, tenant-scoped or platform-level alike — unlike `$DB`/`$PlatformDB`, emitting a metric has no read/write split to restrict. Single method, the same shape as `payos-kernel`'s own `$Metrics` for API scripts:
+
+```javascript
+$Metrics.record(name, type, value, unit, tags);
+```
+
+- `name` — dot-namespaced, e.g. `"settlement.records.processed"`.
+- `type` — `"counter"`, `"gauge"`, or `"histogram"` (case-insensitive).
+- `value` — the sample value.
+- `unit` — e.g. `"ms"`, `"count"`, `"bytes"`.
+- `tags` — a plain object of low-cardinality, string-only key/value pairs; may be omitted/`null`.
+
+Which `type` to use depends on what the number means, not on how you happen to compute it:
+
+- **`counter`** — a value that only ever goes up over the process's lifetime (items processed, rows inserted, failures seen). Record the amount for *this* execution, not a running total you track yourself — Prometheus accumulates it across scrapes on its own.
+- **`gauge`** — a value that can go up or down, true at the moment you record it (a queue depth you just read, a cache size, how many rows matched a condition right now).
+- **`histogram`** — a distribution you want percentiles/buckets for, most commonly a duration. Compute the elapsed time yourself (there's no `$Metrics.startTimer()` — that's a host-side `PayOSMetrics` convenience this binding deliberately doesn't carry over) and record it once the work is done.
+
+```javascript
+function execute(context) {
+    // counter -- how many rows this run processed, not a running total
+    var processed = reconcileSettlements();
+    $Metrics.record("settlement.records.processed", "counter", processed, "count", { jobId: context.getJobId() });
+
+    // gauge -- a point-in-time reading, can go up or down between runs
+    var pendingBacklog = countPendingSettlements();
+    $Metrics.record("settlement.backlog.size", "gauge", pendingBacklog, "count", { jobId: context.getJobId() });
+
+    // histogram -- a duration, timed by the script itself
+    var startedAt = Date.now();
+    callSlowDownstreamService();
+    $Metrics.record("settlement.downstream.call.duration", "histogram", Date.now() - startedAt, "ms",
+            { jobId: context.getJobId(), outcome: "success" });
+}
+```
+
+Each call is independent — there's no requirement to emit all three types, or any at all; add a metric only where you actually want a dashboard or an alert on it.
+
+This bypasses the `PayOSMetrics` fixed-shape facade entirely, same as `$Metrics` on the API side — there is no cardinality enforcement here: a script can publish any name, type, unit, and tag set it wants. Keep tags low-cardinality (a `jobId`, a `status`, not a raw record id or a timestamp) — a Prometheus-style backend degrades or falls over under high-cardinality or unbounded-value tags. `tenant_id` only appears on the exported series at all if the deployment has opted in (`-Dpayos.metrics.tenant-tags-enabled=true` — see [operations: metrics catalog](../operations/metrics-catalog-v3-2026-11-18.md)); this binding doesn't change that policy.
+
+Unlike `$Metrics` on the API side, **tags passed here are masked** (the same `SensitiveFieldMasker` already used for `tss_job_execution` history rows and `JobMetricsEmitter`'s own host-side tags) before the sample is emitted — a tag value under a sensitive-sounding key (`password`, `token`, `apiKey`, ...) comes out as `***` rather than reaching Prometheus or any log line. This is a deliberate asymmetry: these tags are yours, not the host's, so the same defensive masking already applied elsewhere to free-form data applies here too.
+
+Best-effort, matching `$Metrics`' own tolerance for loss: a bad call — including an invalid `type` string — is logged at `warn` and never thrown into your script, so a mistake here never fails the job.
+
+Not available to API endpoint scripts' own `$DB`/`$PlatformDB` context — API scripts get their own, separate `$Metrics` (`payos-kernel`'s `MetricsBinding`, pre-filled with the request's `tenantId`/`correlationId` instead of just `tenantId`, and without tag masking); this is TSS's own counterpart (`JobMetricsBinding`), not a shared instance.
 
 ## 4. `$Parallel` — processing a batch concurrently
 

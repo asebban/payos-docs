@@ -54,7 +54,7 @@ A single background thread continuously drains the buffer to the store, off the 
 
 ## Metrics
 
-See [metrics-catalog-v2-2026-09-11.md](metrics-catalog-v2-2026-09-11.md) for the full inventory (buffer occupancy/growth/overflow, store append/verify/query duration and failures). At minimum, alert on:
+See [metrics-catalog-v3-2026-11-18.md](metrics-catalog-v3-2026-11-18.md) for the full inventory (buffer occupancy/growth/overflow, store append/verify/query duration and failures). At minimum, alert on:
 
 - `payos.audit.buffer.overflow.persistence.failed` (any increment) — an audit event was accepted and then lost (no store bound, or the synchronous overflow write itself failed).
 - `payos.audit.buffer.writer.append.failed` (any increment) — a *buffered* (non-overflow) event was accepted, drained by the writer, and then lost when persisting it failed. The caller received a normal, successful return for this event with no way to know it was later lost — this is the single most severe failure category in the pipeline.
@@ -82,5 +82,5 @@ See [metrics-catalog-v2-2026-09-11.md](metrics-catalog-v2-2026-09-11.md) for the
 ## Next
 
 - [configuration/audit-trail.md](../configuration/audit-trail.md) — every key, default, and the config shape.
-- [metrics-catalog-v2-2026-09-11.md](metrics-catalog-v2-2026-09-11.md) — full metric inventory.
+- [metrics-catalog-v3-2026-11-18.md](metrics-catalog-v3-2026-11-18.md) — full metric inventory.
 - [observability.md](observability.md) — the always-on audit log line and diagnostics this capability sits alongside.

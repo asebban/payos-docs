@@ -1,7 +1,7 @@
 # Scripting bindings reference
 
 Created: 2026-06-05
-Last updated: 2026-10-19
+Last updated: 2026-11-18
 
 Before a script runs, the kernel injects a set of `$`-prefixed **bindings** into the
 scripting context via `scriptingEngine.putMember(name, value)`. They are the only sanctioned
@@ -138,8 +138,10 @@ namespacing.
 $Analytics.logEvent("checkout_started", { plan: "pro" });
 $Analytics.logEvent("checkout_started", { plan: "pro" }, $Principal.get("id")); // explicit actorId
 
-$Metrics.record("connector.execution.duration", "histogram", 42.0, "ms",
+$Metrics.record("connector.execution.duration", "histogram", 42.0, "ms",       // distribution, e.g. a duration
         { connectorType: "CardNetwork", outcome: "SUCCESS" });
+$Metrics.record("checkout.items.count", "counter", items.length, "count", { plan: "pro" }); // monotonic, this call's own amount
+$Metrics.record("checkout.cart.value", "gauge", cartTotal, "amount", { currency: "MAD" });  // point-in-time reading, up or down
 
 $Integration.publish("ma.s2m.payos.payment.completed.v1", { paymentId: paymentId, amount: 1500 });
 

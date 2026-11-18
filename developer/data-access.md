@@ -62,7 +62,7 @@ These are documented in
 
 ## Raw SQL is not available here
 
-`IDatabaseService` has a `nativeList`/`nativeQuery`/`nativeUpdate` surface (raw SQL via JDBC, for cases where ORM hydration overhead or HQL's expressiveness is the bottleneck), but `$DB` on an API endpoint script deliberately doesn't delegate it — only TSS job scripts get it, via the same binding's job-side counterpart. See [task-scheduler-guide.md §3](task-scheduler-guide-v19-2026-11-17.md#native-sql-nativelistnativequerynativeupdate) for the full method surface and reasoning. If an endpoint needs raw-SQL performance, move that logic into a job and have the endpoint trigger or poll it.
+`IDatabaseService` has a `nativeList`/`nativeQuery`/`nativeUpdate` surface (raw SQL via JDBC, for cases where ORM hydration overhead or HQL's expressiveness is the bottleneck), but `$DB` on an API endpoint script deliberately doesn't delegate it — only TSS job scripts get it, via the same binding's job-side counterpart. See [task-scheduler-guide.md §3](task-scheduler-guide-v20-2026-11-18.md#native-sql-nativelistnativequerynativeupdate) for the full method surface and reasoning. If an endpoint needs raw-SQL performance, move that logic into a job and have the endpoint trigger or poll it.
 
 ## If `$DB` is missing
 

@@ -14,7 +14,7 @@ Un résumé du mode embarqué (TSS dans `payos-runtime`) figure en [§13](#13-mo
 
 Tous les comportements décrits ici ont été vérifiés dans le code de `StandaloneMain` et `StandaloneConfigLoader` (version 1.1.3-RELEASE, build du 2026-11-09 : `tss-config.json` y est résolu par rapport au répertoire de base). Les cas limites (fichier de configuration introuvable, `--help`, commande inconnue, échec au démarrage) ont été vérifiés par une exécution réelle du jar.
 
-Pour le détail de chaque fonctionnalité (réconciliation, hot reload, API d'administration, historique, métriques), voir le [guide des opérations](task-scheduling-system-v21-2026-11-15.md). Pour l'écriture des scripts de job, voir le [guide développeur](../developer/task-scheduler-guide-v19-2026-11-17.md).
+Pour le détail de chaque fonctionnalité (réconciliation, hot reload, API d'administration, historique, métriques), voir le [guide des opérations](task-scheduling-system-v21-2026-11-15.md). Pour l'écriture des scripts de job, voir le [guide développeur](../developer/task-scheduler-guide-v20-2026-11-18.md).
 
 ## 1. Vue d'ensemble : la liste à suivre dans l'ordre
 
@@ -274,7 +274,7 @@ Exemple minimal, dans `configDir` :
 
 ## 7. Les jobs
 
-- **`jobs/<tenant>/jobs.json`** déclare les jobs d'un tenant. Seuls les jobs `implementation.type: "script"` sont chargés. Chaque job déclare un tableau `triggers` (plutôt qu'un objet `trigger` unique, supprimé) — `cron`, `interval`, `once`, `manual`, `queue` ou `dependency`, en tout nombre et en tout mélange ; schéma complet dans le [guide développeur](../developer/task-scheduler-guide-v19-2026-11-17.md#trigger-types).
+- **`jobs/<tenant>/jobs.json`** déclare les jobs d'un tenant. Seuls les jobs `implementation.type: "script"` sont chargés. Chaque job déclare un tableau `triggers` (plutôt qu'un objet `trigger` unique, supprimé) — `cron`, `interval`, `once`, `manual`, `queue` ou `dependency`, en tout nombre et en tout mélange ; schéma complet dans le [guide développeur](../developer/task-scheduler-guide-v20-2026-11-18.md#trigger-types).
 - **`jobs/platform-jobs.json`** déclare les jobs sans tenant.
 - **Les scripts** sont résolus par rapport au **répertoire de base**, qui forme un « pool » partagé entre tenants : `"script": "jobs/reconciliation.js"` désigne `<répertoire de base>/jobs/reconciliation.js`. Un script manquant n'empêche pas le démarrage : seule l'exécution concernée échoue.
 
@@ -298,7 +298,7 @@ Un `jobs/` vide ou absent n'est pas une erreur : TSS démarre sans job. Dans ce 
 
 Au démarrage, TSS crée `jobs/<tenant>/` pour chaque tenant déclaré qui n'en a pas encore. Le répertoire est vide, ou contient un `jobs.json` tiré de `jobs/template.json` si ce fichier existe.
 
-Format complet : [guide développeur](../developer/task-scheduler-guide-v19-2026-11-17.md). Changements à chaud : [opérations](task-scheduling-system-v21-2026-11-15.md#changing-jobs-without-a-restart).
+Format complet : [guide développeur](../developer/task-scheduler-guide-v20-2026-11-18.md). Changements à chaud : [opérations](task-scheduling-system-v21-2026-11-15.md#changing-jobs-without-a-restart).
 
 ## 8. La commande de démarrage
 
@@ -556,5 +556,5 @@ Autres symptômes en fonctionnement : [opérations, Troubleshooting](task-schedu
 
 - [Opérations TSS](task-scheduling-system-v21-2026-11-15.md) — modes de déploiement, réconciliation, hot reload, administration, historique, métriques, cluster.
 - [Configuration TSS](../configuration/task-scheduling-system-v11-2026-11-15.md) — référence des clés.
-- [Guide développeur TSS](../developer/task-scheduler-guide-v19-2026-11-17.md) — écrire et configurer des jobs.
+- [Guide développeur TSS](../developer/task-scheduler-guide-v20-2026-11-18.md) — écrire et configurer des jobs.
 - [Diagramme de classes TSS](../architecture/job-scheduler-class-diagram-v24-2026-11-15.md) — conception interne.

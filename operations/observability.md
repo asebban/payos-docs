@@ -87,6 +87,6 @@ publishing to a queue, include these in the payload — see
 ## Next
 
 - [audit-trail.md](audit-trail.md) — the pluggable, durable audit-trail capability.
-- [metrics-catalog-v2-2026-09-11.md](metrics-catalog-v2-2026-09-11.md) — exhaustive Micrometer/Prometheus metrics inventory.
+- [metrics-catalog-v3-2026-11-18.md](metrics-catalog-v3-2026-11-18.md) — exhaustive Micrometer/Prometheus metrics inventory.
 - [hot-reload.md](hot-reload.md)
 - [reference/http-endpoints.md](../reference/http-endpoints.md)

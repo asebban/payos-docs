@@ -193,5 +193,5 @@ Unlike most `bootstrap.json` blocks, `audit-trail` keys have **no** system prope
 - [developer/atomicity-setup-guide.md](../developer/atomicity-setup-guide.md) — ordered end-to-end setup for `$DB`/`$PlatformDB` + `$Audit` + `$Queue`, including the `category: "database"` + mapping-file steps above.
 - [architecture/atomicity-db-audit-queue-v10-2026-10-20.md](../architecture/atomicity-db-audit-queue-v10-2026-10-20.md) — `$Audit`'s own strict, in-transaction write (distinct from this block, which governs system events and, for the `database` category, where `$Audit`'s writes also land).
 - [operations/audit-trail.md](../operations/audit-trail.md) — how the feature behaves operationally, metrics, known limitations, troubleshooting.
-- [operations/metrics-catalog-v2-2026-09-11.md](../operations/metrics-catalog-v2-2026-09-11.md) — full audit-trail metric inventory.
+- [operations/metrics-catalog-v3-2026-11-18.md](../operations/metrics-catalog-v3-2026-11-18.md) — full audit-trail metric inventory.
 - [operations/observability.md](../operations/observability.md) — the always-on audit log line this capability sits behind.

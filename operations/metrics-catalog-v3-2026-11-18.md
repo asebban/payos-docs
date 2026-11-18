@@ -1,6 +1,6 @@
 Created: 2026-09-09
-Last updated: 2026-09-11
-Version: 2
+Last updated: 2026-11-18
+Version: 3 — supersedes v2: notes the new `JobMetricsBinding` (`$Metrics` for TSS job scripts), the same uncatalogued-facade-bypass risk as the API-side `$Metrics`, with one difference (tag masking) — see [`$Metrics`](#metrics-metricsbinding-for-api-scripts-jobmetricsbinding-for-tss-job-scripts--not-covered-by-the-architecture-doc).
 
 # Metrics Catalog (Micrometer / Prometheus)
 
@@ -277,9 +277,9 @@ These instrument the interfaces exposed to application scripts, not the backend 
 
 **`$Queue` (`QueueBinding`)** — listed under Queue and NATS above.
 
-**`$Metrics` (`MetricsBinding`) — not covered by the architecture doc**
+**`$Metrics` (`MetricsBinding` for API scripts, `JobMetricsBinding` for TSS job scripts) — not covered by the architecture doc**
 
-`ApiResourceHandler` exposes a `$Metrics` binding to scripts with a single `record(name, type, value, unit, tags)` entry point. It builds a `MetricSample` directly and sends it through `MetricsRecorder`, bypassing every `PayOSMetrics` convenience method. In practice this means script code can publish **any metric name, any type (counter/gauge/histogram), any unit, and any tag set** — including high-cardinality tags — with only a try/catch-and-log-at-warn as a safety net, no naming or cardinality enforcement. This is the one place in the platform where the metrics category does not go through a fixed-shape facade the way audit/connector/queue metrics do; treat any script-emitted metric name as untrusted for cardinality purposes, and if this binding is used in production, budget dashboard/alert time to check what names and tags scripts are actually publishing.
+`ApiResourceHandler` exposes a `$Metrics` binding to API scripts, and `payos-job-scheduler`'s `ScriptJob` exposes an equivalent `$Metrics` to job scripts (unconditionally, tenant-scoped or platform-level), both with a single `record(name, type, value, unit, tags)` entry point. Both build a `MetricSample` directly and send it through `MetricsRecorder`, bypassing every `PayOSMetrics` convenience method. In practice this means script code — API or job — can publish **any metric name, any type (counter/gauge/histogram), any unit, and any tag set** — including high-cardinality tags — with only a try/catch-and-log-at-warn as a safety net, no naming or cardinality enforcement. This is the one place in the platform where the metrics category does not go through a fixed-shape facade the way audit/connector/queue metrics do; treat any script-emitted metric name as untrusted for cardinality purposes, and if either binding is used in production, budget dashboard/alert time to check what names and tags scripts are actually publishing. One difference between the two: `JobMetricsBinding` passes its `tags` through `SensitiveFieldMasker` before emission (the same masking already applied to `tss_job_execution` history rows and `JobMetricsEmitter`'s own host-side tags); `MetricsBinding` on the API side does not mask tags at all.
 
 ## Known gaps
 

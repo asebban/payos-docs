@@ -78,7 +78,7 @@ This is the template the other five follow, extended in schema v2 with the busin
 
 ## 2. Analytics — `AnalyticsEvent`
 
-Interface: `IAnalyticsRecorder` (`payos-foundation`, package `ma.s2m.payos.analytics`) · Facade: `AnalyticsRecorder` · Default impl: `Slf4jAnalyticsRecorder` (JSON at `INFO` to the `ANALYTICS` logger category), both in `payos/src/main/java/ma/s2m/payos/analytics/`. A real deployment typically swaps this for a batching/buffering or HTTP-shipping implementation, either via `AnalyticsRecorder.setInstance(...)` or a `META-INF/services` override (see the governing principle section).
+Interface: `IAnalyticsRecorder` (`payos-foundation`, package `ma.s2m.payos.events.analytics` — corrected 2026-11-19; this table previously said `ma.s2m.payos.analytics`, which was never updated when the classes moved) · Facade: `AnalyticsRecorder` · Default impl: `Slf4jAnalyticsRecorder` (JSON at `INFO` to the `ANALYTICS` logger category), both in `payos/src/main/java/ma/s2m/payos/events/analytics/`. A real deployment typically swaps this for a batching/buffering or HTTP-shipping implementation, either via `AnalyticsRecorder.setInstance(...)` or a `META-INF/services` override (see the governing principle section) — `payos-analytics-queue` is one such implementation, see [analytics-queue-guide-v2-2026-11-19.md](./analytics-queue-guide-v2-2026-11-19.md).
 
 | Field | Type | Notes |
 |---|---|---|

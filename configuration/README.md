@@ -36,6 +36,7 @@ All keys below are defined as constants in `ma.s2m.payos.config.IConfigSpec`.
 | `platform-database-service` | [platform-database-service.md](platform-database-service.md) | Optional second, tenant-independent database backing `$PlatformDB` — reference/master data shared by every tenant. |
 | `queue-service` | [queue-service.md](queue-service.md) | MoM connector (e.g. NATS). |
 | `notification-service` | [notification-service.md](notification-service.md) | Publisher-side `$Notification` connector — independent from `queue-service`. |
+| `analytics-service` | [analytics-service-v3-2026-11-19.md](analytics-service-v3-2026-11-19.md) | `type`+`parameters` for `payos-analytics-queue` (the queue-backed `IAnalyticsRecorder`) — reuses the `queue-service` connection itself, nothing broker-specific to configure here. |
 | `secret-service` | [secret-service.md](secret-service.md) | Secret provider (`filesystem`/`vault`). |
 | `editor-secret-service` | [editor-secret-service.md](editor-secret-service.md) | Separate secret provider backing the bundle-wide `encryptionKey` (`CryptoService`/`IEditorProvider`) — deliberately distinct from `secret-service`. |
 | `webhooks` / `http-webhook-service` | [webhook-service.md](webhook-service.md) | Webhook dispatcher. |

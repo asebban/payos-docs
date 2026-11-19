@@ -905,7 +905,7 @@ Voir [configuration/task-scheduling-system-v11-2026-11-15.md](../configuration/t
 
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-1-live-and-point-in-time-view-of-job-executions.md` — Story 2.1, y compris la correction du design de pool de connexions et le déplacement de `JobExecutionListener`.
 - `payos-job-scheduler/_bmad-output/implementation-artifacts/2-2-query-execution-history-and-failure-diagnosis.md` — Story 2.2, y compris la recherche sur le quota (`TenantPolicyService`/`ISlidingWindowCounter` écarté), le constat empirique sur la récupération après crash, et le suivi same-day sur la surcharge par tenant.
-- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v20-2026-11-18.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`/`$Parallel`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
+- [Developer guide: Task Scheduling System](../developer/task-scheduler-guide-v21-2026-11-19.md) — le guide développeur complet : configuration de TSS et des jobs par tenant, écriture de scripts de job, surface `context`/`$DB`/`$PlatformDB`/`$Parallel`, et le même sujet (outcomes & historique) du point de vue d'un auteur de script.
 - [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v11-2026-11-15.md) — référence de configuration (quota global/par tenant, récupération après crash).
 
 ## 14. Story 2.3 — métriques (`metrics/`) et exposition HTTP standalone
@@ -1035,7 +1035,7 @@ public final class StandaloneMetricsServer implements Closeable {
 
 ### 14.6 Référence
 
-Voir [configuration/task-scheduling-system-v11-2026-11-15.md](../configuration/task-scheduling-system-v11-2026-11-15.md), [developer guide §12](../developer/task-scheduler-guide-v20-2026-11-18.md#12-metrics) et [operations guide](../operations/task-scheduling-system-v21-2026-11-15.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
+Voir [configuration/task-scheduling-system-v11-2026-11-15.md](../configuration/task-scheduling-system-v11-2026-11-15.md), [developer guide §12](../developer/task-scheduler-guide-v21-2026-11-19.md#12-metrics) et [operations guide](../operations/task-scheduling-system-v21-2026-11-15.md#metrics) pour la documentation orientée utilisateur/opérateur des mêmes mécanismes.
 
 ### 14.7 Références (Story 2.3)
 
@@ -1083,7 +1083,7 @@ Repère les fragments `key: value`/`key=value` dont la clé correspond à `Sensi
 
 ### 15.5 Référence
 
-Voir [developer guide §13](../developer/task-scheduler-guide-v20-2026-11-18.md#13-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v21-2026-11-15.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
+Voir [developer guide §13](../developer/task-scheduler-guide-v21-2026-11-19.md#13-sensitive-data-masking) et [configuration/operations](../operations/task-scheduling-system-v21-2026-11-15.md) pour la documentation orientée développeur/opérateur des mêmes mécanismes.
 
 ### 15.6 Références (Story 2.4)
 
@@ -1649,4 +1649,4 @@ public synchronized void registerRoute(String path, Function<String, Boolean> ha
 
 **5. Tests.** Un test de parsing (options valides/invalides, `id` par défaut, round-trip `definition()`/`fromJson`) et un test de bout en bout du `start`/`fire` — avec un faux de ce que le déclencheur écoute si cela demande une vraie infrastructure externe (voir `FakeQueueClient`/`FakeQueueClientFactory`, §17.7, enregistrés pour les tests uniquement via `META-INF/services`). **Si le type ouvre sa propre connexion externe** (comme `queue`), prévoir en plus un test d'intégration réel contre la vraie dépendance avant de considérer le travail fini — une suite entièrement mockée n'aurait pas pu détecter les deux bugs du §17.9, trouvés uniquement par un démarrage réel contre un vrai broker.
 
-**6. Documentation, trois endroits, pas un seul.** La table et la section détaillée du [guide développeur](../developer/task-scheduler-guide-v20-2026-11-18.md#trigger-types) (options, exemple, ce que `$Trigger` porte pour ce type) ; la section correspondante de la [référence de configuration](../configuration/task-scheduling-system-v11-2026-11-15.md#trigger-types--every-option-every-example) si le type a sa propre configuration (comme `queue` avec `TSS_QUEUE_*`) ; et ce document (§17.1 pour la table des classes, §17.2 pour le diagramme).
+**6. Documentation, trois endroits, pas un seul.** La table et la section détaillée du [guide développeur](../developer/task-scheduler-guide-v21-2026-11-19.md#trigger-types) (options, exemple, ce que `$Trigger` porte pour ce type) ; la section correspondante de la [référence de configuration](../configuration/task-scheduling-system-v11-2026-11-15.md#trigger-types--every-option-every-example) si le type a sa propre configuration (comme `queue` avec `TSS_QUEUE_*`) ; et ce document (§17.1 pour la table des classes, §17.2 pour le diagramme).

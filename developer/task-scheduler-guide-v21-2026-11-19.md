@@ -1,6 +1,6 @@
 Created: 2026-10-06
-Last updated: 2026-11-18
-Version: 20 — supersedes v19: documents the new `$Metrics` binding (`JobMetricsBinding`) for emitting custom Prometheus metrics from a job script — see [`$Metrics` — emitting a custom Prometheus metric](#metrics--emitting-a-custom-prometheus-metric).
+Last updated: 2026-11-19
+Version: 21 — supersedes v20: documents the new `$Insight` binding (`JobInsightBinding`) for emitting a business/usage insight from a job script — TSS's own counterpart to API scripts' `emitInsight()`, delivered via the Analytics facade (not a queue — see this section for the doc/code history) — see [`$Insight` — emitting a business/usage insight](#insight--emitting-a-businessusage-insight).
 
 # Task Scheduling System: developer guide
 
@@ -376,6 +376,31 @@ Unlike `$Metrics` on the API side, **tags passed here are masked** (the same `Se
 Best-effort, matching `$Metrics`' own tolerance for loss: a bad call — including an invalid `type` string — is logged at `warn` and never thrown into your script, so a mistake here never fails the job.
 
 Not available to API endpoint scripts' own `$DB`/`$PlatformDB` context — API scripts get their own, separate `$Metrics` (`payos-kernel`'s `MetricsBinding`, pre-filled with the request's `tenantId`/`correlationId` instead of just `tenantId`, and without tag masking); this is TSS's own counterpart (`JobMetricsBinding`), not a shared instance.
+
+### `$Insight` — emitting a business/usage insight
+
+Always bound, for every job, tenant-scoped or platform-level alike. TSS's own counterpart to API scripts' `emitInsight()` — but shaped as an ordinary binding your script *calls*, not a function your script *defines* for the host to call back (a job has no HTTP response for the host to read a return value out of, which is how API's `emitInsight()` works):
+
+```javascript
+$Insight.emit(insight);
+```
+
+`insight` is any JSON-serializable value — a plain object, array, string, number, or boolean. `null`/omitted is a no-op.
+
+```javascript
+function execute(context) {
+    var summary = reconcileSettlements();
+    $Insight.emit({ recordsReconciled: summary.count, discrepancies: summary.discrepancies });
+}
+```
+
+Delivered the same way `emitInsight` actually delivers today: through the `Analytics` event-category facade (`AnalyticsRecorder`), as an event named **`"job_insight_emitted"`** — a different name from `emitInsight`'s own `"script_insight_emitted"`, so the two origins stay distinguishable on a dashboard. This is **not** a queue — older `payos-docs` pages describe a queue-based path for `emitInsight` that was replaced by the Analytics facade (kernel commit `4a182f4`) and is now dead code; this binding mirrors what `emitInsight` actually does today, not that stale description.
+
+`correlationId` on the emitted event is this execution's own Quartz `fireInstanceId` — stable across every `$Insight.emit(...)` call within the same run, and the same id this execution's `tss_job_execution` history row uses, so an insight can be traced back to the run that produced it.
+
+A platform-level job can call `$Insight.emit(...)`, but it's a silent no-op (debug log only) — an Analytics event requires a tenant to attribute it to, exactly why `emitInsight` itself skips publishing for an API request with no `X-Tenant-Id` header.
+
+Like `$Metrics`, the payload is passed through `SensitiveFieldMasker` before emission (a `password`/`token`/`apiKey`-shaped key anywhere in `insight`, including nested objects, comes out as `***`) — this is your own data, not host-controlled, so the same defensive masking applies. Best-effort: a bad call is logged at `warn` and never thrown into your script.
 
 ## 4. `$Parallel` — processing a batch concurrently
 

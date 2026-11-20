@@ -32,11 +32,11 @@ The whole `analytics-service` block is optional — if it is absent, or `paramet
 
 ## Why there is (almost) nothing broker-specific to configure here
 
-`payos-analytics-queue` deliberately opens no broker connection of its own. It publishes through `ma.s2m.payos.config.PayOSConfig#getQueueClient()`, the same already-connected `IQueueClient` the `$Queue` scripting binding uses — wired up entirely from the existing [`queue-service`](queue-service.md) block (in the kernel) or the TSS-specific queue configuration (standalone TSS — see [task-scheduling-system-v11-2026-11-15.md](task-scheduling-system-v11-2026-11-15.md)). `type`/`parameters` here only ever name the Analytics implementation and its own keys, never the broker: changing the broker is entirely a matter of changing `queue-service.configuration.type` (or TSS's own queue block), with zero changes needed here.
+`payos-analytics-queue` deliberately opens no broker connection of its own. It publishes through `ma.s2m.payos.config.PayOSConfig#getQueueClient()`, the same already-connected `IQueueClient` the `$Queue` scripting binding uses — wired up entirely from the existing [`queue-service`](queue-service.md) block (in the kernel) or the TSS-specific queue configuration (standalone TSS — see [task-scheduling-system-v12-2026-11-20.md](task-scheduling-system-v12-2026-11-20.md)). `type`/`parameters` here only ever name the Analytics implementation and its own keys, never the broker: changing the broker is entirely a matter of changing `queue-service.configuration.type` (or TSS's own queue block), with zero changes needed here.
 
 ## Related references
 
 - [Analytics queue guide](../developer/analytics-queue-guide-v2-2026-11-19.md) — full developer guide.
 - [`queue-service`](queue-service.md) — the broker connection this module reuses, in the kernel.
-- [`task-scheduling-system`](task-scheduling-system-v11-2026-11-15.md) — TSS's own, independent queue connection, used the same way in standalone/embedded TSS.
+- [`task-scheduling-system`](task-scheduling-system-v12-2026-11-20.md) — TSS's own, independent queue connection, used the same way in standalone/embedded TSS.
 - [Architecture: event-category classloading across kernel and TSS](../architecture/analytics-event-category-classloading-v1-2026-11-19.md) — where to physically place `payos-analytics-queue.jar` so it is actually discovered via SPI in each deployment mode.

@@ -381,7 +381,7 @@ Revisit this if TSS needs a full operator dashboard and building it in-house pro
 
 ## Implemented architecture
 
-*(v4)* This section describes `payos-job-scheduler` as implemented on 2026-11-03. The operational detail (commands, configuration keys, file formats) lives in the [TSS operations guide](../../operations/task-scheduling-system-v21-2026-11-15.md) and the [TSS configuration reference](../../configuration/task-scheduling-system-v11-2026-11-15.md). The detailed, per-story class walkthrough remains in the [TSS class diagram document](../job-scheduler-class-diagram-v24-2026-11-15.md).
+*(v4)* This section describes `payos-job-scheduler` as implemented on 2026-11-03. The operational detail (commands, configuration keys, file formats) lives in the [TSS operations guide](../../operations/task-scheduling-system-v22-2026-11-20.md) and the [TSS configuration reference](../../configuration/task-scheduling-system-v12-2026-11-20.md). The detailed, per-story class walkthrough remains in the [TSS class diagram document](../job-scheduler-class-diagram-v24-2026-11-15.md).
 
 ### Deployment modes
 
@@ -942,5 +942,5 @@ Given a multi-product, multi-tenant, regulated platform with hybrid deployment (
 - [Spring Batch 6 announcement](https://spring.io/blog/2025/07/23/spring-batch-6)
 - TSS base specification — `payos-job-scheduler/docs/task-scheduling-system-spec-v3-2026-09-25.md`
 - `$Parallel` design proposal — `payos-job-scheduler/docs/parallel-batch-processing-proposal-v1-2026-10-13.md`
-- [TSS operations guide](../../operations/task-scheduling-system-v21-2026-11-15.md) and [TSS configuration reference](../../configuration/task-scheduling-system-v11-2026-11-15.md)
+- [TSS operations guide](../../operations/task-scheduling-system-v22-2026-11-20.md) and [TSS configuration reference](../../configuration/task-scheduling-system-v12-2026-11-20.md)
 - [TSS class diagram document](../job-scheduler-class-diagram-v24-2026-11-15.md)

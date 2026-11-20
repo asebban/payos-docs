@@ -139,4 +139,4 @@ it has any key at all, so `edc` always copies it through unchanged.
 - [cli-tools/edc.md](../cli-tools/edc.md)
 - [secrets-management.md](secrets-management.md)
 - [architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md](../architecture/tenant-bundle-encryption-key-lifecycle-v11-2026-09-13.md) — the full key lifecycle this page's CLI reference fits into: generating the key, deciding custody, delivering to a client, and rotating it.
-- [architecture/license-validation-architecture-v4-2026-11-16.md](../architecture/license-validation-architecture-v4-2026-11-16.md) — how the license-derived key path above fits into license validation on the `payos-kernel` side.
+- [architecture/license-validation-architecture-v5-2026-11-20.md](../architecture/license-validation-architecture-v5-2026-11-20.md) — how the license-derived key path above fits into license validation on the `payos-kernel` side.

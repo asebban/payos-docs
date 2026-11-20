@@ -48,7 +48,7 @@ java -Dpayos.license.devMode=false -jar payos-runtime.jar
 PAYOS_LICENSE_DEV_MODE=false java -jar payos-runtime.jar
 ```
 
-Full configuration reference, including everything the real validator needs once it's active (licence file location, editor secret provider): [configuration/license-service-v2-2026-11-01.md](../configuration/license-service-v2-2026-11-01.md). Design rationale: [architecture/license-validation-architecture-v4-2026-11-16.md](../architecture/license-validation-architecture-v4-2026-11-16.md).
+Full configuration reference, including everything the real validator needs once it's active (licence file location, editor secret provider): [configuration/license-service-v2-2026-11-01.md](../configuration/license-service-v2-2026-11-01.md). Design rationale: [architecture/license-validation-architecture-v5-2026-11-20.md](../architecture/license-validation-architecture-v5-2026-11-20.md).
 
 ## Verifying which validator is active at runtime
 

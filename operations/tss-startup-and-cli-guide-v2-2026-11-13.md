@@ -14,7 +14,7 @@ Un résumé du mode embarqué (TSS dans `payos-runtime`) figure en [§13](#13-mo
 
 Tous les comportements décrits ici ont été vérifiés dans le code de `StandaloneMain` et `StandaloneConfigLoader` (version 1.1.3-RELEASE, build du 2026-11-09 : `tss-config.json` y est résolu par rapport au répertoire de base). Les cas limites (fichier de configuration introuvable, `--help`, commande inconnue, échec au démarrage) ont été vérifiés par une exécution réelle du jar.
 
-Pour le détail de chaque fonctionnalité (réconciliation, hot reload, API d'administration, historique, métriques), voir le [guide des opérations](task-scheduling-system-v21-2026-11-15.md). Pour l'écriture des scripts de job, voir le [guide développeur](../developer/task-scheduler-guide-v21-2026-11-19.md).
+Pour le détail de chaque fonctionnalité (réconciliation, hot reload, API d'administration, historique, métriques), voir le [guide des opérations](task-scheduling-system-v22-2026-11-20.md). Pour l'écriture des scripts de job, voir le [guide développeur](../developer/task-scheduler-guide-v22-2026-11-20.md).
 
 ## 1. Vue d'ensemble : la liste à suivre dans l'ordre
 
@@ -274,7 +274,7 @@ Exemple minimal, dans `configDir` :
 
 ## 7. Les jobs
 
-- **`jobs/<tenant>/jobs.json`** déclare les jobs d'un tenant. Seuls les jobs `implementation.type: "script"` sont chargés. Chaque job déclare un tableau `triggers` (plutôt qu'un objet `trigger` unique, supprimé) — `cron`, `interval`, `once`, `manual`, `queue` ou `dependency`, en tout nombre et en tout mélange ; schéma complet dans le [guide développeur](../developer/task-scheduler-guide-v21-2026-11-19.md#trigger-types).
+- **`jobs/<tenant>/jobs.json`** déclare les jobs d'un tenant. Seuls les jobs `implementation.type: "script"` sont chargés. Chaque job déclare un tableau `triggers` (plutôt qu'un objet `trigger` unique, supprimé) — `cron`, `interval`, `once`, `manual`, `queue` ou `dependency`, en tout nombre et en tout mélange ; schéma complet dans le [guide développeur](../developer/task-scheduler-guide-v22-2026-11-20.md#trigger-types).
 - **`jobs/platform-jobs.json`** déclare les jobs sans tenant.
 - **Les scripts** sont résolus par rapport au **répertoire de base**, qui forme un « pool » partagé entre tenants : `"script": "jobs/reconciliation.js"` désigne `<répertoire de base>/jobs/reconciliation.js`. Un script manquant n'empêche pas le démarrage : seule l'exécution concernée échoue.
 
@@ -298,7 +298,7 @@ Un `jobs/` vide ou absent n'est pas une erreur : TSS démarre sans job. Dans ce 
 
 Au démarrage, TSS crée `jobs/<tenant>/` pour chaque tenant déclaré qui n'en a pas encore. Le répertoire est vide, ou contient un `jobs.json` tiré de `jobs/template.json` si ce fichier existe.
 
-Format complet : [guide développeur](../developer/task-scheduler-guide-v21-2026-11-19.md). Changements à chaud : [opérations](task-scheduling-system-v21-2026-11-15.md#changing-jobs-without-a-restart).
+Format complet : [guide développeur](../developer/task-scheduler-guide-v22-2026-11-20.md). Changements à chaud : [opérations](task-scheduling-system-v22-2026-11-20.md#changing-jobs-without-a-restart).
 
 ## 8. La commande de démarrage
 
@@ -508,7 +508,7 @@ Pour un cluster, démarrez plusieurs processus avec :
 - le **même `TSS_SCHEDULER_INSTANCE_NAME`** ;
 - un **contenu `jobs/` identique** sur tous les nœuds.
 
-Un seul nœud déclenche un trigger donné, et les jobs d'un nœud arrêté sont repris par les autres. Un nœud dont les fichiers `jobs/` diffèrent réconcilierait tout le cluster vers sa propre version à son démarrage. Utilisez un volume partagé, ou un artefact unique déployé par le même pipeline. Détails : [opérations, Clustering](task-scheduling-system-v21-2026-11-15.md#clustering).
+Un seul nœud déclenche un trigger donné, et les jobs d'un nœud arrêté sont repris par les autres. Un nœud dont les fichiers `jobs/` diffèrent réconcilierait tout le cluster vers sa propre version à son démarrage. Utilisez un volume partagé, ou un artefact unique déployé par le même pipeline. Détails : [opérations, Clustering](task-scheduling-system-v22-2026-11-20.md#clustering).
 
 ## 13. Mode embarqué (TSS dans `payos-runtime`)
 
@@ -532,7 +532,7 @@ TSS peut aussi tourner dans le processus du runtime. Il n'y a alors pas de comma
 4. **Démarrage.** Il se fait avec le runtime : `java -jar payos-runtime-<version>.jar --bundle-path <bundle>`. Les lignes de log de TSS apparaissent dans celles du runtime. Un problème propre à TSS est logué sans arrêter le runtime.
 5. **CLI.** Utilisez le jar standalone avec `TSS_DB_URL` (et les identifiants) **et** `TSS_SCHEDULER_INSTANCE_NAME` égaux aux valeurs du bloc `task-scheduler`.
 
-Référence des clés : [configuration](../configuration/task-scheduling-system-v11-2026-11-15.md#embedded-mode--the-task-scheduler-block-of-payosjson).
+Référence des clés : [configuration](../configuration/task-scheduling-system-v12-2026-11-20.md#embedded-mode--the-task-scheduler-block-of-payosjson).
 
 ## 14. Dépannage du démarrage
 
@@ -550,11 +550,11 @@ Référence des clés : [configuration](../configuration/task-scheduling-system-
 | Hot reload ou API d'administration absents | Aucun job n'était déclaré au démarrage ([§7](#7-les-jobs)), ou bien `TSS_HOT_RELOAD_ENABLED=false` ou `TSS_ADMIN_HTTP_PORT` absent. Pour l'API, cherchez aussi un `WARN` « Failed to start the TSS admin HTTP endpoint ». |
 | Driver Oracle introuvable | Il n'est pas inclus dans le jar : voir [§8.4](#84-ajouter-un-driver-jdbc-par-exemple-oracle). |
 
-Autres symptômes en fonctionnement : [opérations, Troubleshooting](task-scheduling-system-v21-2026-11-15.md#troubleshooting).
+Autres symptômes en fonctionnement : [opérations, Troubleshooting](task-scheduling-system-v22-2026-11-20.md#troubleshooting).
 
 ## 15. Voir aussi
 
-- [Opérations TSS](task-scheduling-system-v21-2026-11-15.md) — modes de déploiement, réconciliation, hot reload, administration, historique, métriques, cluster.
-- [Configuration TSS](../configuration/task-scheduling-system-v11-2026-11-15.md) — référence des clés.
-- [Guide développeur TSS](../developer/task-scheduler-guide-v21-2026-11-19.md) — écrire et configurer des jobs.
+- [Opérations TSS](task-scheduling-system-v22-2026-11-20.md) — modes de déploiement, réconciliation, hot reload, administration, historique, métriques, cluster.
+- [Configuration TSS](../configuration/task-scheduling-system-v12-2026-11-20.md) — référence des clés.
+- [Guide développeur TSS](../developer/task-scheduler-guide-v22-2026-11-20.md) — écrire et configurer des jobs.
 - [Diagramme de classes TSS](../architecture/job-scheduler-class-diagram-v24-2026-11-15.md) — conception interne.

@@ -295,7 +295,7 @@ Wired into `BootServer` since 2026-07-27 (`ConnectorFrameworkInitializer`). Do n
 `service-adapters-dir` legacy SPI loader above (formerly `service-adapters-dir`) — see the linked doc's
 "Distinguishing this from the service-adapter loader" section.
 
-## `task-scheduler` (Task Scheduling System) — [task-scheduling-system-v11-2026-11-15.md](../configuration/task-scheduling-system-v11-2026-11-15.md)
+## `task-scheduler` (Task Scheduling System) — [task-scheduling-system-v12-2026-11-20.md](../configuration/task-scheduling-system-v12-2026-11-20.md)
 
 Defined in `ma.s2m.payos.scheduler.config.IJobConfigSpec` (`payos-job-scheduler`), not in `IConfigSpec`. In embedded mode these fields are read from the `task-scheduler` block of `payos.json`; in standalone mode the same fields are read from `tss-config.json` (blocks `database`, `scheduler`, `jobs`, `admin`), each overridable by the environment variable or system property shown.
 

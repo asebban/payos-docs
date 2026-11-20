@@ -35,7 +35,7 @@ One pre-existing kernel detail worth knowing about while you're here: the kernel
 - **TSS embedded mode** (`TaskSchedulerRuntimeIntegration`, running inside the same JVM as `payos-runtime`): same classloader promotion as the kernel, since it's the same process — no extra wiring either.
 - **TSS standalone mode** (`StandaloneMain`, its own separate deployable/process): also works, but only because of a dedicated fix — see the next section. Without it, the jar would silently never be found there.
 
-In all three cases, install the jar by dropping it into whichever `service-adapters-dir` that process's own `payos.json`/bootstrap configuration points at (standalone TSS reads the exact same key, from its own PayOS config file — see [configuration/task-scheduling-system-v11-2026-11-15.md](../configuration/task-scheduling-system-v11-2026-11-15.md)).
+In all three cases, install the jar by dropping it into whichever `service-adapters-dir` that process's own `payos.json`/bootstrap configuration points at (standalone TSS reads the exact same key, from its own PayOS config file — see [configuration/task-scheduling-system-v12-2026-11-20.md](../configuration/task-scheduling-system-v12-2026-11-20.md)).
 
 ## The standalone-TSS fix, in detail
 
@@ -60,4 +60,4 @@ See [configuration/analytics-service-v3-2026-11-19.md](../configuration/analytic
 - [Configuration: `analytics-service`](../configuration/analytics-service-v3-2026-11-19.md) — the configuration key reference.
 - [Architecture: event-category classloading across kernel and TSS](../architecture/analytics-event-category-classloading-v1-2026-11-19.md) — the full classloader mechanics behind the "deploying it" section above.
 - [Configuration: `queue-service`](../configuration/queue-service.md) — the broker connection this module reuses.
-- [Task Scheduling System: developer guide](./task-scheduler-guide-v21-2026-11-19.md) — `$JobInsight`, which already calls `AnalyticsRecorder.logEvent(...)` the same way `$Analytics` does.
+- [Task Scheduling System: developer guide](./task-scheduler-guide-v22-2026-11-20.md) — `$JobInsight`, which already calls `AnalyticsRecorder.logEvent(...)` the same way `$Analytics` does.

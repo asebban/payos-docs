@@ -1,10 +1,10 @@
 Created: 2026-10-06
-Last updated: 2026-11-19
-Version: 21 — supersedes v20: documents the new `$Insight` binding (`JobInsightBinding`) for emitting a business/usage insight from a job script — TSS's own counterpart to API scripts' `emitInsight()`, delivered via the Analytics facade (not a queue — see this section for the doc/code history) — see [`$Insight` — emitting a business/usage insight](#insight--emitting-a-businessusage-insight).
+Last updated: 2026-11-20
+Version: 22 — supersedes v21: new §14 documents standalone-mode license validation (`LicenseAuthenticityValidator`) and `${VAR}`/`${file:...}` token resolution plus `CryptoService` decryption support for `tss-config.json`/`jobs.json`/job scripts — corrects this page's own earlier §1/§6.1 statements that TSS never expands `${...}` placeholders, which were accurate before this revision but no longer are. See [14. Secrets, encrypted config, and license validation (standalone mode)](#14-secrets-encrypted-config-and-license-validation-standalone-mode).
 
 # Task Scheduling System: developer guide
 
-A self-contained, start-to-finish guide to writing and configuring job scripts for the Task Scheduling System (`payos-job-scheduler`, "TSS") — a Quartz-backed, clustered scheduler that fires your script on a cron schedule, separate from the HTTP/TCP/queue request path the rest of this guide otherwise covers. This page covers everything you need as a developer: how to configure TSS itself, where your job's own configuration lives, every field your script's `execute(context)` function can use, a realistic batch-job example, and what happens to an execution that your script never even gets to run. The condensed config-key reference (for a quick lookup once you already know this material) is [configuration/task-scheduling-system-v11-2026-11-15.md](../configuration/task-scheduling-system-v11-2026-11-15.md); the full day-2 operational picture (clustering, deployment modes, starting/stopping) is [operations/task-scheduling-system-v21-2026-11-15.md](../operations/task-scheduling-system-v21-2026-11-15.md).
+A self-contained, start-to-finish guide to writing and configuring job scripts for the Task Scheduling System (`payos-job-scheduler`, "TSS") — a Quartz-backed, clustered scheduler that fires your script on a cron schedule, separate from the HTTP/TCP/queue request path the rest of this guide otherwise covers. This page covers everything you need as a developer: how to configure TSS itself, where your job's own configuration lives, every field your script's `execute(context)` function can use, a realistic batch-job example, and what happens to an execution that your script never even gets to run. The condensed config-key reference (for a quick lookup once you already know this material) is [configuration/task-scheduling-system-v12-2026-11-20.md](../configuration/task-scheduling-system-v12-2026-11-20.md); the full day-2 operational picture (clustering, deployment modes, starting/stopping) is [operations/task-scheduling-system-v22-2026-11-20.md](../operations/task-scheduling-system-v22-2026-11-20.md).
 
 ## 1. Configuring TSS itself (`tss-config.json`)
 
@@ -20,7 +20,7 @@ TSS's own isolated schema (Quartz's own `QRTZ_*` tables, plus `tss_job_execution
 | --- | --- | --- | --- |
 | `TSS_DB_URL` | `dbUrl` | *(required)* | Where TSS's own schema lives. Every clustered node must point at the **same** database — this is literally how Quartz clustering works (nodes coordinate through shared rows in this database, not through talking to each other directly). |
 | `TSS_DB_USER` | `dbUser` | *(none)* | Username for the connection above. |
-| `TSS_DB_PASSWORD` | `dbPassword` | *(none)* | Password. **Always set this as the environment variable, never in the file** — TSS's config loader does not expand `${...}` placeholders the way the kernel's `bootstrap.json` does, so a literal `dbPassword` in the file is a literal plaintext secret on disk. |
+| `TSS_DB_PASSWORD` | `dbPassword` | *(none)* | Password. The environment variable wins priority either way; if it must live in the file, write `"dbPassword": "${TSS_DB_PASSWORD}"` rather than a literal value — see [§14](#14-secrets-encrypted-config-and-license-validation-standalone-mode). |
 | `TSS_DB_DRIVER` | `dbDriver` | *(required)* | JDBC driver class, e.g. `org.postgresql.Driver`. |
 | `TSS_DB_VENDOR` | `dbVendor` | *(generic ANSI SQL)* | `postgresql` or `oracle` — selects which Quartz `DriverDelegate` is used for SQL dialect differences. Any other value (including leaving it unset) falls back to Quartz's generic `StdJDBCDelegate`, which works for H2/most ANSI-SQL databases but may not handle vendor-specific locking semantics optimally. |
 | `TSS_DB_SCHEMA` | `dbSchema` | *(none)* | Schema name, if your database uses a non-default one. Affects the table-name prefix Quartz uses internally for every `QRTZ_*` table lookup. |
@@ -35,7 +35,7 @@ TSS's own isolated schema (Quartz's own `QRTZ_*` tables, plus `tss_job_execution
 | `TSS_MAX_CONCURRENT_EXECUTIONS_PER_TENANT` | `maxConcurrentExecutionsPerTenant` | `0` (disabled) | Global default for the per-tenant concurrency quota — §8 covers this in full. |
 | `TSS_MAX_PARALLEL_WORKERS_PER_JOB` | `maxParallelWorkersPerJob` | `4` | Ceiling on how many worker threads a single `$Parallel.forEach` call may use to fan a **single execution's own batch** out — a completely different knob from the per-tenant quota above: that one limits how many whole job executions a tenant may have running at once, this one limits how much fan-out happens *inside* one of them. See §4. |
 | `TSS_METRICS_HTTP_PORT` | `metricsHttpPort` | `0` (disabled) | **Standalone mode only** — see §12 for why. A positive value starts a tiny Prometheus scrape HTTP server on that port. |
-| `TSS_HOT_RELOAD_ENABLED` | `hotReloadEnabled` | `true` | Applies your edits to `jobs.json`/`custom-jobs.json`/`platform-jobs.json` (new job, cron expression, `parallelizable`, `arguments`, removed job) about 2 s after you save, without restarting TSS. A brand-new tenant still needs a restart. See [operations §Changing jobs without a restart](../operations/task-scheduling-system-v21-2026-11-15.md#changing-jobs-without-a-restart). |
+| `TSS_HOT_RELOAD_ENABLED` | `hotReloadEnabled` | `true` | Applies your edits to `jobs.json`/`custom-jobs.json`/`platform-jobs.json` (new job, cron expression, `parallelizable`, `arguments`, removed job) about 2 s after you save, without restarting TSS. A brand-new tenant still needs a restart. See [operations §Changing jobs without a restart](../operations/task-scheduling-system-v22-2026-11-20.md#changing-jobs-without-a-restart). |
 
 ### Full `tss-config.json` example
 
@@ -62,14 +62,14 @@ TSS's own isolated schema (Quartz's own `QRTZ_*` tables, plus `tss_job_execution
 }
 ```
 
-`dbPassword` is deliberately absent — set `TSS_DB_PASSWORD` as an environment variable at launch instead.
+`dbPassword` is deliberately absent — set `TSS_DB_PASSWORD` as an environment variable at launch instead, or reference `"${TSS_DB_PASSWORD}"` in the file itself (see [§14](#14-secrets-encrypted-config-and-license-validation-standalone-mode)).
 
 ### `jobs` block — where your job files live
 
 | Key | JSON field | Default | Effect |
 | --- | --- | --- | --- |
 | `TSS_JOBS_ROOT_DIR` | `rootDir` | `jobs` | The directory TSS walks for your job definitions — §2 covers its exact layout. Resolved relative to `--scheduler-base-dir`. |
-| `TSS_PAYOS_CONFIG_FILE` | `payosConfigFile` | `payos.json` | The PayOS config file TSS reads your tenant's database credentials from — **standalone mode only**. Tenants contributed by a PayOS config loader plugin (e.g. `tenant-config-loader-database`, which declares tenants from a registry table in the platform database) are picked up too, exactly as the runtime sees them — see the [operations guide](../operations/task-scheduling-system-v21-2026-11-15.md#tenant-and-platform-database-resolution). In embedded mode (TSS running inside `payos-runtime`), this is never read; TSS reuses the host's already-loaded tenant configuration directly, so this key has no effect there at all. |
+| `TSS_PAYOS_CONFIG_FILE` | `payosConfigFile` | `payos.json` | The PayOS config file TSS reads your tenant's database credentials from — **standalone mode only**. Tenants contributed by a PayOS config loader plugin (e.g. `tenant-config-loader-database`, which declares tenants from a registry table in the platform database) are picked up too, exactly as the runtime sees them — see the [operations guide](../operations/task-scheduling-system-v22-2026-11-20.md#tenant-and-platform-database-resolution). In embedded mode (TSS running inside `payos-runtime`), this is never read; TSS reuses the host's already-loaded tenant configuration directly, so this key has no effect there at all. |
 
 ### Running TSS locally to try your script
 
@@ -86,7 +86,7 @@ java -jar target/payos-job-scheduler-<version>-standalone.jar --scheduler-base-d
   trigger --tenant acme-corp --script jobs/reconciliation.js
 ```
 
-Use `--platform` instead of `--tenant` for a platform-level job, and `list` to see every scheduled job with its next fire time. The same operations exist as a secured HTTP endpoint — see [operations §Administration](../operations/task-scheduling-system-v21-2026-11-15.md#administration-manual-trigger-sync-and-list).
+Use `--platform` instead of `--tenant` for a platform-level job, and `list` to see every scheduled job with its next fire time. The same operations exist as a secured HTTP endpoint — see [operations §Administration](../operations/task-scheduling-system-v22-2026-11-20.md#administration-manual-trigger-sync-and-list).
 
 `--scheduler-base-dir` is the one directory everything else (`tss-config.json`, `jobs/`, your script files, the PayOS config file) is resolved relative to. For local testing, H2 works fine as `TSS_DB_VENDOR` (or just omit it).
 
@@ -108,7 +108,7 @@ jobs/
 - **One subdirectory per tenant**, named exactly as the tenant id. TSS walks every immediate subdirectory of the jobs root and treats each as a tenant — a directory literally named `platform` is rejected (that name is reserved).
 - **`jobs.json`** — a tenant's own baseline job set. This is where you register a new job for a tenant in the normal case.
 - **`custom-jobs.json`** (optional, same directory) — for overriding or adding to what `jobs.json` already declares, without editing that file directly. Loaded *after* `jobs.json`; a matching `scriptPath` is replaced, a new one is added. Every entry here must declare a `tenant` field matching the directory exactly, or it's rejected.
-- **`template.json`** (optional, at the jobs root) — the model for new tenants. At startup, hot reload and `sync`, TSS creates `jobs/<tenantId>/` for every tenant declared in the PayOS configuration (`multitenancy.tenants`) that doesn't have one yet, with a `jobs.json` made from this file, every `{{tenantId}}` replaced by that tenant's id (e.g. `"arguments": {"folder": "/exports/{{tenantId}}"}`) — so declaring a tenant in PayOS is enough to give it its default jobs. An existing tenant directory is never touched, and editing `template.json` later doesn't change tenants already created. The new tenant's jobs are scheduled at the next restart (§ operations, [Safety rules](../operations/task-scheduling-system-v21-2026-11-15.md#safety-rules)).
+- **`template.json`** (optional, at the jobs root) — the model for new tenants. At startup, hot reload and `sync`, TSS creates `jobs/<tenantId>/` for every tenant declared in the PayOS configuration (`multitenancy.tenants`) that doesn't have one yet, with a `jobs.json` made from this file, every `{{tenantId}}` replaced by that tenant's id (e.g. `"arguments": {"folder": "/exports/{{tenantId}}"}`) — so declaring a tenant in PayOS is enough to give it its default jobs. An existing tenant directory is never touched, and editing `template.json` later doesn't change tenants already created. The new tenant's jobs are scheduled at the next restart (§ operations, [Safety rules](../operations/task-scheduling-system-v22-2026-11-20.md#safety-rules)).
 - **`platform-jobs.json`** (optional, at the jobs root, not nested in any tenant directory) — jobs with no tenant owner at all. Only `platform-jobs.json` jobs get the read+write `$PlatformDB`; every tenant job's `$PlatformDB` is read-only (§3). A platform-level job also never gets `$Parallel` at all — see §4.
 
 Only `implementation.type: "script"` entries are loaded — a Java-class job is not a supported entry type. Each entry's `triggers` array is parsed independently per trigger `id`: an entry with an unknown trigger type, an invalid option, two triggers sharing an `id`, or the old single `trigger: {...}` object (removed, not deprecated — see below) is rejected as a whole, with a warning naming the problem; every other entry in the same file still loads.
@@ -160,11 +160,11 @@ Every job can declare any number of triggers, of any mix of the six types below 
 | `cron` | `expression` (required, standard Quartz cron syntax), `timeZone` (default: the server's) | Temporal — Quartz itself tracks the schedule. |
 | `interval` | `every` (required, ISO-8601 duration, at least `PT1S`) | Temporal. |
 | `once` | `at` (required, ISO-8601 date-time). A date already in the past is never scheduled. | Temporal. |
-| `manual` | `enabled` (default `true`), `allowArguments` (default `false`) | Event-driven — fires on a CLI/admin-endpoint request, see the [operations guide §Administration](../operations/task-scheduling-system-v21-2026-11-15.md#administration-manual-trigger-sync-and-list). |
+| `manual` | `enabled` (default `true`), `allowArguments` (default `false`) | Event-driven — fires on a CLI/admin-endpoint request, see the [operations guide §Administration](../operations/task-scheduling-system-v22-2026-11-20.md#administration-manual-trigger-sync-and-list). |
 | `queue` | `destination` (required), `attributeFilter` (object, default: no filter), `maxPayloadBytes` (default `65536`) | Event-driven — fires on a broker message, see **`queue`** below. |
 | `dependency` | `upstream` (required, array of this tenant's job ids, or `platform:<id>` for a platform job), `on` (`SUCCESS` or `COMPLETED`, default `SUCCESS`), `maxAge` (ISO-8601 duration, default: no limit) | Event-driven — fires once every upstream job has completed, see **`dependency`** below. |
 
-A temporal trigger's schedule lives in Quartz itself, exactly like the old single `cronExpression` field did; an event-driven one (`manual`/`queue`/`dependency`) is started and stopped by each node of the cluster to match what's declared, and typically takes effect everywhere within `eventTriggerRefreshSeconds` (default 30 s — [configuration reference](../configuration/task-scheduling-system-v11-2026-11-15.md)) of a change, not instantly.
+A temporal trigger's schedule lives in Quartz itself, exactly like the old single `cronExpression` field did; an event-driven one (`manual`/`queue`/`dependency`) is started and stopped by each node of the cluster to match what's declared, and typically takes effect everywhere within `eventTriggerRefreshSeconds` (default 30 s — [configuration reference](../configuration/task-scheduling-system-v12-2026-11-20.md)) of a change, not instantly.
 
 ```json
 {
@@ -192,7 +192,7 @@ A temporal trigger's schedule lives in Quartz itself, exactly like the old singl
 
 #### `queue` — fire on a broker message
 
-TSS connects to its own message broker, entirely independent of any queue connection the host PayOS application may already have (configured separately — see the [configuration reference](../configuration/task-scheduling-system-v11-2026-11-15.md#queue-block--tsss-own-broker-connection)); a `queue` trigger does nothing at all, and the job simply never fires that way, until an operator configures it.
+TSS connects to its own message broker, entirely independent of any queue connection the host PayOS application may already have (configured separately — see the [configuration reference](../configuration/task-scheduling-system-v12-2026-11-20.md#queue-block--tsss-own-broker-connection)); a `queue` trigger does nothing at all, and the job simply never fires that way, until an operator configures it.
 
 - **`destination`** (required) — the queue/subject name. **A given destination is shared by one durable, cluster-wide consumer group**: several of your own cluster's nodes subscribing to it share the incoming load rather than each seeing every message (so the trigger still fires exactly once per message, cluster-wide) — but for the same reason, **two different jobs that both declare a `queue` trigger on the same destination also share that destination's messages between them**, each message going to only one of the two, never both. Give each job its own destination unless you specifically want several jobs to split one stream's load. **Naming is connector-specific — confirmed against a real broker, 2026-11-15**: `queue-service-nats` only accepts letters, digits, `_` and `-` (it uses `destination` directly as the JetStream stream name, which cannot contain `.`) — a dotted, subject-hierarchy name otherwise idiomatic for NATS (`payments.settled`) is rejected when the trigger tries to start (logged, retried, never fatal — same as any other failure to start). Use `payments-settled`-style names with this connector.
 - **`attributeFilter`** (optional object) — every entry must match a metadata attribute on the message exactly, or the message is acknowledged without firing the job (so it's never redelivered for not matching).
@@ -216,7 +216,7 @@ Every execution, whatever fired it, gets a `$Trigger` binding (`TriggerBinding`)
 | `getType()` / `getId()` | The firing trigger's declared `type`/`id` (e.g. `"queue"` / `"on-settled"`). |
 | `getEventId()` | An id identifying the event — the broker message's id for `queue`, the upstream `fireInstanceId` that completed the set for `dependency`, a generated UUID for `manual`. |
 | `getTriggeredBy()` | `"queue:<destination>"`, `"dependency:<upstreamKey>"`, or the calling user/principal for `manual`. |
-| `getPayload()` | The message payload for `queue`; the `arguments` passed to a manual trigger (see the [operations guide §Administration](../operations/task-scheduling-system-v21-2026-11-15.md#administration-manual-trigger-sync-and-list)); absent for `dependency`. |
+| `getPayload()` | The message payload for `queue`; the `arguments` passed to a manual trigger (see the [operations guide §Administration](../operations/task-scheduling-system-v22-2026-11-20.md#administration-manual-trigger-sync-and-list)); absent for `dependency`. |
 | `getAttributes()` | The message's metadata, for `queue`; absent otherwise. |
 | `getUpstream()` | For `dependency` only — one entry per upstream job, in declaration order: `job`, `fireInstanceId`, `outcome`, `completedAt`, `completions` (how many times it completed since this job last fired). |
 
@@ -603,7 +603,7 @@ function execute(context) {
 - **Shape:** any JSON object — numbers, strings, booleans, `null`, nested objects and arrays. Access nested values with plain JS syntax (`args.target.formats[1]`, `args.target.formats.length`); an argument that isn't declared is simply `undefined`.
 - **A fresh copy per execution.** Mutating `args` inside your script never leaks into the next execution, which starts again from the declared values.
 - **When a change takes effect.** Arguments are stored with the job in the TSS database and refreshed by reconciliation: an edit is applied by hot reload a couple of seconds after you save (or by `sync`), and reaches every node of the cluster at once — no restart. The same goes for the cron expression and `parallelizable`. In a cluster, keep the `jobs/` content identical on every node (already the rule for everything else in it).
-- **Not a secret store.** `jobs.json` is read as plain JSON: unlike PayOS's own configuration files, `${VAR}`-style placeholders are **not** expanded here, so `"${API_TOKEN}"` reaches your script as that literal string. Keep secrets out of `arguments`.
+- **`${VAR}`/`${VAR:-default}`/`${file:/path}` tokens are expanded**, same syntax as PayOS's own configuration files — `"apiToken": "${API_TOKEN}"` in `arguments` reaches your script as the resolved value, not that literal string. See [§14](#14-secrets-encrypted-config-and-license-validation-standalone-mode).
 - **Not visible inside `$Parallel` workers by itself** — pass what a worker needs through `options.extra` (§4).
 
 ## 7. The five outcomes
@@ -752,10 +752,22 @@ password=*** invalid
 
 **Metrics are masked too, defensively** — `JobMetricsEmitter`'s tag map passes through the same canonical masking mechanism before every sample is recorded. Today's own tags (`scriptPath`, `outcome`, `triggerType`) never match the sensitive-key list, so this is normally invisible; it exists so a future tag addition doesn't accidentally bypass masking.
 
+## 14. Secrets, encrypted config, and license validation (standalone mode)
+
+Added 2026-11-20. Standalone TSS (`run` command — `sync`/`trigger`/`list` are unaffected, already gated on direct database access) now validates its license before reading `tss-config.json` at all, the same way `BootServer` does for `payos.json`, but with a lighter check of its own: `LicenseAuthenticityValidator` verifies signature, validity window, `issued_at`, the `licensee.client_id`/`key_envelope.key_id` binding, and machine fingerprint only when the license document declares `machine_bindings` at all — never entitlements or quotas, which TSS has none of its own to enforce. `PAYOS_LICENSE_DEV_MODE` (the same variable the kernel reads) controls it: unset or `true` (the default) is a no-op, exactly as before this version; `false` enables the real check. The editor secret provider connection needed to verify the signature is resolved purely from environment variables (`PAYOS_EDITOR_SECRET_TYPE`, `PAYOS_EDITOR_SECRET_CFG_*`, `PAYOS_EDITOR_ID`, `PAYOS_EDITOR_KEY_NAME`) — the same ones the kernel uses for its own pre-config license check, since `tss-config.json` isn't readable yet at this point in startup either.
+
+A successful check also unwraps the license's `key_envelope` AES key and installs it on `CryptoService` — the same split-key-protected (`SplitKeyGuard`) in-memory key the kernel's own `BootServer` installs from a validated license. Two consequences, both new in this version:
+
+1. **Every JSON file standalone TSS reads can now reference a `${VAR}`/`${VAR:-default}`/`${VAR:?message}`/`${file:/path}`/`${config:a.b}` token** instead of a literal value — `tss-config.json`, `jobs.json`/`custom-jobs.json`/`platform-jobs.json`, and the PayOS config file this module reads for tenant/platform database settings, resolved via the exact same `EnvVarResolver` the kernel's own `ConfigLoader` uses (see [configuration/env-var-resolution.md](../configuration/env-var-resolution.md)). This supersedes §1's and §6.1's earlier statements above that these files never expand placeholders. `template.json`'s own `{{tenantId}}` substitution is a separate, earlier step — see §2 — and the two never collide: `{{tenantId}}` is substituted once, into the materialized `jobs.json` text, before `${...}` tokens in that same text are ever resolved.
+2. **Every one of those files, plus every job script (`.js`) `FileSystemScriptLoader` reads, can be shipped encrypted** with `payosv2-packer` (`P8G2` AES/GCM), decrypted via `CryptoService.decryptIfEncrypted` before being parsed/loaded. In dev mode (no license check), `CryptoService` has no key, so an actually-encrypted file fails to load with "Encryption key not configured" — the same failure mode the kernel has without a license.
+
+Full mechanism: [architecture/license-validation-architecture-v5-2026-11-20.md §17](../architecture/license-validation-architecture-v5-2026-11-20.md#17-payos-job-scheduler-tss-standalone--licenseauthenticityvalidator). Operator procedure (preparing the license file and environment variables for a deployment): [operations guide](../operations/task-scheduling-system-v22-2026-11-20.md#license-validation-checked-before-any-configuration-file).
+
 ## Next
 
-- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v11-2026-11-15.md) — condensed config-key reference, for a quick lookup once you know this material.
-- [Operations: Task Scheduling System](../operations/task-scheduling-system-v21-2026-11-15.md) — deployment modes, clustering, starting/stopping, operational troubleshooting.
+- [Configuration: Task Scheduling System](../configuration/task-scheduling-system-v12-2026-11-20.md) — condensed config-key reference, for a quick lookup once you know this material.
+- [Operations: Task Scheduling System](../operations/task-scheduling-system-v22-2026-11-20.md) — deployment modes, clustering, starting/stopping, operational troubleshooting.
 - [Architecture: Task Scheduling System class diagram](../architecture/job-scheduler-class-diagram-v24-2026-11-15.md) — internal design, every production class (French).
+- [Architecture: License validation, §17](../architecture/license-validation-architecture-v5-2026-11-20.md#17-payos-job-scheduler-tss-standalone--licenseauthenticityvalidator) — `LicenseAuthenticityValidator`'s own design, in full.
 - [Data access](data-access.md) / [Platform database usage](platform-database-usage.md) — the same `$DB`/`$PlatformDB` concepts as used by API scripts, for comparison.
 - [Tenant quota enforcement](tenant-quota-enforcement.md) — the separate, HTTP-request-side quota mechanism.

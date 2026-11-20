@@ -1,10 +1,10 @@
 # Architecture — Validation de licence
 
 **Créé le :** 2026-08-19
-**Dernière mise à jour :** 2026-11-16
-**Version :** v4
-**Audience :** architectes, tech leads, contributeurs à `payos-kernel`, `payos-foundation`, `payosv2-packer`, `payos-license-generator`, `payos-pm`
-**Périmètre :** `ma.s2m.payos.license` (kernel), `ma.s2m.payos.license.LicenseFileLocator` + `ma.s2m.payos.security.SplitKeyGuard`/`CryptoService` (foundation), `ma.s2m.Main`/`PayOSPacker` (packer), `ma.s2m.payos.license.core` (generator), `ma.s2m.payos.pm.cpm.CapabilityManager`/`Cpm` (pm)
+**Dernière mise à jour :** 2026-11-20
+**Version :** v5
+**Audience :** architectes, tech leads, contributeurs à `payos-kernel`, `payos-foundation`, `payosv2-packer`, `payos-license-generator`, `payos-pm`, `payos-job-scheduler`
+**Périmètre :** `ma.s2m.payos.license` (kernel), `ma.s2m.payos.license.LicenseFileLocator` + `ma.s2m.payos.security.SplitKeyGuard`/`CryptoService` (foundation), `ma.s2m.Main`/`PayOSPacker` (packer), `ma.s2m.payos.license.core` (generator), `ma.s2m.payos.pm.cpm.CapabilityManager`/`Cpm` (pm), `ma.s2m.payos.scheduler.bootstrap.StandaloneMain` (job-scheduler)
 
 > Remplace intégralement la version v0 (2026-08-19) de ce document, qui décrivait un `BootServer` câblant `DevLicenseValidator` en dur et un `LicenseValidator` ne vérifiant que l'existence du fichier. Le mécanisme décrit ci-dessous (sélection par variable d'environnement, validation cryptographique réelle, convention de localisation du fichier de licence, intégration avec `payosv2-packer`) est celui effectivement implémenté et testé (94 tests `payos-license-generator`, 649 tests `payos-kernel`, 22 tests `payosv2-packer`, tous verts).
 >
@@ -13,6 +13,8 @@
 > **v3 (2026-11-01)** : renomme `editor-tenant-id`/`PAYOS_EDITOR_TENANT_ID`/`--editor-tenant-id` en `editor-id`/`PAYOS_EDITOR_ID`/`--editor-id` partout (§3, §7, §10) — ce n'est pas un tenant PayOS (un client peut avoir plusieurs tenants ; il n'y a qu'un seul éditeur), juste le namespace de l'éditeur dans le secret provider, réutilisant par accident le paramètre générique `tenantId` du SPI `IAsymmetricCryptoSecretProvider`.
 >
 > **v4 (2026-11-16)** : §14 annonçait l'enforcement des entitlements/quotas comme hors scope — ce n'est plus le cas. Nouvelle §16 : `LicenseQuotaAuditor` (boot, kernel) compare la somme des quotas `requestsPerMinute` de tous les tenants déclarés à `entitlements.quotas.requests_per_minute` de la licence ; `cpm --install` (`payos-pm`, qui dépend déjà de `payos-kernel`) refuse d'installer une capability dont l'id de base n'est pas dans `entitlements.services[]` ; `ResourceLocator` (kernel) applique la même vérification à chaque résolution de ressource appartenant à une capability, au runtime. `LicenseContext` gagne `entitledCapabilityIds()` (§8), dérivé une fois de `entitlements.services[]` — `entitlements` entièrement absent du document (licence antérieure à ce concept) donne `null` (aucune restriction) ; `entitlements` présent mais sans `services[]` donne un ensemble vide (zéro capability entitlée), une distinction délibérée pour ne jamais casser silencieusement une licence existante qui n'a jamais eu ce champ.
+>
+> **v5 (2026-11-20)** : Nouvelle §17 — `payos-job-scheduler` (TSS) en mode standalone valide désormais lui aussi la licence, avant toute lecture de configuration, mais avec un validateur plus léger, `LicenseAuthenticityValidator` (signature, fenêtre de validité, `issued_at`, liaison `licensee.client_id`/`key_envelope.key_id`, et liaison machine seulement si le document la déclare) — jamais les entitlements/quotas, que TSS n'a pas à faire respecter. Il dévérouille quand même la clé AES du `key_envelope` et l'installe sur `CryptoService` (même protection `SplitKeyGuard` que le kernel), ce qui rend `tss-config.json`, `jobs.json`/`custom-jobs.json`/`platform-jobs.json` et les scripts de job déchiffrables exactement comme n'importe quel fichier de configuration du kernel.
 
 ---
 
@@ -34,6 +36,7 @@
 14. [Hors scope / limites connues](#14-hors-scope--limites-connues)
 15. [Considérations de sécurité](#15-considérations-de-sécurité)
 16. [Enforcement des entitlements et des quotas](#16-enforcement-des-entitlements-et-des-quotas)
+17. [`payos-job-scheduler` (TSS) standalone — `LicenseAuthenticityValidator`](#17-payos-job-scheduler-tss-standalone--licenseauthenticityvalidator)
 
 ---
 
@@ -296,6 +299,39 @@ Trois mécanismes distincts, tous dérivés du même `LicenseContext` peuplé pa
 
 ---
 
+## 17. `payos-job-scheduler` (TSS) standalone — `LicenseAuthenticityValidator`
+
+`payos-job-scheduler` ("TSS") a son propre pipeline de boot, totalement indépendant de `BootServer` — `StandaloneMain.main` ne passe jamais par le kernel. Avant ce travail (2026-11-20), le mode standalone de TSS ne validait aucune licence du tout : `sync`/`trigger`/`list` restent protégés indirectement par les identifiants de la base TSS elle-même, mais `run` démarrait sans aucune vérification.
+
+**Portée volontairement réduite — seulement `run`.** Les sous-commandes d'administration (`sync`/`trigger`/`list`) exigent déjà un accès direct à la base de données Quartz de TSS, qui joue le rôle de contrôle d'accès ; seule `run` (démarrage effectif du scheduler) déclenche la validation de licence, en tout premier — avant même la lecture de `tss-config.json` — exactement comme `BootServer` le fait pour `payos.json`.
+
+**`LicenseAuthenticityValidator` — un validateur plus léger, pas une copie de `LicenseValidator`.** TSS n'a ni entitlements ni quotas à faire respecter (pas de `multitenancy.tenants` propre, pas de notion de capability), donc le réutiliser tel quel aurait introduit une dépendance à un concept qui ne s'applique pas à ce process. `LicenseAuthenticityValidator` (nouvelle classe, `ma.s2m.payos.license`, kernel) réutilise directement les méthodes de vérification de `LicenseValidator` (élargies en package-private pour l'occasion — signature, fenêtre de validité, `issued_at`, liaison `licensee.client_id`/`key_envelope.key_id`) mais :
+
+- ne peuple jamais `LicenseContext` (ni `entitlements`, ni `quotas`, ni `clientId`/`licenseId`) ;
+- traite la liaison machine (`machine_bindings`) comme **optionnelle** : absente du document, elle est acceptée plutôt que rejetée (`LicenseValidator.verifyMachineBinding(document, machineFingerprinter, required)` gagne un paramètre `required`, `false` pour ce validateur, `true` pour le kernel — comportement du kernel inchangé) ; présente, elle doit toujours être satisfaite ;
+- dévérouille quand même le `key_envelope.encrypted_key` de la licence (`LicenseValidator.unwrapSourceDecryptionKey`, élargi en package-private) et installe le résultat sur `CryptoService.setKey(...)` — même protection `SplitKeyGuard` (fragmentation XOR, remasking périodique) que le kernel, voir §8. C'est ce qui rend `tss-config.json`, `jobs.json`/`custom-jobs.json`/`platform-jobs.json` et les scripts de job déchiffrables via `CryptoService.decryptIfEncrypted`, exactement comme n'importe quel fichier de configuration ou d'application du kernel — voir [operations/task-scheduling-system-v22-2026-11-20.md](../operations/task-scheduling-system-v22-2026-11-20.md) et [developer/task-scheduler-guide-v22-2026-11-20.md](../developer/task-scheduler-guide-v22-2026-11-20.md).
+
+```mermaid
+flowchart TD
+    A[StandaloneMain.runScheduler] --> B{LicenseValidatorProvider.createAuthenticityOnly}
+    B -->|PAYOS_LICENSE_DEV_MODE absent ou true - defaut| C[DevLicenseValidator - no-op]
+    B -->|PAYOS_LICENSE_DEV_MODE=false| D[LicenseAuthenticityValidator]
+    D --> E[LicenseFileLocator.locate sur scheduler-base-dir]
+    D --> F[BootServer.buildEditorSecretServiceConfigFromEnvironment]
+    D --> G[signature, validite, issued_at, key_envelope.key_id, machine binding si present]
+    D --> H[CryptoService.setKey depuis key_envelope.encrypted_key]
+    C --> I[StandaloneConfigLoader.load - tss-config.json]
+    H --> I
+```
+
+**Même résolution du secret provider éditeur que le kernel, par nécessité, pas par choix stylistique.** `tss-config.json` n'est pas encore lu à ce stade du boot, donc la connexion au secret provider éditeur ne peut dépendre d'aucun fichier TSS — `StandaloneMain` réutilise directement `BootServer.buildEditorSecretServiceConfigFromEnvironment()` (visibilité élargie en `public` pour l'occasion), qui lit les mêmes variables d'environnement que le kernel (`PAYOS_EDITOR_SECRET_TYPE`, `PAYOS_EDITOR_SECRET_CFG_*`, `PAYOS_EDITOR_SECRET_ENABLED` ; `PAYOS_EDITOR_ID`/`PAYOS_EDITOR_KEY_NAME` pour l'identité du signataire). Le provider lui-même reste chargé en SPI via `SecretProviders.create` (§7), jamais nommé en dur par TSS.
+
+**`PAYOS_LICENSE_DEV_MODE` — la même variable que le kernel, un seul interrupteur pour tout le process.** `LicenseValidatorProvider` gagne `createAuthenticityOnly()`, qui lit exactement le même système property/variable d'environnement que `create()` (§3) : absent ou `true` (défaut) sélectionne `DevLicenseValidator` (no-op complet, `CryptoService` reste sans clé), `false` sélectionne le vrai `LicenseAuthenticityValidator`. Il n'existe pas de bascule séparée pour TSS — un déploiement qui active la licence pour le kernel l'active aussi pour tout TSS standalone colocalisé sur le même hôte/la même variable d'environnement.
+
+Voir aussi [operations/task-scheduling-system-v22-2026-11-20.md](../operations/task-scheduling-system-v22-2026-11-20.md) (procédure opérateur) et [configuration/task-scheduling-system-v12-2026-11-20.md](../configuration/task-scheduling-system-v12-2026-11-20.md) (référence des variables).
+
+---
+
 ## Next
 
 - [developer/license-validation-v2-2026-11-01.md](../developer/license-validation-v2-2026-11-01.md) — écrire un validateur custom.
@@ -303,3 +339,4 @@ Trois mécanismes distincts, tous dérivés du même `LicenseContext` peuplé pa
 - [build-and-release/license-validator-mode-v1-2026-10-31.md](../build-and-release/license-validator-mode-v1-2026-10-31.md) — bascule dev/prod côté build/déploiement.
 - [operations/bundle-encryption.md](../operations/bundle-encryption.md) / [cli-tools/edc.md](../cli-tools/edc.md) — intégration côté `payosv2-packer`.
 - [configuration/editor-secret-service.md](../configuration/editor-secret-service.md) — repli vault et variables d'environnement partagées.
+- [operations/task-scheduling-system-v22-2026-11-20.md](../operations/task-scheduling-system-v22-2026-11-20.md) / [developer/task-scheduler-guide-v22-2026-11-20.md](../developer/task-scheduler-guide-v22-2026-11-20.md) — §17 : validation de licence et déchiffrement côté TSS standalone.

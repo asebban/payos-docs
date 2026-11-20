@@ -4,7 +4,7 @@
 **Last updated:** 2026-11-01
 **Version:** v2
 
-> Supersedes the v0 revision of this page (2026-08-19). The `license-file-path` JSON key it documented is **no longer read anywhere** — the constant (`IConfigSpec.LICENSE_FILE_PATH`) still exists but has no consumer left in the codebase. Licence location and validator selection are both environment-variable-driven now; see below. Design: [architecture/license-validation-architecture-v4-2026-11-16.md](../architecture/license-validation-architecture-v4-2026-11-16.md).
+> Supersedes the v0 revision of this page (2026-08-19). The `license-file-path` JSON key it documented is **no longer read anywhere** — the constant (`IConfigSpec.LICENSE_FILE_PATH`) still exists but has no consumer left in the codebase. Licence location and validator selection are both environment-variable-driven now; see below. Design: [architecture/license-validation-architecture-v5-2026-11-20.md](../architecture/license-validation-architecture-v5-2026-11-20.md).
 >
 > **v2 (2026-11-01)**: renames `PAYOS_EDITOR_TENANT_ID` to `PAYOS_EDITOR_ID` (§3) — it identifies the editor's own namespace in the secret provider, not a PayOS multitenancy tenant.
 
@@ -77,7 +77,7 @@ The source-decryption key unwrapped from the licence's `key_envelope.encrypted_k
 
 ## Next
 
-- [architecture/license-validation-architecture-v4-2026-11-16.md](../architecture/license-validation-architecture-v4-2026-11-16.md) — full design.
+- [architecture/license-validation-architecture-v5-2026-11-20.md](../architecture/license-validation-architecture-v5-2026-11-20.md) — full design.
 - [developer/license-validation-v2-2026-11-01.md](../developer/license-validation-v2-2026-11-01.md) — writing a custom validator.
 - [editor-secret-service.md](editor-secret-service.md) — the vault fallback mechanism and its environment variables.
 - [operations/bundle-encryption.md](../operations/bundle-encryption.md) — `payosv2-packer`'s matching licence-derived key support.

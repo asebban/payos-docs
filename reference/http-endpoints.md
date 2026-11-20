@@ -61,7 +61,7 @@ configured).
 
 ## Task Scheduling System administration endpoint
 
-Served by `payos-job-scheduler` (`AdminHttpServer`), not by `payos-server-http`: its own listener on `task-scheduler.admin.httpPort` / `TSS_ADMIN_HTTP_PORT`, off by default, in both standalone and embedded modes. Every call needs `Authorization: Bearer <OIDC access token>` with the `tss-platform-admin` or `tss-tenant-admin` role (configurable). Details: [operations §Administration](../operations/task-scheduling-system-v21-2026-11-15.md#administration-manual-trigger-sync-and-list).
+Served by `payos-job-scheduler` (`AdminHttpServer`), not by `payos-server-http`: its own listener on `task-scheduler.admin.httpPort` / `TSS_ADMIN_HTTP_PORT`, off by default, in both standalone and embedded modes. Every call needs `Authorization: Bearer <OIDC access token>` with the `tss-platform-admin` or `tss-tenant-admin` role (configurable). Details: [operations §Administration](../operations/task-scheduling-system-v22-2026-11-20.md#administration-manual-trigger-sync-and-list).
 
 | Endpoint | Method | Purpose | Allowed to |
 | --- | --- | --- | --- |
